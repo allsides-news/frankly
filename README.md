@@ -1,3 +1,15 @@
+# AllSides v. Frankly v0.1 💬
+-Broadcast chat
+-Record breakout rooms
+-Full emails for events and community
+-Limited HTML ability in pre/post event CTA's and emails as well as Community and Event descriptions
+-Autosave some of the agenda config like waiting room and intro content
+-Loosened character limits
+-Dynamic meta tags
+-Open Graph and Twitter Card
+-Event attendee list added columns for optin/optout status of event and community mail preferences
+-Post event recording downloader updates to deal with very large events with 100+ breakout room recordings
+
 # Frankly 💬
 
 Welcome to the Frankly repo!
