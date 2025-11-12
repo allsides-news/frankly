@@ -20,12 +20,7 @@ class FirestoreLiveMeetingService {
     required String breakoutSessionId,
     required String breakoutRoomId,
   }) {
-    final path = getBreakoutRoomPath(
-      event: event,
-      breakoutSessionId: breakoutSessionId,
-      breakoutRoomId: breakoutRoomId,
-    );
-    return '$path/live-meetings/$breakoutRoomId';
+    return '${getBreakoutSessionDoc(event: event, breakoutSessionId: breakoutSessionId)}/breakout-rooms/$breakoutRoomId/live-meetings/$breakoutRoomId';
   }
 
   String getBreakoutSessionDoc({

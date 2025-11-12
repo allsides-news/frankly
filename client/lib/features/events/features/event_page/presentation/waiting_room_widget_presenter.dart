@@ -28,16 +28,20 @@ class WaitingRoomWidgetPresenter {
     _view.updateView();
   }
 
-  void updateWaitingMedia(MediaItem mediaItem) {
+  Future<void> updateWaitingMedia(MediaItem mediaItem) async {
     _model.waitingRoomInfo =
         _model.waitingRoomInfo.copyWith(waitingMediaItem: mediaItem);
     _view.updateView();
+    // Auto-save when media is uploaded so it persists
+    await save();
   }
 
-  void updateIntroMedia(MediaItem mediaItem) {
+  Future<void> updateIntroMedia(MediaItem mediaItem) async {
     _model.waitingRoomInfo =
         _model.waitingRoomInfo.copyWith(introMediaItem: mediaItem);
     _view.updateView();
+    // Auto-save when media is uploaded so it persists
+    await save();
   }
 
   void updateMinutesInString(String minutesInString) {
@@ -94,16 +98,20 @@ class WaitingRoomWidgetPresenter {
     );
   }
 
-  void deleteWaitingMedia() async {
+  Future<void> deleteWaitingMedia() async {
     _model.waitingRoomInfo =
         _model.waitingRoomInfo.copyWith(waitingMediaItem: null);
     _view.updateView();
+    // Auto-save when media is deleted so it persists
+    await save();
   }
 
-  void deleteIntroMedia() {
+  Future<void> deleteIntroMedia() async {
     _model.waitingRoomInfo =
         _model.waitingRoomInfo.copyWith(introMediaItem: null);
     _view.updateView();
+    // Auto-save when media is deleted so it persists
+    await save();
   }
 
   void updateLoopWaitingVideo(bool loop) {

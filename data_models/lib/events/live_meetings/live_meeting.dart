@@ -115,6 +115,7 @@ class BreakoutRoom with _$BreakoutRoom implements SerializeableRequest {
   static const String kFieldFlagStatus = 'flagStatus';
   static const String kFieldRoomName = 'roomName';
   static const String kFieldRoomId = 'roomId';
+  static const String kFieldHelpRequestedTimestamp = 'helpRequestedTimestamp';
 
   factory BreakoutRoom({
     required String roomId,
@@ -133,6 +134,8 @@ class BreakoutRoom with _$BreakoutRoom implements SerializeableRequest {
     BreakoutRoomFlagStatus flagStatus,
     @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
     DateTime? createdDate,
+    @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+    DateTime? helpRequestedTimestamp,
     @Default(false) bool record,
   }) = _BreakoutRoom;
 

@@ -8,6 +8,7 @@ import 'package:client/features/events/features/live_meeting/data/providers/live
 import 'package:client/features/events/features/live_meeting/features/live_stream/presentation/widgets/url_video_widget.dart';
 import 'package:client/features/events/features/event_page/presentation/waiting_room_presenter.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
+import 'package:client/features/events/features/event_page/data/providers/event_permissions_provider.dart';
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/features/user/presentation/widgets/user_profile_chip.dart';
 import 'package:client/services.dart';
@@ -16,6 +17,7 @@ import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:client/features/events/presentation/widgets/periodic_builder.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/media_item.dart';
+import 'package:data_models/events/live_meetings/live_meeting.dart';
 import 'package:provider/provider.dart';
 
 /// Displays images or videos to the user before meetings start.
@@ -143,21 +145,31 @@ class _WaitingRoom extends StatelessWidget {
             ),
           ),
         SizedBox(height: 13),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            if (eventProvider.event.eventType == EventType.hosted) ...[
-              RowParticipants(),
-              SizedBox(width: 10),
-            ],
-            Flexible(
-              child: Text(
-                _buildPresentCountText(context),
-                style: AppTextStyle.body
-                    .copyWith(color: context.theme.colorScheme.onPrimary),
-              ),
-            ),
-          ],
+        Builder(
+          builder: (context) {
+            final canViewCounts = EventPermissionsProvider.read(context)
+                    ?.canViewParticipantCounts ??
+                false;
+            
+            if (!canViewCounts) return SizedBox.shrink();
+            
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                if (eventProvider.event.eventType == EventType.hosted) ...[
+                  RowParticipants(),
+                  SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: Text(
+                    _buildPresentCountText(context),
+                    style: AppTextStyle.body
+                        .copyWith(color: context.theme.colorScheme.onPrimary),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -187,10 +199,22 @@ class _WaitingRoom extends StatelessWidget {
 
   Widget _buildTimeRemaining(BuildContext context) {
     final event = context.watch<EventProvider>().event;
-    final isInBreakouts = context.watch<LiveMeetingProvider>().breakoutsActive;
+    final liveMeetingProvider = context.watch<LiveMeetingProvider>();
+    final isInBreakouts = liveMeetingProvider.breakoutsActive;
     final waitingRoomMediaIsActive =
         event.timeUntilScheduledStart(clockService.now()).isNegative &&
             (event.waitingRoomInfo?.durationSeconds ?? 0) > 0;
+
+    // Check if breakouts are pending or being processed (showing their own UI)
+    final breakoutSession =
+        liveMeetingProvider.liveMeeting?.currentBreakoutSession;
+    final breakoutsPending = [
+          BreakoutRoomStatus.pending,
+          BreakoutRoomStatus.processingAssignments,
+        ].contains(breakoutSession?.breakoutRoomStatus) ||
+        (breakoutSession?.breakoutRoomStatus == BreakoutRoomStatus.active &&
+            liveMeetingProvider.assignedBreakoutRoomIsLoading);
+
     return Container(
       padding: EdgeInsets.symmetric(
         vertical:
@@ -202,13 +226,6 @@ class _WaitingRoom extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            _buildWaitingRoomInfoText(isInBreakouts, waitingRoomMediaIsActive),
-            style: AppTextStyle.body
-                .copyWith(color: context.theme.colorScheme.onPrimary),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 10),
           if (!isInBreakouts)
             PeriodicBuilder(
               period: Duration(seconds: 1),
@@ -216,14 +233,41 @@ class _WaitingRoom extends StatelessWidget {
                 final timeTillStart = waitingRoomMediaIsActive
                     ? event.timeUntilWaitingRoomFinished(clockService.now())
                     : event.timeUntilScheduledStart(clockService.now());
+
+                // If countdown has reached zero, show only the spinning wheel
+                // UNLESS breakouts are pending/processing (which shows their own UI)
                 if (timeTillStart.isNegative) {
-                  return CustomLoadingIndicator();
+                  // Hide spinner if breakouts UI is showing
+                  if (breakoutsPending) {
+                    return SizedBox.shrink();
+                  }
+
+                  return CustomLoadingIndicator(
+                    color: context.theme.colorScheme.onPrimary,
+                  );
                 }
-                return Text(
-                  _buildTimeToStart(timeTillStart),
-                  style: AppTextStyle.headline1
-                      .copyWith(color: context.theme.colorScheme.onPrimary),
-                  textAlign: TextAlign.center,
+
+                // If countdown is still running, show the message and countdown
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _buildWaitingRoomInfoText(
+                        isInBreakouts,
+                        waitingRoomMediaIsActive,
+                      ),
+                      style: AppTextStyle.body
+                          .copyWith(color: context.theme.colorScheme.onPrimary),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      _buildTimeToStart(timeTillStart),
+                      style: AppTextStyle.headline1
+                          .copyWith(color: context.theme.colorScheme.onPrimary),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 );
               },
             ),

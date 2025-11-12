@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_functions_interop/firebase_functions_interop.dart'
     hide CloudFunction;
@@ -15,7 +16,21 @@ class ShareLink implements CloudFunction {
   @override
   final String functionName = 'ShareLink';
 
-  final _appName = functions.config.get('app.name') as String;
+  String get _appName => functions.config.get('app.name') as String? ?? 'AllSides Roundtables';
+
+  /// Strips HTML tags from a string to make it safe for meta tag content
+  /// Meta tags should only contain plain text, not HTML markup
+  String _stripHtmlTags(String text) {
+    // Remove HTML tags using regex
+    final stripped = text.replaceAll(RegExp(r'<[^>]*>'), '');
+    // Decode common HTML entities
+    return stripped
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&amp;', '&'); // This should be last to avoid double-decoding
+  }
 
   /// Remove /share/
   String _getRedirect(String requestedUri) {
@@ -42,7 +57,7 @@ class ShareLink implements CloudFunction {
     final appPath = _getAppPath(Uri.parse(requestedUri));
 
     var title = '$_appName - Real Deliberations, Meaningful Communities';
-    var image = functions.config.get('app.banner_image_url') as String;
+    var image = functions.config.get('app.banner_image_url') as String? ?? '';
     var description =
         'Deliberations with real people in real time, for any interest.';
 
@@ -56,11 +71,12 @@ class ShareLink implements CloudFunction {
       final templateId = eventMatch.group(2);
       final eventId = eventMatch.group(3);
 
-      final communityDoc =
-          await firestore.document('community/$communityId').get();
-      final community = Community.fromJson(
-        firestoreUtils.fromFirestoreJson(communityDoc.data.toMap()),
-      );
+      try {
+        final communityDoc =
+            await firestore.document('community/$communityId').get();
+        final community = Community.fromJson(
+          firestoreUtils.fromFirestoreJson(communityDoc.data.toMap()),
+        );
 
       final templateDoc = await firestore
           .document('community/$communityId/templates/$templateId')
@@ -100,18 +116,32 @@ class ShareLink implements CloudFunction {
       description = '$_appName - $date $time $timeZoneAbbreviation - Join '
           '${community.name} on $_appName!';
       image = event.image ?? template.image ?? community.bannerImageUrl ?? '';
+      } catch (e) {
+        print('Error loading community/event data for share link: $e');
+        // Use default values if we can't load the event details
+        title = '$_appName - Join us for a discussion!';
+        description = 'Real Deliberations, Meaningful Communities';
+        // image already has fallback value from line 60
+      }
     } else if (communityMatch != null) {
       var communityId = communityMatch.group(1);
 
-      final communityDoc =
-          await firestore.document('community/$communityId').get();
-      final community = Community.fromJson(
-        firestoreUtils.fromFirestoreJson(communityDoc.data.toMap()),
-      );
+      try {
+        final communityDoc =
+            await firestore.document('community/$communityId').get();
+        final community = Community.fromJson(
+          firestoreUtils.fromFirestoreJson(communityDoc.data.toMap()),
+        );
 
-      title = '${community.name} on $_appName';
-      description = community.description ?? description;
-      image = community.bannerImageUrl ?? '';
+        title = '${community.name} on $_appName';
+        description = community.description ?? description;
+        image = community.bannerImageUrl ?? '';
+      } catch (e) {
+        print('Error loading community data for share link: $e');
+        // Use default values if we can't load the community details
+        title = '$_appName - Join the conversation!';
+        // description and image already have fallback values
+      }
     }
 
     if (isLinkedIn &&
@@ -121,29 +151,52 @@ class ShareLink implements CloudFunction {
     }
 
     print(image);
+    
+    // Ensure we have a valid image URL (LinkedIn requires this)
+    if (image.isEmpty) {
+      image = functions.config.get('app.banner_image_url') as String? ?? '';
+    }
+    
+    // Convert HTTP to HTTPS for security and platform requirements
+    if (image.startsWith('http://')) {
+      image = image.replaceFirst('http://', 'https://');
+    }
+    
+    // Sanitize description by stripping HTML tags for meta tag content
+    final sanitizedDescription = _stripHtmlTags(description);
+    
+    // HTML-escape all dynamic content to prevent malformed HTML
+    const htmlEscape = HtmlEscape();
+    final titleEscaped = htmlEscape.convert(title);
+    final descriptionEscaped = htmlEscape.convert(sanitizedDescription);
+    final urlEscaped = htmlEscape.convert(requestedUri);
+    final imageEscaped = htmlEscape.convert(image);
+    final redirectEscaped = htmlEscape.convert(redirect);
+    
     return '''
       <html>
       <head>
         <meta charset="UTF-8">
         <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-        <meta name="description" content="$description">
+        <meta name="description" content="$descriptionEscaped">
 
-        <meta property="og:title" content="$title"/>
-        <meta property="og:description" content="$description"/>
-        <meta property="og:url" content="$requestedUri"/>
-        <meta property="og:image" content="$image"/>
-        <meta name="image" property="og:image" content="$image">
+        <meta property="og:type" content="website"/>
+        <meta property="og:title" content="$titleEscaped"/>
+        <meta property="og:description" content="$descriptionEscaped"/>
+        <meta property="og:url" content="$urlEscaped"/>
+        <meta property="og:image" content="$imageEscaped"/>
+        <meta name="image" property="og:image" content="$imageEscaped">
 
-        <meta name="twitter:title" content="$title">
-        <meta name="twitter:description" content="$description">
-        <meta name="twitter:image" content="$image">
+        <meta name="twitter:title" content="$titleEscaped">
+        <meta name="twitter:description" content="$descriptionEscaped">
+        <meta name="twitter:image" content="$imageEscaped">
         <meta name="twitter:card" content="summary_large_image">
 
-        <title>$title</title>
+        <title>$titleEscaped</title>
 
       </head>
       <body>
-        <p><a href="$redirect">Click here</a> to continue!</p>
+        <p><a href="$redirectEscaped">Click here</a> to continue!</p>
       </body>
       </html>
     ''';

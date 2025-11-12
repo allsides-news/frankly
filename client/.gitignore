@@ -37,6 +37,7 @@
 .pub/
 /build/
 .env
+.env.json
 
 # Web related
 

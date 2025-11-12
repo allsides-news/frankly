@@ -18,6 +18,7 @@ class ParticipantsList extends StatefulWidget {
   final int numberOfIconsToShow;
   final double iconSize;
   final int? participantCount;
+  final bool showParticipantCount;
 
   const ParticipantsList({
     required this.event,
@@ -25,6 +26,7 @@ class ParticipantsList extends StatefulWidget {
     required this.numberOfIconsToShow,
     this.iconSize = 40,
     this.participantCount,
+    this.showParticipantCount = true,
     Key? key,
   }) : super(key: key);
 
@@ -54,8 +56,10 @@ class _ParticipantsListState extends State<ParticipantsList> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Stack(children: _buildUserIcons()),
-        SizedBox(width: 5),
-        Flexible(child: _buildParticipantCount()),
+        if (widget.showParticipantCount) ...[
+          SizedBox(width: 5),
+          Flexible(child: _buildParticipantCount()),
+        ],
       ],
     );
   }

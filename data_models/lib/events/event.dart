@@ -186,6 +186,49 @@ class Event with _$Event implements SerializeableRequest {
     }
     return startTime;
   }
+
+  /// Returns the DateTime when this event is scheduled to end.
+  ///
+  /// Calculates end time based on [scheduledTime] + [durationInMinutes].
+  /// Returns null if [scheduledTime] is null.
+  DateTime? get scheduledEndTime {
+    final start = scheduledTime;
+    if (start == null) return null;
+    return start.add(Duration(minutes: durationInMinutes));
+  }
+
+  /// Returns the Duration until this event ends.
+  ///
+  /// Returns Duration.zero if [scheduledEndTime] is null.
+  /// Returns negative duration if event has already ended.
+  Duration timeUntilEnd(DateTime now) {
+    final endTime = scheduledEndTime;
+    if (endTime == null) return Duration.zero;
+    return endTime.difference(now);
+  }
+
+  /// Returns true if the event has ended based on its duration.
+  ///
+  /// An event is considered ended when the current time is past
+  /// [scheduledTime] + [durationInMinutes].
+  bool hasEnded(DateTime now) {
+    return timeUntilEnd(now).isNegative;
+  }
+
+  /// Returns true if the event should display a countdown timer.
+  ///
+  /// The countdown should show when:
+  /// - The event hasn't ended yet
+  /// - There are fewer than [minutesBefore] minutes remaining
+  /// - There are more than 0 seconds remaining
+  ///
+  /// Default [minutesBefore] is 5 minutes.
+  bool shouldShowCountdown(DateTime now, {int minutesBefore = 5}) {
+    final timeLeft = timeUntilEnd(now);
+    return !timeLeft.isNegative &&
+        timeLeft.inMinutes < minutesBefore &&
+        timeLeft.inSeconds > 0;
+  }
 }
 
 @Freezed(makeCollectionsUnmodifiable: false)
@@ -307,6 +350,12 @@ class Participant with _$Participant implements SerializeableRequest {
     @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
     DateTime? mostRecentPresentTime,
     String? zipCode,
+    
+    /// Whether user opted in to receive community communications
+    @Default(false) bool optInToCommunity,
+    
+    /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+    @Default(false) bool optInToNewsletters,
   }) = _Participant;
 
   factory Participant.fromJson(Map<String, dynamic> json) =>

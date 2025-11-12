@@ -32,6 +32,7 @@ import 'package:client/features/user/data/services/user_service.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/utils/dialogs.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
+import 'package:client/core/widgets/html_content.dart';
 import 'package:client/core/widgets/stream_utils.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/event_message.dart';
@@ -106,7 +107,7 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
           ),
         if (eventTabsModel.enableMessages)
           CustomTabAndContent(
-            tab: 'Announcements',
+            tab: 'Message Board',
             content: (context) => _buildAnnouncements(context),
           ),
         if (eventTabsModel.enableAdminPanel)
@@ -130,7 +131,7 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
       entryFrom: '_EventPageState._buildGuide',
       stream: context.watch<EventTabsControllerState>().eventMessagesStream,
       errorBuilder: (_) => HeightConstrainedText(
-        'There was an error while loading Announcements',
+        'There was an error while loading Message Board',
         style: context.theme.textTheme.bodyMedium!
             .copyWith(color: context.theme.colorScheme.onSurfaceVariant),
       ),
@@ -230,12 +231,12 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
       children: [
         SizedBox(height: 24),
         if (description != null && description.isNotEmpty) ...[
-          HeightConstrainedText(
+          Text(
             'Description',
             style: context.theme.textTheme.titleMedium,
           ),
           SizedBox(height: 8),
-          HeightConstrainedText(
+          HtmlContent(
             description,
             style: context.theme.textTheme.bodyMedium!
                 .copyWith(color: context.theme.colorScheme.onSurfaceVariant),
@@ -246,7 +247,7 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
           Row(
             children: [
               HeightConstrainedText(
-                'Announcements',
+                'Message Board',
                 style: context.theme.textTheme.titleMedium,
               ),
               Spacer(),
@@ -421,7 +422,6 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
             parentPath: context.watch<ChatModel>().parentPath,
             messageInputHint: 'Say something',
             allowBroadcast: liveMeetingProvider != null &&
-                !liveMeetingProvider.isInBreakout &&
                 context.watch<EventPermissionsProvider>().canBroadcastChat,
           ),
         ),

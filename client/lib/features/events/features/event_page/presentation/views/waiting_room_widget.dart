@@ -30,6 +30,7 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
     implements WaitingRoomWidgetView {
   late final WaitingRoomWidgetModel _model;
   late final WaitingRoomWidgetPresenter _presenter;
+  late final TextEditingController _introTextController;
 
   @override
   void initState() {
@@ -38,6 +39,27 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
     _model = WaitingRoomWidgetModel(widget.event);
     _presenter = WaitingRoomWidgetPresenter(this, _model);
     _presenter.init();
+    _introTextController = TextEditingController(
+      text: _model.waitingRoomInfo.content ?? '',
+    );
+  }
+
+  @override
+  void didUpdateWidget(WaitingRoomWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // If the event has changed (e.g., from Firestore), update our local model
+    if (oldWidget.event != widget.event) {
+      _model.event = widget.event;
+      _presenter.init();
+      _introTextController.text = _model.waitingRoomInfo.content ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _introTextController.dispose();
+    super.dispose();
   }
 
   @override
@@ -87,11 +109,11 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
                 .copyWith(color: context.theme.colorScheme.secondary),
           ),
           CustomTextField(
+            controller: _introTextController,
             minLines: 3,
             keyboardType: TextInputType.multiline,
             borderType: BorderType.outline,
             borderRadius: 10,
-            initialValue: _model.waitingRoomInfo.content,
             onChanged: (value) => _presenter.updateWaitingText(value),
             hintText: context.l10n.enterWaitingRoomText,
             textStyle: AppTextStyle.body
@@ -106,8 +128,28 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
           SizedBox(height: 10),
           MediaItemSection(
             mediaItem: waitingMediaItem,
-            onDelete: () => _presenter.deleteWaitingMedia(),
-            onUpdate: (mediaItem) => _presenter.updateWaitingMedia(mediaItem),
+            onDelete: () => alertOnError(
+              context,
+              () async {
+                await _presenter.deleteWaitingMedia();
+                showRegularToast(
+                  context,
+                  'Waiting room video removed',
+                  toastType: ToastType.success,
+                );
+              },
+            ),
+            onUpdate: (mediaItem) => alertOnError(
+              context,
+              () async {
+                await _presenter.updateWaitingMedia(mediaItem);
+                showRegularToast(
+                  context,
+                  'Waiting room video saved',
+                  toastType: ToastType.success,
+                );
+              },
+            ),
           ),
           SizedBox(height: 10),
           Row(
@@ -168,27 +210,51 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
                   context.l10n.bufferTimeDescription(
                     waitingBufferDurationDescription,
                   ),
-                  style: context.theme.textTheme.bodyMedium,
+                  style: AppTextStyle.body,
                 ),
               ),
             ],
           ),
           SizedBox(height: 20),
           if (_presenter.enableIntroVideo) ...[
-            Text(
-              'Intro Image/Video',
-              style: AppTextStyle.subhead
-                  .copyWith(color: context.theme.colorScheme.primary),
-            ),
-            Text(
-              context.l10n.playsAt(introStartTime),
-              style: context.theme.textTheme.bodyMedium,
+            RichText(
+              text: TextSpan(
+                text: 'Intro Image/Video',
+                style: AppTextStyle.subhead
+                    .copyWith(color: context.theme.colorScheme.primary),
+                children: [
+                  TextSpan(
+                    text: context.l10n.playsAt(introStartTime),
+                    style: AppTextStyle.bodyMedium,
+                  ),
+                ],
+              ),
             ),
             SizedBox(height: 20),
             MediaItemSection(
               mediaItem: introMediaItem,
-              onDelete: () => _presenter.deleteIntroMedia(),
-              onUpdate: (mediaItem) => _presenter.updateIntroMedia(mediaItem),
+              onDelete: () => alertOnError(
+                context,
+                () async {
+                  await _presenter.deleteIntroMedia();
+                  showRegularToast(
+                    context,
+                    'Intro video removed',
+                    toastType: ToastType.success,
+                  );
+                },
+              ),
+              onUpdate: (mediaItem) => alertOnError(
+                context,
+                () async {
+                  await _presenter.updateIntroMedia(mediaItem);
+                  showRegularToast(
+                    context,
+                    'Intro video saved',
+                    toastType: ToastType.success,
+                  );
+                },
+              ),
             ),
             SizedBox(height: 10),
             HeightConstrainedText(
@@ -234,7 +300,7 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
                   child: HeightConstrainedText(
                     context.l10n
                         .introBeforeBreakouts(introLengthDurationDescription),
-                    style: context.theme.textTheme.bodyMedium,
+                    style: AppTextStyle.body,
                   ),
                 ),
               ],
@@ -242,17 +308,17 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
           ],
           SizedBox(height: 18),
           HeightConstrainedText(
-            'Participants will be sent into rooms at $breakoutsInitiationTime.\n${context.l10n.bufferAndIntroTime(
+            'Participants will be sent into rooms at $breakoutsInitiationTime ${context.l10n.bufferAndIntroTime(
               waitingBufferDurationDescription,
               introLengthDurationDescription,
-            )}.',
-            style: context.theme.textTheme.titleMedium,
+            )}',
+            style: AppTextStyle.subhead,
           ),
-          SizedBox(height: 24),
+          SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              if (showChatOption) ...[
+              if (showChatOption)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -269,8 +335,7 @@ class _WaitingRoomWidgetState extends State<WaitingRoomWidget>
                     ),
                   ],
                 ),
-              ] else
-                SizedBox.shrink(),
+              Spacer(),
               ActionButton(
                 loadingHeight: 10.0,
                 color: context.theme.colorScheme.primary,

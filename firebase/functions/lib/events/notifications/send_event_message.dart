@@ -102,6 +102,7 @@ class SendEventMessage extends OnCallMethod<SendEventMessageRequest> {
             eventMessage: request.eventMessage,
             unsubscribeUrl: unsubscribeUrl,
           ),
+          attachments: [],
         );
       },
     );

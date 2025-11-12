@@ -12,12 +12,14 @@ class EventPageParticipantsList extends StatelessWidget {
   final Event event;
   final double? iconSize;
   final bool showFullParticipantCount;
+  final bool showParticipantCount;
 
   const EventPageParticipantsList(
     this.event, {
     Key? key,
     this.iconSize,
     this.showFullParticipantCount = true,
+    this.showParticipantCount = true,
   }) : super(key: key);
 
   @override
@@ -40,6 +42,7 @@ class EventPageParticipantsList extends StatelessWidget {
           event: event,
           participantIds: activeParticipants.map((e) => e.id).toList(),
           numberOfIconsToShow: numberOfParticipantsToShow,
+          showParticipantCount: showParticipantCount,
         );
       },
     );

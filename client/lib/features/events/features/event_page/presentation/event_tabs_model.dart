@@ -1,6 +1,8 @@
+import 'package:beamer/beamer.dart';
 import 'package:client/core/utils/navigation_utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:client/core/routing/locations.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
 import 'package:client/features/events/features/event_page/presentation/widgets/event_tabs.dart';
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
@@ -80,16 +82,57 @@ class EventTabsControllerState extends State<EventTabsController> {
     super.initState();
 
     final liveMeetingProvider = LiveMeetingProvider.readOrNull(context);
-    final guideTabIndex = _getTabIndex(
-      liveMeetingProvider != null ? TabType.guide : TabType.about,
-    );
+
+    // Check if there's a tab query parameter to open specific tab
+    final tabParam = (routerDelegate.currentBeamLocation.state as BeamState)
+        .queryParameters['tab'];
+
+    int initialTabIndex;
+    if (tabParam == 'ctas') {
+      // CTAs tab is dynamically added and is always last in the list when enabled
+      // We'll set this after tabs are built
+      initialTabIndex = -1; // Will be set in didChangeDependencies
+    } else {
+      final initialTabType = _getInitialTabType(liveMeetingProvider, tabParam);
+      initialTabIndex = _getTabIndex(initialTabType);
+    }
+
     _selectedTabController = SelectedTabController(
-      initialTab: guideTabIndex >= 0 ? guideTabIndex : 0,
+      initialTab: initialTabIndex >= 0 ? initialTabIndex : 0,
     );
 
     _selectedTabController.addListener(_onTabChanges);
 
     _templatesFuture = _loadAllTemplates();
+
+    // If tab parameter was specified, expand the tabs to show it
+    if (tabParam != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // For CTAs tab, select the last tab
+        if (tabParam == 'ctas' && widget.enablePrePostEvent) {
+          final ctasTabIndex = tabs.length - 1; // CTAs is always last
+          if (ctasTabIndex >= 0) {
+            _selectedTabController.setTabIndex(ctasTabIndex);
+          }
+        }
+        setState(() => _expanded = true);
+      });
+    }
+  }
+
+  TabType _getInitialTabType(
+      LiveMeetingProvider? liveMeetingProvider, String? tabParam) {
+    // If tab parameter is specified, use it
+    if (tabParam == 'guide') return TabType.guide;
+    if (tabParam == 'chat') return TabType.chat;
+    if (tabParam == 'messages') return TabType.messages;
+    if (tabParam == 'admin') return TabType.admin;
+
+    // For CTAs tab, we need to select the last tab in the list since it's dynamically added
+    // We'll handle this in initState instead
+
+    // Otherwise use default behavior
+    return liveMeetingProvider != null ? TabType.guide : TabType.about;
   }
 
   /// We load the event messages stream just in time because it is only accessible when the

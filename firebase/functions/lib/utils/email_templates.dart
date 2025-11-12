@@ -14,15 +14,47 @@ import 'package:data_models/community/community.dart';
 import 'package:data_models/templates/template.dart';
 import 'package:timezone/standalone.dart' as tz;
 
-final privacyPolicyUrl =
-    functions.config.get('app.privacy_policy_url') as String;
-final mailingAddress = functions.config.get('app.mailing_address') as String;
-final orgName = functions.config.get('app.legal_entity_name') as String;
-final linkPrefix = functions.config.get('app.full_url') as String;
-final appName = functions.config.get('app.name') as String;
-final copyright = functions.config.get('app.copyright') as String;
-final legalStatement = '$appName is operated by $orgName.';
-final copyrightStatement = '© $copyright';
+/// Processes HTML content for email compatibility:
+/// - Preserves <a> tags with inline styling for links
+/// - Strips all other HTML tags to prevent email styling issues
+/// - Preserves line breaks by converting \n to <br>
+String _processHtmlForEmail(String html) {
+  // First, convert <br> and <br/> tags to newlines temporarily
+  var processed = html.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+  
+  // Convert closing </p> and heading tags to newlines for better formatting
+  processed = processed.replaceAll(RegExp(r'</p>', caseSensitive: false), '\n');
+  processed = processed.replaceAll(RegExp(r'</h[1-6]>', caseSensitive: false), '\n');
+  
+  // Add inline styles to <a> tags for email compatibility (green, underline)
+  processed = processed.replaceAllMapped(
+    RegExp(r'<a\s+([^>]*)>', caseSensitive: false),
+    (match) => '<a ${match[1]} style="color:#9BFBC2;text-decoration:underline;font-family:Helvetica,Arial,sans-serif;">',
+  );
+  
+  // Strip all HTML tags EXCEPT <a> and </a>
+  processed = processed.replaceAllMapped(
+    RegExp(r'<(?!/?a\b)[^>]*>', caseSensitive: false),
+    (match) => '',
+  );
+  
+  // Convert newlines back to <br> tags for email display
+  processed = processed.replaceAll('\n', '<br>');
+  
+  // Remove multiple consecutive <br> tags (max 2 for paragraph spacing)
+  processed = processed.replaceAll(RegExp(r'(<br>){3,}'), '<br><br>');
+  
+  return processed.trim();
+}
+
+String get privacyPolicyUrl => functions.config.get('app.privacy_policy_url') as String? ?? '';
+String get mailingAddress => functions.config.get('app.mailing_address') as String? ?? '';
+String get orgName => functions.config.get('app.legal_entity_name') as String? ?? 'Organization';
+String get linkPrefix => functions.config.get('app.full_url') as String? ?? '';
+String get appName => functions.config.get('app.name') as String? ?? 'App';
+String get copyright => functions.config.get('app.copyright') as String? ?? '';
+String get legalStatement => '$appName is operated by $orgName.';
+String get copyrightStatement => '© $copyright';
 
 class EventWithTemplate {
   final Event event;
@@ -100,7 +132,10 @@ String generateEmailEventInfo({
   if (allowPrePost && prePostCard != null && prePostCard.hasData) {
     const htmlEscape = HtmlEscape();
     final headlineSanitized = htmlEscape.convert(prePostCard.headline);
-    final messageSanitized = htmlEscape.convert(prePostCard.message);
+    // Don't escape the message since it contains HTML that should be rendered
+    // (HTML is already sanitized on the client side with HtmlSanitizer)
+    // Process HTML for email compatibility (newlines to <br>, inline styles)
+    final messageSanitized = _processHtmlForEmail(prePostCard.message);
     final List<String> buttonSectionHtmlList = [];
 
     for (var urlInfo in prePostCard.prePostUrls) {
@@ -150,24 +185,24 @@ String generateEmailEventInfo({
             background: #303B5F;
             padding: 40px;">
   <p style="color:#9BFBC2;
-			      font-family: Helvetica, Arial, sans-serif;
+		      font-family: Helvetica, Arial, sans-serif;
             font-size: 16px;
             font-weight: lighter;
             line-height: 24px;
             letter-spacing: 0.1em;
             text-transform: uppercase;"> If you haven't already done so... </p>
   <p style="color:#FFFFFF;         
-			      font-family: Helvetica, Arial, sans-serif;
+		      font-family: Helvetica, Arial, sans-serif;
             font-size: 24px;
             font-weight: bold;
             font-size: 24px;
             line-height: 110%;">$headlineSanitized</p>
-  <p style="color:#EBEDF1;
-			      font-family: Helvetica, Arial, sans-serif;
-            font-style: normal;
+  <div style="color:#EBEDF1;
+            font-family: Helvetica, Arial, sans-serif;
             font-size: 16px;
-            font-size: 16px;
-            line-height: 150%;">$messageSanitized</p>
+            line-height: 150%;">
+    $messageSanitized
+  </div>
   <br />
   <br />
   $buttonSectionHtml
@@ -1407,7 +1442,10 @@ String generateEventEndedContent({
   if (allowPrePost && postEventCard != null && postEventCard.hasData) {
     const htmlEscape = HtmlEscape();
     final headlineSanitized = htmlEscape.convert(postEventCard.headline);
-    final messageSanitized = htmlEscape.convert(postEventCard.message);
+    // Don't escape the message since it contains HTML that should be rendered
+    // (HTML is already sanitized on the client side with HtmlSanitizer)
+    // Process HTML for email compatibility (newlines to <br>, inline styles)
+    final messageSanitized = _processHtmlForEmail(postEventCard.message);
     final List<String> buttonSectionHtmlList = [];
 
     for (var urlInfo in postEventCard.prePostUrls) {
@@ -1452,12 +1490,12 @@ String generateEventEndedContent({
                 font-weight: bold;
                 font-size: 24px;
                 line-height: 110%;">$headlineSanitized</p>
-      <p style="color:#EBEDF1;
+      <div style="color:#EBEDF1;
                 font-family: Helvetica, Arial, sans-serif;
-                font-style: normal;
                 font-size: 16px;
-                font-size: 16px;
-                line-height: 150%;">$messageSanitized</p>
+                line-height: 150%;">
+        $messageSanitized
+      </div>
       <br />
       <br />
       $buttonSectionHtml

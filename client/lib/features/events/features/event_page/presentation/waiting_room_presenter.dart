@@ -34,7 +34,19 @@ class WaitingRoomPresenter with ChangeNotifier {
         eventProvider.event.timeUntilScheduledStart(clockService.now());
     if (isWaitingRoomMediaIntro && timeUntilScheduledStart.isNegative) {
       /// We start the intro video at however long past the scheduled start time we are.
-      _introVideoStartTime = timeUntilScheduledStart.abs();
+      /// But we cap it at the intro duration to prevent the video from immediately completing.
+      final timePastStart = timeUntilScheduledStart.abs();
+      final introDuration = Duration(
+        seconds: eventProvider.event.waitingRoomInfo?.durationSeconds ?? 0,
+      );
+      
+      // If we're past the intro duration, mark it as completed and don't set a start time
+      if (introDuration.inSeconds > 0 && timePastStart >= introDuration) {
+        _introVideoCompleted = true;
+      } else {
+        // Otherwise, start the video at the appropriate offset
+        _introVideoStartTime = timePastStart;
+      }
     }
   }
 
@@ -57,16 +69,19 @@ class WaitingRoomPresenter with ChangeNotifier {
 
   MediaItem get media {
     final waitingRoomInfo = eventProvider.event.waitingRoomInfo;
+    final introMediaItem = waitingRoomInfo?.introMediaItem;
+    final waitingMediaItem = waitingRoomInfo?.waitingMediaItem;
     final mediaItem = isWaitingRoomMediaIntro
-        ? waitingRoomInfo?.introMediaItem
-        : waitingRoomInfo?.waitingMediaItem;
+        ? introMediaItem
+        : waitingMediaItem;
 
     final communityImageUrl = communityProvider.community.profileImageUrl;
     final eventImageUrl = eventProvider.event.image;
 
     // After the intro video is completed, we override the image.
+    // But only if an intro media item was actually set.
     final isCompletedIntroVideo =
-        _introVideoCompleted && isWaitingRoomMediaIntro;
+        _introVideoCompleted && isWaitingRoomMediaIntro && introMediaItem != null;
     if (isCompletedIntroVideo &&
         communityImageUrl != null &&
         communityImageUrl.isNotEmpty) {
@@ -76,6 +91,9 @@ class WaitingRoomPresenter with ChangeNotifier {
       );
     } else if (mediaItem != null) {
       return mediaItem;
+    } else if (isWaitingRoomMediaIntro && waitingMediaItem != null) {
+      // If we're in intro mode but no intro media is set, fall back to waiting media
+      return waitingMediaItem;
     } else if (eventImageUrl != null && eventImageUrl.isNotEmpty) {
       return MediaItem(
         type: MediaType.image,

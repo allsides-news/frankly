@@ -7,7 +7,6 @@ import 'package:client/core/localization/localization_helper.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/community/features/create_community/presentation/widgets/dialog_flow.dart';
-import 'package:client/core/utils/error_utils.dart';
 import 'package:client/features/community/presentation/widgets/community_icon_or_logo.dart';
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
@@ -20,7 +19,7 @@ import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/community/community.dart';
 import 'package:data_models/user/public_user_info.dart';
 
-import '../../../community/utils/community_theme_utils.dart';
+import '../../../community/utils/community_theme_utils.dart.dart';
 
 /// This is the top section of the home page that displays a carousel of images which link to the community home pages
 class MyCommunitiesSection extends StatefulWidget {

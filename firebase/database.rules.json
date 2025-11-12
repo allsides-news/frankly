@@ -1,9 +1,12 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "status": {
       "$user_id": {
-        ".read": false,
-        ".write": "$user_id === auth.uid",
+        ".read": "auth != null && $user_id === auth.uid",
+        ".write": "auth != null && $user_id === auth.uid",
+        ".validate": "newData.hasChildren(['state', 'last_changed']) && (newData.child('state').val() === 'online' || newData.child('state').val() === 'offline')"
       }
     }
   }

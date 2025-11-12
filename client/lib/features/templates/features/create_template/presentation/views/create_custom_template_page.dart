@@ -14,11 +14,11 @@ import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_list_view.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
 import 'package:client/core/widgets/custom_text_field.dart';
+import 'package:client/core/widgets/rich_text_editor.dart';
 import 'package:client/services.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/templates/template.dart';
 import 'package:provider/provider.dart';
-import 'package:client/core/localization/localization_helper.dart';
 
 enum TemplateActionType {
   create,
@@ -240,22 +240,15 @@ class __CreateCustomTemplatePageState extends State<_CreateCustomTemplatePage> {
         onChanged: (value) => templatePresenter.onChangeTitle(value),
       ),
       SizedBox(height: 10),
-      CustomTextField(
+      RichTextEditor(
         labelText: 'Description',
-        keyboardType: TextInputType.multiline,
-        minLines: 4,
-        maxLines: 4,
         initialValue:
             !isNullOrEmpty(templatePresenter.updatedTemplate.description)
                 ? templatePresenter.updatedTemplate.description
                 : null,
         onChanged: (value) => templatePresenter.onChangeDescription(value),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return context.l10n.enterValidName;
-          }
-          return null;
-        },
+        minLines: 4,
+        maxLines: 10,
       ),
     ];
   }

@@ -1,10 +1,8 @@
 import 'package:client/core/utils/image_utils.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/material.dart';
-import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/localization/localization_helper.dart';
-import 'package:client/core/widgets/custom_ink_well.dart';
 import 'package:client/core/widgets/navbar/nav_bar_provider.dart';
 import 'package:client/core/routing/locations.dart';
 import 'package:client/services.dart';
@@ -67,21 +65,24 @@ class CurrentCommunityIconOrLogo extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(left: isMobile ? 1 : 8),
       child: SizedBox(
-        height: isMobile ? 40 : 80,
+        height: isMobile ? 25 : 34,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // App logo
-            Semantics(
-              label: context.l10n.franklyLogo,
-              child: Image.asset(
-                AppAsset.kLogoPng.path,
-                width: 100,
-                height: isMobile ? 40 : 80,
-                fit: BoxFit.contain,
+            // App logo - centered vertically
+            Center(
+              child: Semantics(
+                label: context.l10n.franklyLogo,
+                child: Image.asset(
+                  AppAsset.kLogoPng.path,
+                  width: isMobile ? 113 : 153,
+                  height: isMobile ? 25 : 34,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
-            SizedBox(width: 10),
-            // TODO: I would prefer to use an SVG asset, but for some reason it looks terrible on web when loaded
+            SizedBox(width: 5),
+            //  TODO: I would prefer to use an SVG asset, but for some reason it looks terrible on web when loaded
             // Fix the SVG logo issue?
             /*    
             SvgPicture.asset(
@@ -95,18 +96,22 @@ class CurrentCommunityIconOrLogo extends StatelessWidget {
                   child: const CircularProgressIndicator(),),
             ), 
             */
-            SizedBox(width: 10),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              decoration: BoxDecoration(
-                color: Color(0xFFE5E0D6),
-                borderRadius: BorderRadius.circular(64),
-              ),
-              child: Text(
-                'BETA',
-                style: AppTextStyle.bodySmall.copyWith(
-                  color: context.theme.colorScheme.primary,
-                  height: 1.2,
+            SizedBox(width: 5),
+            // Badge - aligned to baseline/bottom with 2px lift desktop
+            Padding(
+              padding: EdgeInsets.only(bottom: isMobile ? 0 : 2),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Color(0xFFE5E0D6),
+                  borderRadius: BorderRadius.circular(64),
+                ),
+                child: Text(
+                  'ROUNDTABLES',
+                  style: AppTextStyle.bodySmall.copyWith(
+                    color: context.theme.colorScheme.primary,
+                    height: 1.2,
+                  ),
                 ),
               ),
             ),

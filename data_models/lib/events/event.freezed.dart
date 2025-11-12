@@ -1763,6 +1763,12 @@ mixin _$Participant {
   DateTime? get mostRecentPresentTime => throw _privateConstructorUsedError;
   String? get zipCode => throw _privateConstructorUsedError;
 
+  /// Whether user opted in to receive community communications
+  bool get optInToCommunity => throw _privateConstructorUsedError;
+
+  /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+  bool get optInToNewsletters => throw _privateConstructorUsedError;
+
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
   $ParticipantCopyWith<Participant> get copyWith =>
@@ -1795,7 +1801,9 @@ abstract class $ParticipantCopyWith<$Res> {
       List<BreakoutQuestion> breakoutRoomSurveyQuestions,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       DateTime? mostRecentPresentTime,
-      String? zipCode});
+      String? zipCode,
+      bool optInToCommunity,
+      bool optInToNewsletters});
 }
 
 /// @nodoc
@@ -1828,6 +1836,8 @@ class _$ParticipantCopyWithImpl<$Res, $Val extends Participant>
     Object? breakoutRoomSurveyQuestions = null,
     Object? mostRecentPresentTime = freezed,
     Object? zipCode = freezed,
+    Object? optInToCommunity = null,
+    Object? optInToNewsletters = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -1898,6 +1908,14 @@ class _$ParticipantCopyWithImpl<$Res, $Val extends Participant>
           ? _value.zipCode
           : zipCode // ignore: cast_nullable_to_non_nullable
               as String?,
+      optInToCommunity: null == optInToCommunity
+          ? _value.optInToCommunity
+          : optInToCommunity // ignore: cast_nullable_to_non_nullable
+              as bool,
+      optInToNewsletters: null == optInToNewsletters
+          ? _value.optInToNewsletters
+          : optInToNewsletters // ignore: cast_nullable_to_non_nullable
+              as bool,
     ) as $Val);
   }
 }
@@ -1930,7 +1948,9 @@ abstract class _$$_ParticipantCopyWith<$Res>
       List<BreakoutQuestion> breakoutRoomSurveyQuestions,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       DateTime? mostRecentPresentTime,
-      String? zipCode});
+      String? zipCode,
+      bool optInToCommunity,
+      bool optInToNewsletters});
 }
 
 /// @nodoc
@@ -1961,6 +1981,8 @@ class __$$_ParticipantCopyWithImpl<$Res>
     Object? breakoutRoomSurveyQuestions = null,
     Object? mostRecentPresentTime = freezed,
     Object? zipCode = freezed,
+    Object? optInToCommunity = null,
+    Object? optInToNewsletters = null,
   }) {
     return _then(_$_Participant(
       id: null == id
@@ -2031,6 +2053,14 @@ class __$$_ParticipantCopyWithImpl<$Res>
           ? _value.zipCode
           : zipCode // ignore: cast_nullable_to_non_nullable
               as String?,
+      optInToCommunity: null == optInToCommunity
+          ? _value.optInToCommunity
+          : optInToCommunity // ignore: cast_nullable_to_non_nullable
+              as bool,
+      optInToNewsletters: null == optInToNewsletters
+          ? _value.optInToNewsletters
+          : optInToNewsletters // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -2058,7 +2088,9 @@ class _$_Participant implements _Participant {
       this.breakoutRoomSurveyQuestions = const [],
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       this.mostRecentPresentTime,
-      this.zipCode});
+      this.zipCode,
+      this.optInToCommunity = false,
+      this.optInToNewsletters = false});
 
   factory _$_Participant.fromJson(Map<String, dynamic> json) =>
       _$$_ParticipantFromJson(json);
@@ -2113,9 +2145,19 @@ class _$_Participant implements _Participant {
   @override
   final String? zipCode;
 
+  /// Whether user opted in to receive community communications
+  @override
+  @JsonKey()
+  final bool optInToCommunity;
+
+  /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+  @override
+  @JsonKey()
+  final bool optInToNewsletters;
+
   @override
   String toString() {
-    return 'Participant(id: $id, communityId: $communityId, externalCommunityId: $externalCommunityId, templateId: $templateId, lastUpdatedTime: $lastUpdatedTime, createdDate: $createdDate, scheduledTime: $scheduledTime, status: $status, isPresent: $isPresent, availableForBreakoutSessionId: $availableForBreakoutSessionId, membershipStatus: $membershipStatus, currentBreakoutRoomId: $currentBreakoutRoomId, muteOverride: $muteOverride, joinParameters: $joinParameters, breakoutRoomSurveyQuestions: $breakoutRoomSurveyQuestions, mostRecentPresentTime: $mostRecentPresentTime, zipCode: $zipCode)';
+    return 'Participant(id: $id, communityId: $communityId, externalCommunityId: $externalCommunityId, templateId: $templateId, lastUpdatedTime: $lastUpdatedTime, createdDate: $createdDate, scheduledTime: $scheduledTime, status: $status, isPresent: $isPresent, availableForBreakoutSessionId: $availableForBreakoutSessionId, membershipStatus: $membershipStatus, currentBreakoutRoomId: $currentBreakoutRoomId, muteOverride: $muteOverride, joinParameters: $joinParameters, breakoutRoomSurveyQuestions: $breakoutRoomSurveyQuestions, mostRecentPresentTime: $mostRecentPresentTime, zipCode: $zipCode, optInToCommunity: $optInToCommunity, optInToNewsletters: $optInToNewsletters)';
   }
 
   @override
@@ -2156,30 +2198,37 @@ class _$_Participant implements _Participant {
                 breakoutRoomSurveyQuestions) &&
             (identical(other.mostRecentPresentTime, mostRecentPresentTime) ||
                 other.mostRecentPresentTime == mostRecentPresentTime) &&
-            (identical(other.zipCode, zipCode) || other.zipCode == zipCode));
+            (identical(other.zipCode, zipCode) || other.zipCode == zipCode) &&
+            (identical(other.optInToCommunity, optInToCommunity) ||
+                other.optInToCommunity == optInToCommunity) &&
+            (identical(other.optInToNewsletters, optInToNewsletters) ||
+                other.optInToNewsletters == optInToNewsletters));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      id,
-      communityId,
-      externalCommunityId,
-      templateId,
-      lastUpdatedTime,
-      createdDate,
-      scheduledTime,
-      status,
-      isPresent,
-      availableForBreakoutSessionId,
-      membershipStatus,
-      currentBreakoutRoomId,
-      muteOverride,
-      const DeepCollectionEquality().hash(joinParameters),
-      const DeepCollectionEquality().hash(breakoutRoomSurveyQuestions),
-      mostRecentPresentTime,
-      zipCode);
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        id,
+        communityId,
+        externalCommunityId,
+        templateId,
+        lastUpdatedTime,
+        createdDate,
+        scheduledTime,
+        status,
+        isPresent,
+        availableForBreakoutSessionId,
+        membershipStatus,
+        currentBreakoutRoomId,
+        muteOverride,
+        const DeepCollectionEquality().hash(joinParameters),
+        const DeepCollectionEquality().hash(breakoutRoomSurveyQuestions),
+        mostRecentPresentTime,
+        zipCode,
+        optInToCommunity,
+        optInToNewsletters
+      ]);
 
   @JsonKey(ignore: true)
   @override
@@ -2216,7 +2265,9 @@ abstract class _Participant implements Participant {
       final List<BreakoutQuestion> breakoutRoomSurveyQuestions,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       final DateTime? mostRecentPresentTime,
-      final String? zipCode}) = _$_Participant;
+      final String? zipCode,
+      final bool optInToCommunity,
+      final bool optInToNewsletters}) = _$_Participant;
 
   factory _Participant.fromJson(Map<String, dynamic> json) =
       _$_Participant.fromJson;
@@ -2266,6 +2317,14 @@ abstract class _Participant implements Participant {
   DateTime? get mostRecentPresentTime;
   @override
   String? get zipCode;
+  @override
+
+  /// Whether user opted in to receive community communications
+  bool get optInToCommunity;
+  @override
+
+  /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+  bool get optInToNewsletters;
   @override
   @JsonKey(ignore: true)
   _$$_ParticipantCopyWith<_$_Participant> get copyWith =>

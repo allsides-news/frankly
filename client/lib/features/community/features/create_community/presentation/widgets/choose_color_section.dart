@@ -3,7 +3,7 @@ import 'package:client/core/utils/navigation_utils.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:client/features/community/utils/community_theme_utils.dart';
+import 'package:client/features/community/utils/community_theme_utils.dart.dart';
 import 'package:client/features/community/features/create_community/presentation/widgets/theme_preview_container.dart';
 import 'package:client/core/widgets/custom_text_field.dart';
 import 'package:client/services.dart';
@@ -106,7 +106,7 @@ class _ChooseColorSectionState extends State<ChooseColorSection> {
             context.theme.colorScheme.primary;
 
         if (!ThemeUtils.isFirstColorLighter(firstColor, secondColor)) {
-          _selectedColorErrorMessage = 'Light color is not light enough.';
+          _selectedColorErrorMessage = 'Light color must be lighter';
         } else if (!ThemeUtils.isContrastRatioValid(
           context,
           firstColor,
@@ -119,13 +119,13 @@ class _ChooseColorSectionState extends State<ChooseColorSection> {
           firstColor,
           context.theme.colorScheme.secondary,
         )) {
-          _selectedColorErrorMessage = 'Light color is not light enough.';
+          _selectedColorErrorMessage = 'Light color must be lighter';
         } else if (!ThemeUtils.isContrastRatioValid(
           context,
           secondColor,
           context.theme.colorScheme.surface,
         )) {
-          _selectedColorErrorMessage = 'Dark color is not dark enough.';
+          _selectedColorErrorMessage = 'Dark color must be darker';
         }
       } else {
         _selectedColorErrorMessage = null;
@@ -381,26 +381,29 @@ class _ChooseColorSectionState extends State<ChooseColorSection> {
         ),
       );
 
-  Widget _buildCheckIcon() => Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _isSelectedColorComboValid
-              ? context.theme.colorScheme.surfaceContainer
-              : null,
-          border: Border.all(
+  Widget _buildCheckIcon() => Align(
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
             color: _isSelectedColorComboValid
-                ? context.theme.colorScheme.onSurface
-                : context.theme.colorScheme.outline,
+                ? context.theme.colorScheme.onPrimary.withAlpha(40)
+                : null,
+            border: Border.all(
+              color: _isSelectedColorComboValid
+                  ? context.theme.colorScheme.primary
+                  : context.theme.colorScheme.onPrimaryContainer,
+            ),
           ),
-        ),
-        child: Center(
-          child: Icon(
-            _isSelectedColorComboValid ? Icons.check : Icons.close,
-            color: _isSelectedColorComboValid
-                ? context.theme.colorScheme.onSurface
-                : context.theme.colorScheme.outline,
+          child: Center(
+            child: Icon(
+              Icons.check,
+              color: _isSelectedColorComboValid
+                  ? context.theme.colorScheme.secondary
+                  : context.theme.colorScheme.onPrimaryContainer,
+            ),
           ),
         ),
       );

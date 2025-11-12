@@ -356,12 +356,42 @@ class AgoraRoom with ChangeNotifier {
 
   @override
   dispose() {
-    engine.unregisterEventHandler(_rtcEngineEventHandler);
-    engine.leaveChannel();
-    engine.stopPreview();
-    engine.enableLocalVideo(false);
-    engine.enableLocalAudio(false);
-    engine.release();
+    try {
+      engine.unregisterEventHandler(_rtcEngineEventHandler);
+    } catch (e) {
+      loggingService.log('Error unregistering event handler: $e');
+    }
+    
+    try {
+      // Stop preview and disable tracks BEFORE leaving channel
+      engine.stopPreview();
+    } catch (e) {
+      loggingService.log('Error stopping preview: $e');
+    }
+    
+    try {
+      engine.enableLocalVideo(false);
+    } catch (e) {
+      loggingService.log('Error disabling video: $e');
+    }
+    
+    try {
+      engine.enableLocalAudio(false);
+    } catch (e) {
+      loggingService.log('Error disabling audio: $e');
+    }
+    
+    try {
+      engine.leaveChannel();
+    } catch (e) {
+      loggingService.log('Error leaving channel: $e');
+    }
+    
+    try {
+      engine.release();
+    } catch (e) {
+      loggingService.log('Error releasing engine: $e');
+    }
 
     super.dispose();
   }

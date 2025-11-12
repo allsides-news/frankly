@@ -172,10 +172,21 @@ class EventCard extends StatelessWidget {
                                 .withOpacity(0.75),
                           ),
                         ),
-                      EventPageParticipantsList(
-                        event,
-                        iconSize: 30,
-                        showFullParticipantCount: true,
+                      Builder(
+                        builder: (context) {
+                          final canViewCounts = Provider.of<UserDataService>(context)
+                              .getMembership(
+                                Provider.of<CommunityProvider>(context)
+                                    .communityId,
+                              )
+                              .isMod;
+                          return EventPageParticipantsList(
+                            event,
+                            iconSize: 30,
+                            showFullParticipantCount: true,
+                            showParticipantCount: canViewCounts,
+                          );
+                        },
                       ),
                     ],
                   ],

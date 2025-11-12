@@ -27,9 +27,21 @@ class Event {
 
   external String get end;
 
-  external set organizer(String v);
+  external set organizer(Organizer v);
 
-  external String get organizer;
+  external Organizer get organizer;
+}
+
+@JS()
+@anonymous
+class Organizer {
+  external factory Organizer({String name, String email});
+  
+  external String get name;
+  external set name(String v);
+  
+  external String get email;
+  external set email(String v);
 }
 
 @JS()

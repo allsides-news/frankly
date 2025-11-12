@@ -376,6 +376,8 @@ class EventProvider with ChangeNotifier {
     firstRow.add('Email');
     firstRow.add('Member status');
     firstRow.add('RSVP Time');
+    firstRow.add('Opted In To Community');
+    firstRow.add('Opted In To Newsletters');
     rows.add(firstRow);
 
     final numberOfQuestions =
@@ -396,6 +398,12 @@ class EventProvider with ChangeNotifier {
       );
       row.add(
         registrationData[i].memberEvent?.participant?.createdDate?.toUtc(),
+      );
+      row.add(
+        registrationData[i].memberEvent?.participant?.optInToCommunity ?? false,
+      );
+      row.add(
+        registrationData[i].memberEvent?.participant?.optInToNewsletters ?? false,
       );
 
       final event = registrationData[i].memberEvent;

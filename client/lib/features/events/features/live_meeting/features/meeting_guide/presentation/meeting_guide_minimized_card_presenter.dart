@@ -67,10 +67,12 @@ class MeetingGuideMinimizedCardPresenter {
     final isMeetingStarted = _agendaProvider.isMeetingStarted;
     final meetingGuideCardIsPending =
         _meetingGuideCardStore.meetingGuideCardIsPending;
+    final isInBreakout = _agendaProvider.isInBreakouts;
 
     return currentItem == null &&
         isMeetingStarted &&
-        !meetingGuideCardIsPending;
+        !meetingGuideCardIsPending &&
+        !isInBreakout;
   }
 
   String? getCurrentAgendaModelItemId() {

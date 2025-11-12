@@ -132,16 +132,19 @@ class UpdateLiveStreamParticipantCount implements CloudFunction {
 
   @override
   void register(FirebaseFunctions functions) {
+    final minInstancesConfig = functions.config.get(
+      'functions.update_live_stream_participant_count.min_instances',
+    );
+    final minInstances = minInstancesConfig != null 
+        ? int.parse(minInstancesConfig) 
+        : 0;
+    
     functions[functionName] = functions
         .runWith(
           RuntimeOptions(
             timeoutSeconds: 60,
             memory: '256MB',
-            minInstances: int.parse(
-              functions.config.get(
-                'functions.update_live_stream_participant_count.min_instances',
-              ),
-            ),
+            minInstances: minInstances,
           ),
         )
         .pubsub

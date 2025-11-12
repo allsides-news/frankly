@@ -2,6 +2,7 @@ import 'package:client/core/utils/provider_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/community/data/providers/community_permissions_provider.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
+import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/services.dart';
 import 'package:data_models/chat/chat.dart';
@@ -60,6 +61,12 @@ class EventPermissionsProvider with ChangeNotifier {
     return _isHost || communityPermissions.membershipStatus.isFacilitator;
   }
 
+  /// Checks if user can view participant counts in events, waiting rooms, and breakout rooms.
+  /// Hosts, facilitators, moderators, admins, and owners can all see participant counts.
+  bool get canViewParticipantCounts {
+    return _isHost || communityPermissions.membershipStatus.isFacilitator;
+  }
+
   bool get canEditEventTitle {
     return canEditEvent &&
             (communityProvider.settings.allowUnofficialTemplates) ||
@@ -74,6 +81,11 @@ class EventPermissionsProvider with ChangeNotifier {
   }
 
   bool get canJoinEvent {
+    // Check if event has ended based on duration
+    if (eventProvider.event.hasEnded(clockService.now())) {
+      return false;
+    }
+
     if (eventProvider.event.isLocked) {
       return false;
     } else if (communityProvider.settings.requireApprovalToJoin) {
@@ -84,12 +96,43 @@ class EventPermissionsProvider with ChangeNotifier {
   }
 
   bool get _isHost {
-    return eventProvider.event.creatorId == userService.currentUserId;
+    final currentUser = userService.currentUserId;
+    return currentUser != null && 
+           eventProvider.event.creatorId == currentUser;
   }
 
   bool get canBroadcastChat =>
-      (_isHost || communityPermissions.membershipStatus.isMod) &&
-      eventProvider.isLiveStream;
+      _isHost || communityPermissions.membershipStatus.isMod;
+
+  /// Returns true if the user should have chat disabled in hostless waiting room.
+  /// Members and Attendees cannot chat in hostless waiting room, but can chat in breakouts.
+  bool shouldDisableChatInHostlessWaitingRoom(BuildContext context) {
+    // Only disable for hostless events
+    if (eventProvider.event.eventType != EventType.hostless) {
+      return false;
+    }
+
+    // Check if we have a LiveMeetingProvider available
+    final liveMeetingProvider = watchProviderOrNull<LiveMeetingProvider>(context);
+    
+    // Only disable in waiting room, not in breakouts
+    final isInWaitingRoom = liveMeetingProvider?.shouldBeInWaitingRoom ?? false;
+    final isInBreakout = liveMeetingProvider?.isInBreakout ?? false;
+    
+    if (!isInWaitingRoom || isInBreakout) {
+      return false;
+    }
+
+    // Disable for Members and Attendees only
+    // Facilitators, Mods, Admins, and Owners can still chat
+    final status = communityPermissions.membershipStatus;
+    final isRestrictedRole = 
+        (status == MembershipStatus.member || 
+         status == MembershipStatus.attendee) &&
+        !status.isFacilitator;
+    
+    return isRestrictedRole;
+  }
 
   bool get canPinItemInParticipantWidget => _isHost;
 

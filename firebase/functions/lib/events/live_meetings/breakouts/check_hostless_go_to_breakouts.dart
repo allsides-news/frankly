@@ -27,18 +27,27 @@ class CheckHostlessGoToBreakouts
     CheckHostlessGoToBreakoutsRequest request,
     CallableContext context,
   ) async {
-    await checkHostlessGoToBreakouts(request, context.authUid!);
+    try {
+      await checkHostlessGoToBreakouts(request, context.authUid!);
+    } catch (e, stackTrace) {
+      print('Error in CheckHostlessGoToBreakouts: $e');
+      print('Stack trace: $stackTrace');
+      // Rethrow to let the client know there was an error
+      rethrow;
+    }
   }
 
   Future<void> checkHostlessGoToBreakouts(
     CheckHostlessGoToBreakoutsRequest request,
     String userId,
   ) async {
+    print('CheckHostlessGoToBreakouts called for event: ${request.eventPath}, userId: $userId');
+    
     final event = await firestoreUtils.getFirestoreObject(
       path: request.eventPath,
       constructor: (map) => Event.fromJson(map),
     );
-    print('Retrieved event: $event');
+    print('Retrieved event: ${event.id}, type: ${event.eventType}, status: ${event.status}');
 
     if (event.eventType != EventType.hostless) {
       print('Event is not hostless, returning.');
@@ -69,30 +78,39 @@ class CheckHostlessGoToBreakouts
       constructor: (map) => LiveMeeting.fromJson(map),
     );
 
-    if ([BreakoutRoomStatus.active]
-        .contains(liveMeeting.currentBreakoutSession?.breakoutRoomStatus)) {
-      print('Breakouts have already been assigned so returning.');
+    final currentBreakoutStatus = liveMeeting.currentBreakoutSession?.breakoutRoomStatus;
+    print('Current breakout status: $currentBreakoutStatus');
+    
+    if ([BreakoutRoomStatus.active, BreakoutRoomStatus.pending]
+        .contains(currentBreakoutStatus)) {
+      print('Breakouts have already been assigned or are being assigned, returning.');
       return;
     }
     const defaultTargetParticipants = 8;
 
-    print('initializing breakouts');
-    await InitiateBreakouts().initiateBreakouts(
-      event: event,
-      request: InitiateBreakoutsRequest(
-        eventPath: event.fullPath,
-        // Use the event ID so that any duplicate checks will use the same breakout session ID.
-        breakoutSessionId: event.id,
-        assignmentMethod: event.breakoutRoomDefinition?.assignmentMethod ??
-            BreakoutAssignmentMethod.targetPerRoom,
-        targetParticipantsPerRoom:
-            event.breakoutRoomDefinition?.targetParticipants ??
-                defaultTargetParticipants,
-        includeWaitingRoom: true,
-      ),
-      creatorId: userId,
-    );
-    print('Finished initiating breakouts');
+    print('Initializing breakouts for ${event.id}');
+    try {
+      await InitiateBreakouts().initiateBreakouts(
+        event: event,
+        request: InitiateBreakoutsRequest(
+          eventPath: event.fullPath,
+          // Use the event ID so that any duplicate checks will use the same breakout session ID.
+          breakoutSessionId: event.id,
+          assignmentMethod: event.breakoutRoomDefinition?.assignmentMethod ??
+              BreakoutAssignmentMethod.targetPerRoom,
+          targetParticipantsPerRoom:
+              event.breakoutRoomDefinition?.targetParticipants ??
+                  defaultTargetParticipants,
+          includeWaitingRoom: true,
+        ),
+        creatorId: userId,
+      );
+      print('Successfully finished initiating breakouts for ${event.id}');
+    } catch (e, stackTrace) {
+      print('Error initiating breakouts for ${event.id}: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<void> enqueueScheduledCheck(Event event) async {

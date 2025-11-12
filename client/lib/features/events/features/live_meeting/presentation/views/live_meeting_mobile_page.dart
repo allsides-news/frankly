@@ -12,6 +12,7 @@ import 'package:client/features/events/features/event_page/data/providers/event_
 import 'package:client/features/events/features/event_page/presentation/widgets/event_tabs.dart';
 import 'package:client/features/events/features/event_page/presentation/event_tabs_model.dart';
 import 'package:client/features/events/features/live_meeting/presentation/widgets/live_meeting_desktop.dart';
+import 'package:client/features/events/features/live_meeting/features/video/presentation/views/talking_odometer.dart';
 import 'package:client/features/events/features/live_meeting/presentation/views/live_meeting_mobile_contract.dart';
 import 'package:client/features/events/features/live_meeting/data/models/live_meeting_mobile_model.dart';
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
@@ -28,6 +29,7 @@ import 'package:client/features/events/features/live_meeting/features/video/pres
 import 'package:client/features/events/features/live_meeting/features/video/presentation/views/video_flutter_meeting.dart';
 import 'package:client/features/events/features/live_meeting/features/live_stream/presentation/widgets/live_stream_widget.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_agenda/data/providers/meeting_agenda_provider.dart';
+import 'package:client/features/events/features/live_meeting/presentation/widgets/event_countdown_timer.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_agenda/presentation/widgets/user_submitted_agenda.dart';
 import 'package:client/features/events/features/event_page/presentation/widgets/waiting_room.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
@@ -195,11 +197,14 @@ class _LiveMeetingMobilePageState extends State<LiveMeetingMobilePage>
   PreferredSize _buildAppBar() {
     final eventTabsController = Provider.of<EventTabsControllerState>(context);
     final agendaProvider = Provider.of<AgendaProvider>(context);
+    final eventProvider = EventProvider.watch(context);
 
     const showShareButton = false;
 
     final suppressGuide = ConferenceRoom.read(context) == null ||
         agendaProvider.agendaItems.isEmpty;
+
+    final showTalkingTimer = eventProvider.enableTalkingTimer;
 
     return PreferredSize(
       preferredSize: Size.fromHeight(60),
@@ -268,6 +273,25 @@ class _LiveMeetingMobilePageState extends State<LiveMeetingMobilePage>
                             LiveMeetingMobileBottomSheetState.fullyVisible,
                           );
                         },
+                      ),
+                    Spacer(),
+                    if (showTalkingTimer)
+                      Center(
+                        child: SizedBox(
+                          width: 70,
+                          height: 70,
+                          child: Transform.scale(
+                            scale: 0.85,
+                            child: Theme(
+                              data: context.theme.copyWith(
+                                colorScheme: context.theme.colorScheme.copyWith(
+                                  onPrimary: context.theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              child: TalkingOdometer(),
+                            ),
+                          ),
+                        ),
                       ),
                     Spacer(),
                     if (showShareButton)
@@ -417,8 +441,15 @@ class _LiveMeetingMobilePageState extends State<LiveMeetingMobilePage>
     final eventProvider = EventProvider.watch(context);
     final isInLiveStreamLobby = eventProvider.isLiveStream &&
         !LiveMeetingProvider.watch(context).isInBreakout;
+    
+    // Check if chat should be disabled for this user in hostless waiting room
+    final eventPermissions = EventPermissionsProvider.watch(context);
+    final shouldDisableChat = 
+        eventPermissions?.shouldDisableChatInHostlessWaitingRoom(context) ?? false;
+    
     final isFloatingChatEnabled = eventTabsController.widget.enableChat &&
-        eventProvider.enableFloatingChat;
+        eventProvider.enableFloatingChat &&
+        !shouldDisableChat;
 
     return Stack(
       children: [
@@ -494,6 +525,18 @@ class _LiveMeetingMobilePageState extends State<LiveMeetingMobilePage>
           builder: (_, __) => Stack(
             children: [
               _buildMeeting(),
+              // Event countdown timer - shows X minutes before event ends
+              Positioned(
+                top: 8,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: EventCountdownTimer(
+                    event: EventProvider.watch(context).event,
+                    minutesBeforeEnd: 5,
+                  ),
+                ),
+              ),
               if (EventProvider.watch(context)
                       .event
                       .eventSettings
@@ -813,7 +856,14 @@ class _LiveMeetingMobilePageState extends State<LiveMeetingMobilePage>
                           ),
                         SizedBox(width: 10),
                         if (!meetingFinished &&
-                            agendaProvider.agendaItems.isNotEmpty)
+                            agendaProvider.agendaItems.isNotEmpty) ...[
+                          Text(
+                            'NEXT',
+                            style: context.theme.textTheme.bodyMedium?.copyWith(
+                              color: context.theme.colorScheme.onPrimary,
+                            ),
+                          ),
+                          SizedBox(width: 10),
                           SizedBox(
                             width: 40,
                             height: 40,
@@ -836,6 +886,7 @@ class _LiveMeetingMobilePageState extends State<LiveMeetingMobilePage>
                               ),
                             ),
                           ),
+                        ],
                       ],
                     ],
                     if (!isBottomSheetPresent &&
@@ -1017,8 +1068,7 @@ class _LiveMeetingBottomSheetState extends State<LiveMeetingBottomSheet> {
       return ChatWidget(
         parentPath: context.watch<ChatModel>().parentPath,
         messageInputHint: 'Say something',
-        allowBroadcast: context.watch<LiveMeetingProvider>().isInBreakout &&
-            context.watch<EventPermissionsProvider>().canBroadcastChat,
+        allowBroadcast: context.watch<EventPermissionsProvider>().canBroadcastChat,
       );
     } else if (selectedTab == TabType.suggestions) {
       return Padding(

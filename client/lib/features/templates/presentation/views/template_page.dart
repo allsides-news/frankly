@@ -35,6 +35,7 @@ import 'package:client/features/user/data/services/user_data_service.dart';
 import 'package:client/services.dart';
 import 'package:client/core/utils/dialogs.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
+import 'package:client/core/widgets/html_content.dart';
 import 'package:client/core/widgets/stream_utils.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/community/community_tag.dart';
@@ -346,10 +347,16 @@ class _TemplatePageState extends State<TemplatePage>
           ),
         ),
         SizedBox(height: 10),
-        HeightConstrainedText(
-          template.description ?? 'No description for this event',
-          style: AppTextStyle.body,
-        ),
+        if (template.description != null && template.description!.isNotEmpty)
+          HtmlContent(
+            template.description!,
+            style: AppTextStyle.body,
+          )
+        else
+          HeightConstrainedText(
+            'No description for this event',
+            style: AppTextStyle.body,
+          ),
       ],
     );
   }

@@ -72,18 +72,42 @@ class UpdateBreakoutRoomFlagStatus
         context,
       );
 
+      // Set timestamp when help is requested, clear it when unflagged
+      // Only set timestamp if changing from unflagged to needsHelp (preserve oldest request)
+      final isChangingToNeedsHelp = requestedBreakoutRoom.flagStatus != BreakoutRoomFlagStatus.needsHelp &&
+          request.flagStatus == BreakoutRoomFlagStatus.needsHelp;
+      final isChangingToUnflagged = requestedBreakoutRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp &&
+          request.flagStatus == BreakoutRoomFlagStatus.unflagged;
+      
+      final now = DateTime.now();
+      final fieldsToUpdate = <String>[BreakoutRoom.kFieldFlagStatus];
+      
+      // Only update timestamp if:
+      // 1. Changing to needsHelp AND timestamp is not already set (preserve oldest)
+      // 2. Changing to unflagged (clear timestamp)
+      DateTime? newTimestamp;
+      if (isChangingToUnflagged) {
+        newTimestamp = null;
+        fieldsToUpdate.add(BreakoutRoom.kFieldHelpRequestedTimestamp);
+      } else if (isChangingToNeedsHelp && requestedBreakoutRoom.helpRequestedTimestamp == null) {
+        newTimestamp = now;
+        fieldsToUpdate.add(BreakoutRoom.kFieldHelpRequestedTimestamp);
+      } else {
+        // Keep existing timestamp - don't update the field
+        newTimestamp = requestedBreakoutRoom.helpRequestedTimestamp;
+      }
+      
+      final updatedRoom = requestedBreakoutRoom.copyWith(
+        flagStatus: request.flagStatus!,
+        helpRequestedTimestamp: newTimestamp,
+      );
+
       transaction.update(
         breakoutRoomDoc.reference,
         UpdateData.fromMap(
           jsonSubset(
-            [BreakoutRoom.kFieldFlagStatus],
-            firestoreUtils.toFirestoreJson(
-              requestedBreakoutRoom
-                  .copyWith(
-                    flagStatus: request.flagStatus!,
-                  )
-                  .toJson(),
-            ),
+            fieldsToUpdate,
+            firestoreUtils.toFirestoreJson(updatedRoom.toJson()),
           ),
         ),
       );

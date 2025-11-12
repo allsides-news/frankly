@@ -24,7 +24,7 @@ class GetStripeBillingPortalLink
     final stripeCustomerId =
         await stripeUtil.getOrCreateCustomerStripeId(uid: context.authUid!);
 
-    final domain = functions.config.get('app.domain') as String;
+    final domain = functions.config.get('app.domain') as String? ?? 'roundtables.allsides.com';
 
     final Map<String, String> params = {
       'customer': stripeCustomerId,

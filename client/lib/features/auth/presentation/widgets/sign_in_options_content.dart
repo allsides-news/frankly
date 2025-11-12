@@ -56,8 +56,8 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
   }
 
   bool isPasswordValid(String password) {
-    // Password must be at least 12 characters long, and contain one lowercase and one uppercase letter
-    return RegExp(r'^(?=.*?[A-Z])(?=.*?[a-z]).{12,}$').hasMatch(password);
+    // Password must be at least 6 characters long, and contain one lowercase and one uppercase letter
+    return RegExp(r'^(?=.*?[A-Z])(?=.*?[a-z]).{6,}$').hasMatch(password);
   }
 
   Future<void> _onSubmit() async {
@@ -254,12 +254,30 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
       googleButtonWidth = 80;
     }
 
+    // Determine if we're on mobile (width < 768) or desktop
+    bool isMobile = screenWidth < 768;
+    
+    // Get the actual font size for titleLarge to calculate accurate character width
+    double fontSize = context.theme.textTheme.titleLarge?.fontSize ?? 22.0;
+    // Average character width is approximately 0.6-0.7 of font size for typical fonts
+    double approximateCharWidth = fontSize * 0.65;
+    double minWidthFor50Chars = 50 * approximateCharWidth;
+    
     return [
       Align(
         alignment: Alignment.center,
-        child: HeightConstrainedText(
-          _getTitleText(),
-          style: context.theme.textTheme.titleLarge,
+        child: ConstrainedBox(
+          // On desktop, prevent wrapping until 50 characters
+          constraints: BoxConstraints(
+            minWidth: isMobile ? 0 : minWidthFor50Chars,
+            maxWidth: double.infinity,
+          ),
+          child: HeightConstrainedText(
+            _getTitleText(),
+            style: context.theme.textTheme.titleLarge,
+            textAlign: TextAlign.center,
+            softWrap: isMobile ? true : _getTitleText().length > 50,
+          ),
         ),
       ),
       SizedBox(height: 9),
@@ -441,24 +459,49 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
   }
 
   Widget _buildTermsOfService() {
-    return Text.rich(
-      TextSpan(
-        style: context.theme.textTheme.bodyMedium,
-        children: [
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text.rich(
           TextSpan(
-            text: context.l10n.termsAgreementPrefix(Environment.appName),
+            style: context.theme.textTheme.bodyMedium,
+            children: [
+              TextSpan(
+                text: context.l10n.termsAgreementPrefix(Environment.appName),
+              ),
+              TextSpan(
+                text: context.l10n.termsOfService(Environment.appName),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => launch(Environment.termsUrl),
+                style: context.theme.textTheme.bodyMedium?.copyWith(
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+              TextSpan(text: '.'),
+            ],
           ),
+        ),
+        SizedBox(height: 8),
+        Text.rich(
           TextSpan(
-            text: context.l10n.termsOfService(Environment.appName),
-            recognizer: TapGestureRecognizer()
-              ..onTap = () => launch(Environment.termsUrl),
-            style: context.theme.textTheme.bodyMedium?.copyWith(
-              decoration: TextDecoration.underline,
-            ),
+            style: context.theme.textTheme.bodyMedium,
+            children: [
+              TextSpan(
+                text: context.l10n.emailConsentText,
+              ),
+              TextSpan(
+                text: context.l10n.allsidesPrivacyPolicy,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => launch(Environment.privacyPolicyUrl),
+                style: context.theme.textTheme.bodyMedium?.copyWith(
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+              TextSpan(text: '.'),
+            ],
           ),
-          TextSpan(text: '.'),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -38,7 +38,7 @@ class CreateDonationCheckoutSession
 
     final String customerId =
         await stripeUtil.getOrCreateCustomerStripeId(uid: context.authUid!);
-    final domain = functions.config.get('app.domain') as String;
+    final domain = functions.config.get('app.domain') as String? ?? 'roundtables.allsides.com';
 
     final communitySnapshot =
         await firestore.document('/community/$communityId').get();

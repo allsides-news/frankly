@@ -28,75 +28,91 @@ class CheckAssignToBreakouts
     CheckAssignToBreakoutsRequest request,
     CallableContext context,
   ) async {
-    await checkAssignToBreakouts(request, context.authUid!);
+    try {
+      await checkAssignToBreakouts(request, context.authUid!);
+    } catch (e, stackTrace) {
+      print('Error in CheckAssignToBreakouts.action: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<void> checkAssignToBreakouts(
     CheckAssignToBreakoutsRequest request,
     String userId,
   ) async {
-    final event = await firestoreUtils.getFirestoreObject(
-      path: request.eventPath,
-      constructor: (map) => Event.fromJson(map),
-    );
-    print('Retrieved event: $event');
-
-    if (event.status != EventStatus.active) {
-      print('Event is cancelled, returning.');
-      return;
-    }
-
-    final liveMeetingPath = '${event.fullPath}/live-meetings/${event.id}';
-    final liveMeeting = await firestoreUtils.getFirestoreObject(
-      path: liveMeetingPath,
-      constructor: (map) => LiveMeeting.fromJson(map),
-    );
-
-    final breakoutSession = liveMeeting.currentBreakoutSession;
-
-    if (breakoutSession == null) {
-      print('Breakout session not found in live meeting.');
-      return;
-    }
-
-    // Check if it is currently after the expected amount of time of the waiting room
-    final scheduledStartTime =
-        breakoutSession.scheduledTime?.subtract(_clockSkewBuffer);
-    if (scheduledStartTime == null) {
-      print('Scheduled start time is null.');
-      return;
-    }
-
-    final now = DateTime.now();
-    print(
-      'Comparing now ($now) and scheduled start time ($scheduledStartTime) with buffer',
-    );
-    if (now.isBefore(scheduledStartTime)) {
-      print(
-        'It is currently ($now) still before scheduled start time ($scheduledStartTime) so returning.',
+    print('CheckAssignToBreakouts called for event: ${request.eventPath}, breakoutSessionId: ${request.breakoutSessionId}, userId: $userId');
+    
+    try {
+      final event = await firestoreUtils.getFirestoreObject(
+        path: request.eventPath,
+        constructor: (map) => Event.fromJson(map),
       );
-      return;
-    }
+      print('Retrieved event: ${event.id}, type: ${event.eventType}, status: ${event.status}');
 
-    if (breakoutSession.breakoutRoomSessionId != request.breakoutSessionId) {
+      if (event.status != EventStatus.active) {
+        print('Event is cancelled, returning.');
+        return;
+      }
+
+      final liveMeetingPath = '${event.fullPath}/live-meetings/${event.id}';
+      final liveMeeting = await firestoreUtils.getFirestoreObject(
+        path: liveMeetingPath,
+        constructor: (map) => LiveMeeting.fromJson(map),
+      );
+
+      final breakoutSession = liveMeeting.currentBreakoutSession;
+
+      if (breakoutSession == null) {
+        print('Breakout session not found in live meeting.');
+        return;
+      }
+
+      // Check if it is currently after the expected amount of time of the waiting room
+      final scheduledStartTime =
+          breakoutSession.scheduledTime?.subtract(_clockSkewBuffer);
+      if (scheduledStartTime == null) {
+        print('Scheduled start time is null.');
+        return;
+      }
+
+      final now = DateTime.now();
       print(
-          'Current breakout session (${breakoutSession.breakoutRoomSessionId})'
-          ' does not match requested session ID (${request.breakoutSessionId}).');
-      return;
-    }
+        'Comparing now ($now) and scheduled start time ($scheduledStartTime) with buffer',
+      );
+      if (now.isBefore(scheduledStartTime)) {
+        print(
+          'It is currently ($now) still before scheduled start time ($scheduledStartTime) so returning.',
+        );
+        return;
+      }
 
-    if (BreakoutRoomStatus.active == breakoutSession.breakoutRoomStatus) {
-      print('Breakouts have already been assigned so returning.');
-      return;
-    }
+      if (breakoutSession.breakoutRoomSessionId != request.breakoutSessionId) {
+        print(
+            'Current breakout session (${breakoutSession.breakoutRoomSessionId})'
+            ' does not match requested session ID (${request.breakoutSessionId}).');
+        return;
+      }
 
-    await AssignToBreakouts().assignToBreakouts(
-      breakoutSessionId: breakoutSession.breakoutRoomSessionId,
-      assignmentMethod: breakoutSession.assignmentMethod,
-      targetParticipantsPerRoom: breakoutSession.targetParticipantsPerRoom,
-      includeWaitingRoom: breakoutSession.hasWaitingRoom,
-      event: event,
-      creatorId: userId,
-    );
+      if (BreakoutRoomStatus.active == breakoutSession.breakoutRoomStatus) {
+        print('Breakouts have already been assigned so returning.');
+        return;
+      }
+
+      print('Starting smart match assignment for event ${event.id}, method: ${breakoutSession.assignmentMethod}');
+      await AssignToBreakouts().assignToBreakouts(
+        breakoutSessionId: breakoutSession.breakoutRoomSessionId,
+        assignmentMethod: breakoutSession.assignmentMethod,
+        targetParticipantsPerRoom: breakoutSession.targetParticipantsPerRoom,
+        includeWaitingRoom: breakoutSession.hasWaitingRoom,
+        event: event,
+        creatorId: userId,
+      );
+      print('Successfully completed smart match assignment for event ${event.id}');
+    } catch (e, stackTrace) {
+      print('Error in checkAssignToBreakouts for event path ${request.eventPath}: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 }

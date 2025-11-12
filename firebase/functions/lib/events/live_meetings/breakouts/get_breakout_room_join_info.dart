@@ -17,6 +17,11 @@ class GetBreakoutRoomJoinInfo
         super(
           'GetBreakoutRoomJoinInfo',
           (jsonMap) => GetBreakoutRoomJoinInfoRequest.fromJson(jsonMap),
+          runWithOptions: RuntimeOptions(
+            timeoutSeconds: 60,
+            memory: '8GB',  // MAXIMUM - Nuclear option for production stability
+            minInstances: 15,  // 15 warm instances always ready
+          ),
         );
 
   @override
@@ -73,11 +78,17 @@ class GetBreakoutRoomJoinInfo
       throw HttpsError(HttpsError.failedPrecondition, 'unauthorized', null);
     }
 
+    // Construct the breakout room path for recording state storage
+    final breakoutRoomPath = '$liveMeetingPath/breakout-room-sessions/${liveMeeting.currentBreakoutSession?.breakoutRoomSessionId}/breakout-rooms/${request.breakoutRoomId}';
+    
     final joinInfo = await liveMeetingUtils.getBreakoutRoomJoinInfo(
       communityId: event.communityId,
       meetingId: breakoutRoom.roomId,
       userId: context.authUid!,
       record: breakoutRoom.record,
+      eventId: event.id,
+      breakoutRoomId: request.breakoutRoomId,
+      breakoutRoomPath: breakoutRoomPath,
     );
 
     return joinInfo.toJson();

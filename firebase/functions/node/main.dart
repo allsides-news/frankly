@@ -15,7 +15,9 @@ import 'package:functions/community/create_community.dart';
 import 'package:functions/events/live_meetings/create_live_stream.dart';
 import 'package:functions/admin/payments/create_stripe_connected_account.dart';
 import 'package:functions/admin/payments/create_subscription_checkout_session.dart';
+import 'package:functions/events/auto_end_event.dart';
 import 'package:functions/events/event_ended.dart';
+import 'package:functions/events/on_event.dart';
 import 'package:functions/events/live_meetings/breakouts/get_breakout_room_assignment.dart';
 import 'package:functions/events/live_meetings/breakouts/get_breakout_room_join_info.dart';
 import 'package:functions/events/calendar/get_calendar_link.dart';
@@ -54,6 +56,7 @@ import 'package:functions/community/on_community.dart';
 import 'package:functions/community/on_community_membership.dart';
 import 'package:functions/admin/partner_agreements/on_partner_agreements.dart';
 import 'package:functions/templates/on_template.dart';
+import 'package:functions/chat/on_broadcast_chat_message.dart';
 import 'package:functions/events/calendar/calendar_feed_ics.dart';
 import 'package:functions/events/calendar/calendar_feed_rss.dart';
 import 'package:functions/events/live_meetings/breakouts/check_assign_to_breakouts_server.dart';
@@ -136,6 +139,7 @@ final _cloudFunctions = <CloudFunction>[
   UpdatePresenceStatus(),
 
   // On PubSub functions
+  AutoEndEvents(),
   TriggerEmailDigests(),
   UpdateLiveStreamParticipantCount(),
 ];
@@ -148,6 +152,8 @@ final _eventFunctions = <FirestoreEventFunction>[
   OnCommunityMembership(),
   OnPartnerAgreements(),
   OnTemplate(),
+  OnBroadcastChatMessage(),
+  OnBreakoutBroadcastChatMessage(),
 ];
 
 void _registerServices() {
@@ -159,7 +165,9 @@ void _registerServices() {
 }
 
 void _registerJsFunctions() {
-  functions['downloadRecording'] = require('../js/download-recordings.js');
+  functions['downloadRecording'] =
+      require('../js/download-recordings.js');
+  functions['deleteRecordingJob'] = require('../js/delete-recording-job.js');
   functions['imageProxy'] = require('../js/image-proxy.js');
 }
 

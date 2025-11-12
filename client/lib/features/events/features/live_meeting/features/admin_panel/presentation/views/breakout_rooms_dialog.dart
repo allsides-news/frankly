@@ -149,7 +149,7 @@ class __BreakoutRoomsDialogState extends State<BreakoutRoomsDialog> {
             _numPerRoom = value;
           }),
           min: 1,
-          max: 16,
+          max: 20,
         ),
       ],
     );

@@ -101,8 +101,8 @@ class _BottomNavAddIcon extends StatelessWidget {
   final void Function()? onTap;
 
   const _BottomNavAddIcon({
-    this.onTap,
     Key? key,
+    this.onTap,
   }) : super(key: key);
 
   @override

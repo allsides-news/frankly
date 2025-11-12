@@ -21,7 +21,7 @@ class _HomePageSignInSectionState extends State<HomePageSignInSection> {
             children: [
               SizedBox(height: 45),
               SizedBox(
-                width: 300,
+                width: 380,
                 child: SignInOptionsContent(
                   showSignUp: true,
                 ),

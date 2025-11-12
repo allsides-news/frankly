@@ -20,7 +20,6 @@ import 'package:data_models/events/event.dart' hide Participant;
 import 'package:pedantic/pedantic.dart';
 import 'package:provider/provider.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:client/core/localization/localization_helper.dart';
 import 'package:synchronized/synchronized.dart';
 import 'package:universal_html/js_util.dart' as js_util;
 import 'package:universal_html/html.dart' as html;
@@ -307,7 +306,7 @@ class ConferenceRoom with ChangeNotifier {
         eventProvider: liveMeetingProvider.eventProvider,
         conferenceRoom: this,
       );
-      await _room!.connect(enableVideo: liveMeetingProvider.videoDefaultOn);
+      await _room!.connect();
       _room!.addListener(notifyListeners);
     } catch (err, stacktrace) {
       loggingService.log('error');

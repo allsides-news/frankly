@@ -8,6 +8,7 @@ import 'package:client/core/widgets/navbar/custom_scaffold.dart';
 import 'package:client/core/widgets/navbar/nav_bar_provider.dart';
 import 'package:client/services.dart';
 import 'package:client/features/user/data/services/user_service.dart';
+import 'package:client/core/utils/meta_tag_service.dart';
 import 'package:client/styles/styles.dart';
 import 'package:provider/provider.dart';
 
@@ -22,6 +23,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     context.read<NavBarProvider>().checkIfShouldResetNav();
+    // Reset meta tags to default when on home page
+    MetaTagService.resetToDefaults();
     super.initState();
   }
 

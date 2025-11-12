@@ -254,7 +254,7 @@ class TriggerEmailDigests extends CloudFunction {
 
     // return actual email contents
     final noReplyEmailAddr =
-        functions.config.get('app.no_reply_email') as String;
+        functions.config.get('app.no_reply_email') as String? ?? 'no-reply@allsides.com';
     return SendGridEmail(
       to: [emailAddress],
       from: '${community.name} <$noReplyEmailAddr>',
@@ -268,6 +268,7 @@ class TriggerEmailDigests extends CloudFunction {
             userId: userId,
           ),
         ),
+        attachments: [],
       ),
     );
   }

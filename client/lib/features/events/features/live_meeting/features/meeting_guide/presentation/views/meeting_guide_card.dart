@@ -128,11 +128,12 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
     final currentItem = _presenter.getCurrentAgendaItem();
     final isMeetingStarted = _presenter.isMeetingStarted();
     final isCardPending = _presenter.isCardPending();
-
-    final meetingFinished =
-        currentItem == null && isMeetingStarted && !isCardPending;
-
     final isInBreakout = agendaProvider.isInBreakouts;
+
+    final meetingFinished = currentItem == null &&
+        isMeetingStarted &&
+        !isCardPending &&
+        !isInBreakout;
     final canUserControlMeeting = _presenter.canUserControlMeeting;
     final isHosted = agendaProvider.event?.isHosted ?? false;
 
@@ -481,8 +482,12 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
               );
               final isMeetingStarted = _presenter.isMeetingStarted();
               final isCardPending = _presenter.isCardPending();
-              final meetingFinished =
-                  currentItem == null && isMeetingStarted && !isCardPending;
+              final isInBreakout =
+                  context.watch<AgendaProvider>().isInBreakouts;
+              final meetingFinished = currentItem == null &&
+                  isMeetingStarted &&
+                  !isCardPending &&
+                  !isInBreakout;
               final isHosted = _presenter.isHosted();
 
               if (isHosted) {

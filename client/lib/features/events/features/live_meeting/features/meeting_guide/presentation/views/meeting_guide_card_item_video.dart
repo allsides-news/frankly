@@ -210,12 +210,12 @@ class _MeetingGuideCardItemVideoState extends State<MeetingGuideCardItemVideo>
                       HeightConstrainedText(
                         'We\'ll be ready in:',
                         style: AppTextStyle.subhead.copyWith(
-                            color: context.theme.colorScheme.onPrimary),
+                            color: context.theme.colorScheme.onPrimary,),
                       ),
                       HeightConstrainedText(
                         '$minutes:$secondsFormatted',
                         style: AppTextStyle.timeLarge.copyWith(
-                            color: context.theme.colorScheme.onPrimary),
+                            color: context.theme.colorScheme.onPrimary,),
                       ),
                     ],
                   ],

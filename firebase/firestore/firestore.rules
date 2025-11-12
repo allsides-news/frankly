@@ -298,6 +298,8 @@ service cloud.firestore {
                     // Event Messages
                     match /event-messages/{eventMessageId} {
                         allow read: if hasAuth() && (isParticipant(getEventPath()) || isCommunityMod());
+                        allow create: if hasAuth() && verifyMembershipSnapshot() && isCommunityMod();
+                        allow update: if false;
                         allow delete: if hasAuth() && (isDocCreator(resource) || isCommunityMod());
                     }
 
@@ -332,15 +334,12 @@ service cloud.firestore {
                             allow read: if hasAuth() && isDocCreator(getEventData());
                             allow read: if hasAuth() && isParticipant(getEventPath());
                             allow read: if hasAuth() && isCommunityMod();
+                        }
 
+                        match /breakout-room-sessions/{sessionId} {
                             match /breakout-rooms/{breakoutRoomId} {
+                                // TODO: Only allow reading and writing if you are in this breakout room
                                 match /live-meetings/{liveMeetingId} {
-                                    match /participant-agenda-item-details/{agendaItemId}/participant-details/{userId} {
-                                        allow write: if hasAuth() && (request.auth.uid == userId || isCommunityMod() || isDocCreator(getEventData())) && isParticipant(getEventPath());
-                                        allow read: if hasAuth() && (isParticipant(getEventPath()) || isCommunityMod());
-                                    }
-
-                                    // TODO: Only allow reading and writing if you are in this breakout room
                                     match /chats/{chatId}/messages/{messageId} {
                                         allow read: if hasAuth() && (isParticipant(getEventPath()) || isCommunityMod());
 
@@ -486,6 +485,12 @@ service cloud.firestore {
             allow list: if false;
             allow write: if false;
             allow read: if false;
+        }
+
+        match /recordingJobs/{eventId} {
+            // Only allow reads for authenticated users - Cloud Function handles detailed authorization
+            allow write: if false;
+            allow read: if hasAuth();
         }
     }
 }

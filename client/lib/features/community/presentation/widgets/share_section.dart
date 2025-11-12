@@ -147,7 +147,7 @@ class _ShareSectionState extends State<ShareSection> {
             shape: BoxShape.circle,
             color: widget.iconBackgroundColor,
             border: Border.all(
-                color: widget.iconColor ?? context.theme.colorScheme.primary),
+                color: widget.iconColor ?? context.theme.colorScheme.primary,),
           ),
           duration: kTabScrollDuration,
           child: Padding(

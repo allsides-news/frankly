@@ -20,7 +20,7 @@ import 'package:provider/provider.dart';
 import 'package:sentry/sentry.dart';
 import 'package:uuid/uuid.dart';
 
-import 'config/firebase_options.dart';
+import 'firebase_options.dart';
 
 bool kShowStripeFeatures = false;
 bool useBotControls = false;

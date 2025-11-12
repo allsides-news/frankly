@@ -33,7 +33,7 @@ class GetStripeConnectedAccountLink
     orElseUnauthorized(agreement.stripeConnectedAccountId != null);
     orElseUnauthorized(agreement.initialUserId == context.authUid);
 
-    final domain = functions.config.get('app.domain') as String;
+    final domain = functions.config.get('app.domain') as String? ?? 'roundtables.allsides.com';
 
     final Map<String, String> params = {
       'account': agreement.stripeConnectedAccountId!,

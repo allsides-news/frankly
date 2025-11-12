@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:async/async.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:enum_to_string/enum_to_string.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:client/config/environment.dart';
 import 'package:client/features/events/features/event_page/data/providers/template_provider.dart';
 
 import 'package:client/core/utils/visible_exception.dart';
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
 import 'package:client/core/utils/extensions.dart';
-import 'package:data_models/events/event.dart';
 import 'package:data_models/community/community.dart';
 import 'package:data_models/templates/template.dart';
 import 'package:data_models/utils/utils.dart';
@@ -30,7 +31,18 @@ class FirestoreDatabase {
 
   static bool usingEmulator = false;
 
-  final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore firestore = _getFirestoreInstance();
+
+  static FirebaseFirestore _getFirestoreInstance() {
+    final databaseId = Environment.firebaseDatabaseId;
+    if (databaseId.isNotEmpty) {
+      return FirebaseFirestore.instanceFor(
+        app: Firebase.app(),
+        databaseId: databaseId,
+      );
+    }
+    return FirebaseFirestore.instance;
+  }
 
   CollectionReference<Map<String, dynamic>> get _communityCollection =>
       firestore.collection(communityCollectionName);

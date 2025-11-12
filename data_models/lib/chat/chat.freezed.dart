@@ -40,6 +40,11 @@ mixin _$ChatMessage {
   /// rooms and show in the floating display on screen
   bool? get broadcast => throw _privateConstructorUsedError;
 
+  /// Indicates the type of message for special styling
+  /// 'global_admin' - Global admin announcement from outside the meeting
+  /// null/other - Regular chat message
+  String? get messageType => throw _privateConstructorUsedError;
+
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
   $ChatMessageCopyWith<ChatMessage> get copyWith =>
@@ -66,7 +71,8 @@ abstract class $ChatMessageCopyWith<$Res> {
       ChatMessageStatus messageStatus,
       @JsonKey(unknownEnumValue: null)
       MembershipStatus? membershipStatusSnapshot,
-      bool? broadcast});
+      bool? broadcast,
+      String? messageType});
 }
 
 /// @nodoc
@@ -91,6 +97,7 @@ class _$ChatMessageCopyWithImpl<$Res, $Val extends ChatMessage>
     Object? messageStatus = null,
     Object? membershipStatusSnapshot = freezed,
     Object? broadcast = freezed,
+    Object? messageType = freezed,
   }) {
     return _then(_value.copyWith(
       id: freezed == id
@@ -129,6 +136,10 @@ class _$ChatMessageCopyWithImpl<$Res, $Val extends ChatMessage>
           ? _value.broadcast
           : broadcast // ignore: cast_nullable_to_non_nullable
               as bool?,
+      messageType: freezed == messageType
+          ? _value.messageType
+          : messageType // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -155,7 +166,8 @@ abstract class _$$_ChatMessageCopyWith<$Res>
       ChatMessageStatus messageStatus,
       @JsonKey(unknownEnumValue: null)
       MembershipStatus? membershipStatusSnapshot,
-      bool? broadcast});
+      bool? broadcast,
+      String? messageType});
 }
 
 /// @nodoc
@@ -178,6 +190,7 @@ class __$$_ChatMessageCopyWithImpl<$Res>
     Object? messageStatus = null,
     Object? membershipStatusSnapshot = freezed,
     Object? broadcast = freezed,
+    Object? messageType = freezed,
   }) {
     return _then(_$_ChatMessage(
       id: freezed == id
@@ -216,6 +229,10 @@ class __$$_ChatMessageCopyWithImpl<$Res>
           ? _value.broadcast
           : broadcast // ignore: cast_nullable_to_non_nullable
               as bool?,
+      messageType: freezed == messageType
+          ? _value.messageType
+          : messageType // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -236,7 +253,8 @@ class _$_ChatMessage extends _ChatMessage {
           unknownEnumValue: ChatMessageStatus.active)
       this.messageStatus = ChatMessageStatus.active,
       @JsonKey(unknownEnumValue: null) this.membershipStatusSnapshot,
-      this.broadcast = false})
+      this.broadcast = false,
+      this.messageType})
       : super._();
 
   factory _$_ChatMessage.fromJson(Map<String, dynamic> json) =>
@@ -271,9 +289,15 @@ class _$_ChatMessage extends _ChatMessage {
   @JsonKey()
   final bool? broadcast;
 
+  /// Indicates the type of message for special styling
+  /// 'global_admin' - Global admin announcement from outside the meeting
+  /// null/other - Regular chat message
+  @override
+  final String? messageType;
+
   @override
   String toString() {
-    return 'ChatMessage(id: $id, collectionPath: $collectionPath, message: $message, emotionType: $emotionType, creatorId: $creatorId, createdDate: $createdDate, messageStatus: $messageStatus, membershipStatusSnapshot: $membershipStatusSnapshot, broadcast: $broadcast)';
+    return 'ChatMessage(id: $id, collectionPath: $collectionPath, message: $message, emotionType: $emotionType, creatorId: $creatorId, createdDate: $createdDate, messageStatus: $messageStatus, membershipStatusSnapshot: $membershipStatusSnapshot, broadcast: $broadcast, messageType: $messageType)';
   }
 
   @override
@@ -297,7 +321,9 @@ class _$_ChatMessage extends _ChatMessage {
                     other.membershipStatusSnapshot, membershipStatusSnapshot) ||
                 other.membershipStatusSnapshot == membershipStatusSnapshot) &&
             (identical(other.broadcast, broadcast) ||
-                other.broadcast == broadcast));
+                other.broadcast == broadcast) &&
+            (identical(other.messageType, messageType) ||
+                other.messageType == messageType));
   }
 
   @JsonKey(ignore: true)
@@ -312,7 +338,8 @@ class _$_ChatMessage extends _ChatMessage {
       createdDate,
       messageStatus,
       membershipStatusSnapshot,
-      broadcast);
+      broadcast,
+      messageType);
 
   @JsonKey(ignore: true)
   @override
@@ -343,7 +370,8 @@ abstract class _ChatMessage extends ChatMessage {
       final ChatMessageStatus messageStatus,
       @JsonKey(unknownEnumValue: null)
       final MembershipStatus? membershipStatusSnapshot,
-      final bool? broadcast}) = _$_ChatMessage;
+      final bool? broadcast,
+      final String? messageType}) = _$_ChatMessage;
   _ChatMessage._() : super._();
 
   factory _ChatMessage.fromJson(Map<String, dynamic> json) =
@@ -376,6 +404,12 @@ abstract class _ChatMessage extends ChatMessage {
   /// Setting this field to true indicates it should show up in all breakout
   /// rooms and show in the floating display on screen
   bool? get broadcast;
+  @override
+
+  /// Indicates the type of message for special styling
+  /// 'global_admin' - Global admin announcement from outside the meeting
+  /// null/other - Regular chat message
+  String? get messageType;
   @override
   @JsonKey(ignore: true)
   _$$_ChatMessageCopyWith<_$_ChatMessage> get copyWith =>

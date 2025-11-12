@@ -1,8 +1,8 @@
-site_name: Frankly
+site_name: AllSides
 docs_dir: pages
 site_dir: output
 strict: true
-repo_url: https://github.com/berkmancenter/frankly
+repo_url: https://github.com/allsides-news/allsides-frankly
 plugins:
   - search
 theme:

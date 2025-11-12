@@ -13,7 +13,13 @@ const imageProxy = functions.https.onRequest((req, res) => {
      }
 
      try {
-       const response = await fetch(url);
+       // Add User-Agent header for AllSides domains to bypass Cloudflare restrictions
+       const headers = {};
+       if (url.includes('allsides.com')) {
+         headers['User-Agent'] = 'sutchka';
+       }
+
+       const response = await fetch(url, { headers });
        const contentType = response.headers.get('content-type');
 
        res.setHeader('Content-Type', contentType);

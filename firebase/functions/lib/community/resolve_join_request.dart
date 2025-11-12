@@ -169,9 +169,10 @@ class ResolveJoinRequest extends OnCallMethod<ResolveJoinRequestRequest> {
     final message = SendGridEmailMessage(
       subject: 'Join Request Approved: ${community.name ?? community.id}',
       html: makeJoinApprovedBody(community: community),
+      attachments: [],
     );
     final noReplyEmailAddr =
-        functions.config.get('app.no_reply_email') as String;
+        functions.config.get('app.no_reply_email') as String? ?? 'no-reply@allsides.com';
     return SendGridEmail(
       to: [emailAddress],
       from: '${community.name ?? community.id} <$noReplyEmailAddr>',

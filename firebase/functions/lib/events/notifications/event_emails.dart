@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_admin_interop/firebase_admin_interop.dart'
     as admin_interop;
 import 'package:firebase_functions_interop/firebase_functions_interop.dart';
@@ -31,22 +33,28 @@ class EventEmails {
       final offset = offsetEntry.value;
       final emailType = offsetEntry.key;
 
-      final doubleOffset = offset + offset;
-      print('Comparing time until to $doubleOffset');
+      print(
+          'Comparing time until event ($timeUntilEvent) to reminder offset ($offset)');
       // Only schedule the email if there is enough time between now and when
-      // the email will be.
+      // the email will be sent.
       final scheduledTime = event.scheduledTime;
-      if (scheduledTime != null && timeUntilEvent > (offset + offset)) {
+      if (scheduledTime != null && timeUntilEvent > offset) {
         print('Scheduling $emailType');
-        await EmailEventReminder().schedule(
-          EmailEventReminderRequest(
-            communityId: event.communityId,
-            templateId: event.templateId,
-            eventId: event.id,
-            eventEmailType: emailType,
-          ),
-          scheduledTime.subtract(offset),
-        );
+        try {
+          await EmailEventReminder().schedule(
+            EmailEventReminderRequest(
+              communityId: event.communityId,
+              templateId: event.templateId,
+              eventId: event.id,
+              eventEmailType: emailType,
+            ),
+            scheduledTime.subtract(offset),
+          );
+          print('Successfully scheduled $emailType reminder');
+        } catch (e) {
+          print('Failed to schedule $emailType reminder: $e');
+          // Continue with other reminders even if one fails
+        }
       }
     }
   }
@@ -89,6 +97,8 @@ class EventEmails {
       return 'Starting in 1 hour: $eventTitle';
     } else if (emailType == EventEmailType.canceled) {
       return 'Event Cancelled: $eventTitle';
+    } else if (emailType == EventEmailType.ended) {
+      return 'Thanks for joining';
     }
 
     return eventTitle;
@@ -196,7 +206,8 @@ class EventEmails {
         .calculateCapabilities(eventLocal.communityId);
     final hasPrePost = capabilities.hasPrePost ?? false;
     final noReplyEmailAddr =
-        functions.config.get('app.no_reply_email') as String;
+        functions.config.get('app.no_reply_email') as String? ??
+            'no-reply@allsides.com';
 
     // Send out emails
     for (final user in lookedUpUsers) {
@@ -246,7 +257,8 @@ class EventEmails {
     required bool allowPrePost,
     admin_interop.UserRecord? eventOrganizer,
   }) {
-    final linkPrefix = functions.config.get('app.full_url') as String;
+    final linkPrefix = functions.config.get('app.full_url') as String? ??
+        'https://roundtables.allsides.com';
     final link =
         '$linkPrefix/space/${event.communityId}/discuss/${event.templateId}/${event.id}';
     final communityUrl = '$linkPrefix/space/${event.communityId}';
@@ -309,6 +321,7 @@ class EventEmails {
       EventEmailType.initialSignUp: 'Registration',
       EventEmailType.oneDayReminder: 'Reminder',
       EventEmailType.oneHourReminder: 'Reminder',
+      EventEmailType.ended: 'Event Ended',
     };
     final actionTitle = actionTitles[emailType] ?? 'Event Update';
 
@@ -319,42 +332,53 @@ class EventEmails {
       EventEmailType.oneDayReminder:
           'You are registered for an upcoming event!',
       EventEmailType.oneHourReminder: 'Your event is beginning in one hour!',
+      EventEmailType.ended: 'Thanks for joining $eventTitle!',
     };
     final header = headers[emailType] ?? '';
 
-    final content = generateEmailEventInfo(
-      actionTitle: actionTitle,
-      cancellation: emailType == EventEmailType.canceled,
-      eventTitle: eventTitle,
-      eventImage: eventImage,
-      eventDateDisplay:
-          '$scheduledDate at $scheduledTime $timeZoneAbbreviation',
-      bannerImgUrl: imgUrl,
-      communityId: community.id,
-      communityName: community.name,
-      cancelUrl: '$link?cancel=true',
-      detailsUrl: '$link?uid=${userRecord.uid}',
-      communityUrl: communityUrl,
-      participantsText: participantsText,
-      header: header,
-      calendarGoogleLink: calendarGoogleLink,
-      calendarOffice365Link: calendarOffice365Link,
-      calendarOutlookLink: calendarOutlookLink,
-      event: event,
-      userRecord: userRecord,
-      allowPrePost: allowPrePost,
-    );
+    final content = emailType == EventEmailType.ended
+        ? generateEventEndedContent(
+            header: header,
+            community: community,
+            userRecord: userRecord,
+            event: event,
+            allowPrePost: allowPrePost,
+          )
+        : generateEmailEventInfo(
+            actionTitle: actionTitle,
+            cancellation: emailType == EventEmailType.canceled,
+            eventTitle: eventTitle,
+            eventImage: eventImage,
+            eventDateDisplay:
+                '$scheduledDate at $scheduledTime $timeZoneAbbreviation',
+            bannerImgUrl: imgUrl,
+            communityId: community.id,
+            communityName: community.name,
+            cancelUrl: '$link?cancel=true',
+            detailsUrl: '$link?uid=${userRecord.uid}',
+            communityUrl: communityUrl,
+            participantsText: participantsText,
+            header: header,
+            calendarGoogleLink: calendarGoogleLink,
+            calendarOffice365Link: calendarOffice365Link,
+            calendarOutlookLink: calendarOutlookLink,
+            event: event,
+            userRecord: userRecord,
+            allowPrePost: allowPrePost,
+          );
 
     return SendGridEmailMessage(
       subject: _getEmailSubject(emailType, eventTitle),
       html: content,
-      attachments: [
-        EmailAttachment(
-          filename: 'invite.ics',
-          content: calendarICS,
-          contentType: 'text/calendar',
-        ),
-      ],
+      attachments: emailType == EventEmailType.ended
+          ? []
+          : [
+              EmailAttachment(
+                filename: 'invite.ics',
+                content: base64.encode(utf8.encode(calendarICS)),
+                contentType: 'text/calendar',
+              ),
+            ],
     );
   }
 }

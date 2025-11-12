@@ -187,7 +187,7 @@ class _NotificationsTabState extends State<NotificationsTab> {
                 ),
                 Flexible(
                   child: HeightConstrainedText(
-                      context.l10n.notifyMeAboutNewEvents),
+                      context.l10n.notifyMeAboutNewEvents,),
                 ),
               ],
             ),
@@ -208,7 +208,7 @@ class _NotificationsTabState extends State<NotificationsTab> {
           return Padding(
             padding: EdgeInsets.all(20),
             child: HeightConstrainedText(
-                '${context.l10n.no} ${Environment.appName} ${context.l10n.memberships}.'),
+                '${context.l10n.no} ${Environment.appName} ${context.l10n.memberships}.',),
           );
         }
         return CustomStreamBuilder<List<Community>>(

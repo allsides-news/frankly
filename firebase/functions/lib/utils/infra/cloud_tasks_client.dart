@@ -46,7 +46,7 @@ abstract class CloudTasksClient {
   external String queuePath(String project, String location, String queue);
 
   external dynamic createTask(
-      CreateTaskRequest request); //[CallOptions callOptions]);
+      CreateTaskRequest request,); //[CallOptions callOptions]);
 }
 
 @JS()
@@ -59,7 +59,7 @@ abstract class Task {
   external Timestamp get scheduleTime;
 
   external factory Task(
-      {String name, HttpRequest httpRequest, Timestamp scheduleTime});
+      {String name, HttpRequest httpRequest, Timestamp scheduleTime,});
 }
 
 @JS()

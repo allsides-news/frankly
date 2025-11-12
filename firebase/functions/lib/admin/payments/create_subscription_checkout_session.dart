@@ -27,7 +27,7 @@ class CreateSubscriptionCheckoutSession
   ) async {
     orElseUnauthorized(context.authUid != null);
 
-    final domain = functions.config.get('app.domain') as String;
+    final domain = functions.config.get('app.domain') as String? ?? 'roundtables.allsides.com';
 
     // For now, only allow community creator to create a new subscription
     final communitySnapshot = await firestore

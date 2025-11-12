@@ -1,5 +1,4 @@
-import 'package:client/features/community/utils/community_theme_utils.dart';
-import 'package:flutter/cupertino.dart' hide ReorderableList;
+import 'package:client/features/community/utils/community_theme_utils.dart.dart';
 import 'package:flutter/material.dart' hide ReorderableList;
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:flutter_reorderable_list/flutter_reorderable_list.dart';

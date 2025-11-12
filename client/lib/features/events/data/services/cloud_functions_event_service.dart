@@ -43,7 +43,7 @@ class CloudFunctionsEventService {
     GetCommunityCalendarLinkRequest request,
   ) async {
     final result = await cloudFunctions.callFunction(
-        'getCommunityCalendarLink', request.toJson());
+        'getCommunityCalendarLink', request.toJson(),);
     return GetCommunityCalendarLinkResponse.fromJson(result);
   }
 }

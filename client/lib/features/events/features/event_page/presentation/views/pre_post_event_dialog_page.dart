@@ -7,6 +7,7 @@ import 'package:client/features/community/data/providers/user_admin_details_buil
 import 'package:client/services.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
+import 'package:client/core/widgets/html_content.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/pre_post_card.dart';
 import 'package:data_models/events/pre_post_url_params.dart';
@@ -103,7 +104,7 @@ class _PrePostEventDialogPageState extends State<PrePostEventDialogPage>
               overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: 10),
-            HeightConstrainedText(
+            HtmlContent(
               _model.prePostCard.message,
               style: context.theme.textTheme.titleSmall,
               maxLines: 8,

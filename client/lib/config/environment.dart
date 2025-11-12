@@ -10,6 +10,10 @@ class Environment {
   );
   static const firebaseProjectId =
       String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'dev');
+  static const firebaseDatabaseId = String.fromEnvironment(
+    'FIREBASE_DATABASE_ID',
+    defaultValue: '',
+  );
   static const firebaseAuthDomain =
       String.fromEnvironment('FIREBASE_AUTH_DOMAIN', defaultValue: 'any');
   static const firebaseDatabaseUrl = String.fromEnvironment(
@@ -22,7 +26,7 @@ class Environment {
       String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: 'any');
   static const functionsUrlPrefix = String.fromEnvironment(
     'FUNCTIONS_URL_PREFIX',
-    defaultValue: 'http://127.0.0.1:5001/dev/us-central1',
+    defaultValue: 'https://us-central1-allsides-roundtables.cloudfunctions.net',
   );
 
   static const sentryDSN = String.fromEnvironment('SENTRY_DSN');
@@ -33,9 +37,9 @@ class Environment {
 
   // App branding and URL properties
   static const appName =
-      String.fromEnvironment('APP_NAME', defaultValue: 'Frankly');
+      String.fromEnvironment('APP_NAME', defaultValue: 'AllSides');
   static const appUrl = String.fromEnvironment('APP_URL',
-      defaultValue: 'https://app.frankly.org');
+      defaultValue: 'https://roundtables.allsides.com',);
   static const sidebarFooter = String.fromEnvironment('SIDEBAR_FOOTER');
   static const copyrightStatement =
       String.fromEnvironment('COPYRIGHT_STATEMENT');
@@ -77,6 +81,6 @@ class Environment {
   static const enableTraceLog = bool.fromEnvironment('ENABLE_TRACE_LOG');
   static const enableEmulators = String.fromEnvironment(
     'EMULATORS',
-    defaultValue: 'functions,firestore,auth,database',
+    defaultValue: '',
   );
 }

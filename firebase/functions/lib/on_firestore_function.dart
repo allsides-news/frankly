@@ -150,6 +150,9 @@ abstract class OnFirestoreFunction<T extends SerializeableRequest>
 
   @override
   void register(FirebaseFunctions functions) {
+    final minInstancesConfig = functions.config.get('functions.on_firestore.min_instances');
+    final minInstances = minInstancesConfig != null ? int.parse(minInstancesConfig) : 0;
+    
     for (var data in appFirestoreFunctionData) {
       final functionName = data.functionName;
       final eventType = data.firestoreEventType;
@@ -161,10 +164,7 @@ abstract class OnFirestoreFunction<T extends SerializeableRequest>
                 RuntimeOptions(
                   timeoutSeconds: 60,
                   memory: '1GB',
-                  minInstances: int.parse(
-                    functions.config
-                        .get('functions.on_firestore.min_instances'),
-                  ),
+                  minInstances: minInstances,
                 ),
               )
               .firestore
@@ -180,10 +180,7 @@ abstract class OnFirestoreFunction<T extends SerializeableRequest>
                 RuntimeOptions(
                   timeoutSeconds: 60,
                   memory: '1GB',
-                  minInstances: int.parse(
-                    functions.config
-                        .get('functions.on_firestore.min_instances'),
-                  ),
+                  minInstances: minInstances,
                 ),
               )
               .firestore
@@ -199,10 +196,7 @@ abstract class OnFirestoreFunction<T extends SerializeableRequest>
                 RuntimeOptions(
                   timeoutSeconds: 60,
                   memory: '1GB',
-                  minInstances: int.parse(
-                    functions.config
-                        .get('functions.on_firestore.min_instances'),
-                  ),
+                  minInstances: minInstances,
                 ),
               )
               .firestore
@@ -218,10 +212,7 @@ abstract class OnFirestoreFunction<T extends SerializeableRequest>
                 RuntimeOptions(
                   timeoutSeconds: 60,
                   memory: '1GB',
-                  minInstances: int.parse(
-                    functions.config
-                        .get('functions.on_firestore.min_instances'),
-                  ),
+                  minInstances: minInstances,
                 ),
               )
               .firestore

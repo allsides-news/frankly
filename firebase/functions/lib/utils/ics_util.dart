@@ -9,7 +9,7 @@ import 'package:data_models/community/community.dart';
 import 'package:node_interop/node.dart';
 import 'package:js/js.dart';
 
-final _icsProdId = functions.config.get('ics.prod_id') as String;
+String get _icsProdId => functions.config.get('ics.prod_id') as String? ?? '-//Default//NONSGML Event Calendar//EN';
 
 IcsLib requireIcsLib() {
   return require('ics') as IcsLib;
@@ -102,7 +102,7 @@ class IcsUtil {
         )
         .toList();
 
-    final domain = functions.config.get('app.domain') as String;
+    final domain = functions.config.get('app.domain') as String? ?? 'roundtables.allsides.com';
 
     final scheduledEvents =
         events.where((event) => event.scheduledTime != null).map((event) {

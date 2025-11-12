@@ -10,7 +10,7 @@
   "engines": {
     "node": "20"
   },
-  "main": "build/node/main.dart.js",
+  "main": "index.js",
   "dependencies": {
     "@google-cloud/firestore": "^4.15.1",
     "@google-cloud/tasks": "^2.4.2",
@@ -20,8 +20,8 @@
     "archiver": "^7.0.1",
     "calendar-link": "^2.0.16",
     "cors": "^2.8.5",
-    "firebase-admin": "^9.11.1",
-    "firebase-functions": "^3.15.7",
+    "firebase-admin": "^11.11.1",
+    "firebase-functions": "^4.9.0",
     "ics": "^2.31.0",
     "patch-package": "^6.4.7",
     "stripe": "^8.176.0",

@@ -227,8 +227,9 @@ _$_SendGridEmailMessage _$$_SendGridEmailMessageFromJson(
       subject: json['subject'] as String,
       html: json['html'] as String,
       attachments: (json['attachments'] as List<dynamic>?)
-          ?.map((e) => EmailAttachment.fromJson(e as Map<String, dynamic>))
-          .toList(),
+              ?.map((e) => EmailAttachment.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
 
 Map<String, dynamic> _$$_SendGridEmailMessageToJson(
@@ -236,7 +237,7 @@ Map<String, dynamic> _$$_SendGridEmailMessageToJson(
     <String, dynamic>{
       'subject': instance.subject,
       'html': instance.html,
-      'attachments': instance.attachments?.map((e) => e.toJson()).toList(),
+      'attachments': instance.attachments.map((e) => e.toJson()).toList(),
     };
 
 _$_GetServerTimestampRequest _$$_GetServerTimestampRequestFromJson(

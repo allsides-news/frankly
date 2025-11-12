@@ -286,7 +286,7 @@ class TagChip extends StatelessWidget {
           style: AppTextStyle.body.copyWith(
               color: isSelected
                   ? tagTextColor
-                  : context.theme.colorScheme.secondary),
+                  : context.theme.colorScheme.secondary,),
         ),
       ),
     );

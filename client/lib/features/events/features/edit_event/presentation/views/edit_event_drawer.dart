@@ -19,6 +19,7 @@ import 'package:client/features/events/presentation/widgets/event_participants_l
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
 import 'package:client/core/widgets/custom_text_field.dart';
+import 'package:client/core/widgets/rich_text_editor.dart';
 import 'package:client/core/localization/localization_helper.dart';
 import 'package:client/config/environment.dart';
 import 'package:client/core/data/services/media_helper_service.dart';
@@ -222,9 +223,11 @@ class EditEventDrawerState extends State<EditEventDrawer>
   }
 
   Widget _buildDescriptionSection() {
-    return CustomTextField(
+    return RichTextEditor(
       labelText: 'Description',
       initialValue: _model.event.description,
+      minLines: 4,
+      maxLines: 10,
       onChanged: (value) => _presenter.updateDescription(value),
     );
   }

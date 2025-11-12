@@ -1,4 +1,5 @@
 import 'package:client/core/utils/toast_utils.dart';
+import 'package:client/core/utils/html_sanitizer.dart';
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -104,12 +105,20 @@ class EditEventPresenter {
   List<Duration> get durationOptions {
     const increment = Duration(minutes: 15);
     const threshold = Duration(hours: 4);
-    return [
+    final options = [
       for (var duration = increment;
           duration < threshold;
           duration = duration + increment)
         duration,
     ];
+    
+    // Add 5-minute option for local development/QA testing only
+    final isLocalhost = Uri.base.origin.contains('localhost');
+    if (isLocalhost) {
+      options.insert(0, Duration(minutes: 5));
+    }
+    
+    return options;
   }
 
   void updateTitle(String value) {
@@ -119,7 +128,9 @@ class EditEventPresenter {
   }
 
   void updateDescription(String value) {
-    _model.event = _model.event.copyWith(description: value.trim());
+    // Sanitize HTML content for security
+    final sanitizedValue = HtmlSanitizer.sanitize(value.trim());
+    _model.event = _model.event.copyWith(description: sanitizedValue);
     _appDrawerProvider.setUnsavedChanges(_helper.wereChangesMade(_model));
     _view.updateView();
   }

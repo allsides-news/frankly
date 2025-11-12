@@ -14,7 +14,7 @@ List<CommunityFeatureFlags> communityFeatureFlagsFromJson(dynamic enumList) {
     return [];
   }
   final List<String> nonNullEnumList =
-      (enumList as List<dynamic>).whereNotNull().whereType<String>().toList();
+      (enumList).whereNotNull().whereType<String>().toList();
   final featureFlags =
       EnumToString.fromList(CommunityFeatureFlags.values, nonNullEnumList);
   return featureFlags.whereNotNull().toList();

@@ -1,4 +1,3 @@
-import 'dart:math';
 
 import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/core/utils/visible_exception.dart';
@@ -6,7 +5,6 @@ import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:client/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:client/core/localization/localization_helper.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 
 import 'dart:async';
@@ -94,7 +92,9 @@ Function()? callback ,
 }) async {
   try {
     await action();
-    callback!();
+    if (callback != null) {
+      callback();
+    }
   } catch (e, s) {
     loggingService.log(e, logType: LogType.error);
     loggingService.log(s, logType: LogType.error);

@@ -33,10 +33,12 @@ import 'package:client/styles/app_asset.dart';
 import 'package:client/core/localization/localization_helper.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 import 'package:client/core/utils/dialogs.dart';
+import 'package:client/core/utils/meta_tag_service.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/event_message.dart';
 import 'package:provider/provider.dart';
+import 'package:universal_html/html.dart' as html;
 
 import '../event_page_presenter.dart';
 
@@ -147,12 +149,14 @@ class EventPageState extends State<EventPage> implements EventPageView {
   Future<JoinEventResults> _joinEvent({
     bool showConfirm = true,
     bool joinCommunity = false,
+    bool optInToNewsletters = false,
   }) async {
     return await alertOnError<JoinEventResults>(
           context,
           () => context.read<EventPageProvider>().joinEvent(
                 showConfirm: showConfirm,
                 joinCommunity: joinCommunity,
+                optInToNewsletters: optInToNewsletters,
               ),
         ) ??
         JoinEventResults(isJoined: false);
@@ -219,8 +223,10 @@ class EventPageState extends State<EventPage> implements EventPageView {
     final now = clockService.now();
     final beforeMeetingCutoff = scheduled.subtract(Duration(minutes: 10));
     final afterMeetingCutoff = scheduled.add(Duration(hours: 2));
+    final hasEnded = event.hasEnded(now);
 
     return isParticipant &&
+        !hasEnded &&
         now.isAfter(beforeMeetingCutoff) &&
         now.isBefore(afterMeetingCutoff);
   }
@@ -457,6 +463,18 @@ class EventPageState extends State<EventPage> implements EventPageView {
         stream: eventProvider.eventParticipantsStream,
         builder: (_, __) {
           if (event == null) return CircularProgressIndicator();
+
+          // Update meta tags for social sharing when event loads
+          final community = context.watch<CommunityProvider>().community;
+          final currentUrl = html.window.location.href;
+          final communityName = community.name ?? 'Community';
+          MetaTagService.updateEventMetaTags(
+            eventTitle: event.title ?? 'Event',
+            eventDescription: event.description,
+            eventImageUrl: event.image,
+            eventUrl: currentUrl,
+            communityName: communityName,
+          );
 
           return _buildMainContent();
         },

@@ -65,16 +65,20 @@ class _ConfirmTextInputDialogueState extends State<ConfirmTextInputDialogue> {
       color: Colors.transparent,
       child: GestureDetector(
         onTap: () {},
-        child: Container(
-          constraints: BoxConstraints(maxWidth: 600),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: context.theme.colorScheme.primary,
-          ),
-          padding: const EdgeInsets.all(40),
-          child: CustomListView(
-            shrinkWrap: true,
-            children: [
+        child: Stack(
+          children: [
+            Container(
+              constraints: BoxConstraints(maxWidth: 600),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                color: context.theme.colorScheme.primary,
+              ),
+              padding: const EdgeInsets.all(40),
+              child: CustomListView(
+                shrinkWrap: true,
+                children: [
+                  // Add top padding to prevent title from overlapping with X button
+                  SizedBox(height: 10),
               if (!isNullOrEmpty(widget.title)) ...[
                 HeightConstrainedText(
                   widget.title,
@@ -110,44 +114,89 @@ class _ConfirmTextInputDialogueState extends State<ConfirmTextInputDialogue> {
                 onChanged: (value) => setState(() => _textInput = value),
                 minLines: 2,
                 maxLines: 2,
+                // Make cursor white/light for visibility on black background
+                cursorColor: context.theme.colorScheme.onPrimary,
+                // Ensure text is visible
+                textStyle: AppTextStyle.body
+                    .copyWith(color: context.theme.colorScheme.onPrimary),
+                // Make hint/placeholder text lighter and visible
+                hintStyle: AppTextStyle.body.copyWith(
+                  color: context.theme.colorScheme.onPrimary.withOpacity(0.5),
+                ),
+                // Make label text lighter
+                labelStyle: AppTextStyle.bodySmall.copyWith(
+                  color: context.theme.colorScheme.onPrimary.withOpacity(0.7),
+                ),
               ),
               SizedBox(height: 40),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   if (!isNullOrEmpty(widget.cancelText))
-                    ActionButton(
-                      type: ActionButtonType.outline,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: ActionButton(
+                          type: ActionButtonType.outline,
+                          height: 55,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
+                          minWidth: 100,
+                          color: Colors.transparent,
+                          text: widget.cancelText,
+                          // Use textColor property for proper foreground color
+                          textColor: context.theme.colorScheme.onPrimary,
+                          textStyle: AppTextStyle.body,
+                          borderSide: BorderSide(
+                            color: context.theme.colorScheme.onPrimary,
+                            width: 2,
+                          ),
+                          onPressed: _cancel,
+                        ),
+                      ),
+                    )
+                  else
+                    SizedBox.shrink(),
+                  Expanded(
+                    child: ActionButton(
                       height: 55,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,
                         vertical: 12,
                       ),
-                      minWidth: 100,
-                      color: Colors.transparent,
-                      text: widget.cancelText,
-                      textStyle: AppTextStyle.body
-                          .copyWith(color: context.theme.colorScheme.onPrimary),
-                      onPressed: _cancel,
-                    )
-                  else
-                    SizedBox.shrink(),
-                  ActionButton(
-                    height: 55,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
+                      color: context.theme.colorScheme.onPrimary,
+                      disabledColor: context.theme.colorScheme.onPrimary.withOpacity(0.5),
+                      text: widget.confirmText,
+                      // Use textColor property for proper foreground color
+                      textColor: context.theme.colorScheme.primary,
+                      textStyle: AppTextStyle.body.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      onPressed: (_textInput.trim().isNotEmpty) ? _confirm : null,
                     ),
-                    color: context.theme.colorScheme.onPrimary,
-                    text: widget.confirmText,
-                    textStyle: AppTextStyle.body
-                        .copyWith(color: context.theme.colorScheme.primary),
-                    onPressed: (_textInput != '') ? _confirm : null,
                   ),
                 ],
               ),
-            ],
-          ),
+                ],
+              ),
+            ),
+            // Close button (X) positioned at actual top-right corner of modal
+            Positioned(
+              top: 12,
+              right: 12,
+              child: IconButton(
+                icon: Icon(
+                  Icons.close,
+                  color: context.theme.colorScheme.onPrimary,
+                  size: 24,
+                ),
+                onPressed: _cancel,
+                tooltip: 'Close',
+              ),
+            ),
+          ],
         ),
       ),
     );

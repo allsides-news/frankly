@@ -16,7 +16,7 @@ import 'package:data_models/community/community_user_settings.dart';
 import 'package:data_models/community/membership.dart';
 import 'package:data_models/templates/template.dart';
 
-final noReplyEmailAddr = functions.config.get('app.no_reply_email') as String;
+String get noReplyEmailAddr => functions.config.get('app.no_reply_email') as String? ?? 'noreply@example.com';
 
 class UnsubscribeData {
   String userId;
@@ -263,14 +263,14 @@ class NotificationsUtils {
 
   String getUnsubscribeUrl({required String userId}) {
     final encrypted = encryptUnsubscribeData(userId: userId);
-    final domain = functions.config.get('app.domain') as String;
+    final domain = functions.config.get('app.domain') as String? ?? 'roundtables.allsides.com';
     return 'https://$domain/emailunsubscribe?data=$encrypted';
   }
 
   Key get _encryptionKey {
     // changing this key will invalidate previously sent unsubscribe links
     final encryptionKeyInput =
-        functions.config.get('app.unsubscribe_encryption_key') as String;
+        functions.config.get('app.unsubscribe_encryption_key') as String? ?? 'default-key-change-in-production';
     return Key.fromUtf8(encryptionKeyInput);
   }
 
@@ -285,7 +285,7 @@ class NotificationsUtils {
 
 class SimpleObfuscator {
   final _secretKey =
-      functions.config.get('app.unsubscribe_encryption_key') as String;
+      functions.config.get('app.unsubscribe_encryption_key') as String? ?? 'default-key-change-in-production';
 
   String encode(String input) {
     var output = input.runes.map((int rune) {

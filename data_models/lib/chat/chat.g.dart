@@ -22,6 +22,7 @@ _$_ChatMessage _$$_ChatMessageFromJson(Map<String, dynamic> json) =>
       membershipStatusSnapshot: $enumDecodeNullable(
           _$MembershipStatusEnumMap, json['membershipStatusSnapshot']),
       broadcast: json['broadcast'] as bool? ?? false,
+      messageType: json['messageType'] as String?,
     );
 
 Map<String, dynamic> _$$_ChatMessageToJson(_$_ChatMessage instance) =>
@@ -36,6 +37,7 @@ Map<String, dynamic> _$$_ChatMessageToJson(_$_ChatMessage instance) =>
       'membershipStatusSnapshot':
           _$MembershipStatusEnumMap[instance.membershipStatusSnapshot],
       'broadcast': instance.broadcast,
+      'messageType': instance.messageType,
     };
 
 const _$EmotionTypeEnumMap = {

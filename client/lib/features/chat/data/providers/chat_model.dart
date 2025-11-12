@@ -22,6 +22,19 @@ class ChatModel with ChangeNotifier {
   String? _lastReadMessageId;
   BehaviorSubjectWrapper<List<ChatMessage>>? _messagesStream;
   StreamSubscription<List<ChatMessage>>? _messagesStreamSubscription;
+  
+  /// Tracks whether broadcast mode is enabled for chat messages.
+  /// This persists across widget rebuilds and room changes.
+  bool _broadcastEnabled = false;
+  
+  bool get broadcastEnabled => _broadcastEnabled;
+  
+  set broadcastEnabled(bool value) {
+    if (_broadcastEnabled != value) {
+      _broadcastEnabled = value;
+      notifyListeners();
+    }
+  }
 
   Stream<List<ChatMessage>>? get messagesStream => _messagesStream?.stream;
 
@@ -159,6 +172,7 @@ class ChatModel with ChangeNotifier {
       emotionType: emotionType,
       membershipStatusSnapshot: membership,
       broadcast: broadcast,
+      messageType: broadcast ? 'global_admin' : null,
     );
 
     if (emotionType == null) {

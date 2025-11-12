@@ -1,8 +1,8 @@
 import 'package:client/core/utils/provider_utils.dart';
 import 'package:client/features/community/utils/guard_utils.dart';
-import 'package:client/features/community/utils/community_theme_utils.dart';
+import 'package:client/features/community/utils/community_theme_utils.dart.dart';
+import 'package:client/features/events/features/event_page/data/providers/event_permissions_provider.dart';
 import 'package:client/styles/styles.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/chat/data/providers/chat_model.dart';
 import 'package:client/features/chat/presentation/widgets/message_display.dart';
@@ -73,14 +73,14 @@ class _ChatWidgetState extends State<_ChatWidget> {
   final _message = TextEditingController();
   final _sendController = SubmitNotifier();
 
-  bool _broadcast = false;
-
   Future<void> _sendMessageWithAlert() => alertOnError(context, () async {
         final text = _message.text;
         _message.clear();
-        await context
-            .read<ChatModel>()
-            .createChatMessage(text: text, broadcast: _broadcast);
+        final chatModel = context.read<ChatModel>();
+        await chatModel.createChatMessage(
+          text: text,
+          broadcast: chatModel.broadcastEnabled,
+        );
       });
 
   Future<void> _sendMessage() => widget.shouldGuardCommunityMember
@@ -131,6 +131,17 @@ class _ChatWidgetState extends State<_ChatWidget> {
 
   Widget _buildChatInput() {
     final canSubmit = !isNullOrEmpty(_message.text.trim());
+    
+    // Check if chat should be disabled for this user in hostless waiting room
+    final eventPermissions = EventPermissionsProvider.watch(context);
+    final shouldDisableChat = 
+        eventPermissions?.shouldDisableChatInHostlessWaitingRoom(context) ?? false;
+    
+    // Hide chat input completely for restricted users in waiting room
+    if (shouldDisableChat) {
+      return SizedBox.shrink();
+    }
+    
     return Row(
       children: [
         Expanded(
@@ -175,12 +186,15 @@ class _ChatWidgetState extends State<_ChatWidget> {
   }
 
   Widget _buildBroadcastCheckbox() {
+    final chatModel = context.watch<ChatModel>();
     return Row(
       children: [
         Checkbox(
           side: BorderSide(color: context.theme.colorScheme.outline),
-          value: _broadcast,
-          onChanged: (value) => setState(() => _broadcast = !_broadcast),
+          value: chatModel.broadcastEnabled,
+          onChanged: (value) {
+            chatModel.broadcastEnabled = !chatModel.broadcastEnabled;
+          },
         ),
         Flexible(
           child: HeightConstrainedText(context.l10n.broadcast),

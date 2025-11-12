@@ -12,6 +12,8 @@ import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/core/widgets/buttons/app_clickable_widget.dart';
 import 'package:client/core/widgets/confirm_dialog.dart';
 import 'package:client/core/widgets/custom_text_field.dart';
+import 'package:client/core/widgets/rich_text_editor.dart';
+import 'package:client/core/widgets/html_content.dart';
 import 'package:client/services.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/events/event.dart';
@@ -223,17 +225,12 @@ class _PrePostCardWidgetPageState extends State<PrePostCardWidgetPage>
               validator: (text) => _presenter.validateHeadline(text),
             ),
             SizedBox(height: 14),
-            CustomTextField(
-              hintText:
-                  'Enter message (e.g. "Take this survey $beforeAfter the event")',
+            RichTextEditor(
+              labelText: 'Message',
               initialValue: _model.prePostCard.message,
-              borderType: BorderType.outline,
-              borderRadius: 10,
-              maxLength: 200,
-              minLines: 3,
-              keyboardType: TextInputType.multiline,
               onChanged: (text) => _presenter.updateEnteredMessage(text),
-              validator: (text) => _presenter.validateMessage(text),
+              minLines: 4,
+              maxLines: 10,
             ),
           ],
         ),
@@ -562,7 +559,7 @@ class _PrePostCardWidgetPageState extends State<PrePostCardWidgetPage>
             style: context.theme.textTheme.titleMedium,
           ),
           SizedBox(height: 20),
-          Text(
+          HtmlContent(
             _model.prePostCard.message,
             style: context.theme.textTheme.titleMedium,
           ),

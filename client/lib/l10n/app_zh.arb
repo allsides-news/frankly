@@ -71,7 +71,7 @@
       }
     }
   },
-  "appTitle": "Frankly",
+  "appTitle": "AllSides",
   "appTitleHome": "{appName} - 首页",
   "@appTitleHome": {
     "placeholders": {
@@ -405,7 +405,7 @@
   "participants": "参与者",
   "participantsLoadError": "加载参与者时出现问题。请刷新。",
   "password": "密码",
-  "passwordRequirements": "長度必須至少為 12 個字符，並且包含一個小寫字母和一個大寫字母。",
+  "passwordRequirements": "長度必須至少為 6 個字符，並且包含一個小寫字母和一個大寫字母。",
   "passwordInvalid": "密码无效。点击忘记密码进行重置。或者，使用其他电子邮件重新注册。",
   "passwordResetLinkSent": "密码重置链接已发送至 {email}",
   "@passwordResetLinkSent": {
@@ -514,7 +514,7 @@
   "sidebarUnfollowButton": "侧边栏取消关注按钮",
   "sidebarFollowCommunityButton": "侧边栏关注社区按钮",
   "followCommunityButton": "关注社区按钮",
-  "franklyLogo": "Frankly 标志",
+  "franklyLogo": "AllSides 标志",
   "signIn": "登录",
   "signUp": "注册",
   "signingUp": "報名",
@@ -600,7 +600,7 @@
   "videoInputDevice": "视频输入设备：",
   "vimeoVideoLookupFailed": "抱歉，Vimeo 视频查找失败。",
   "waitingRoom": "等候室",
-  "welcome": "欢迎来到 Frankly",
+  "welcome": "欢迎来到 AllSides",
   "welcomeName": "您好，{name}",
   "@welcomeName": {
     "placeholders": {

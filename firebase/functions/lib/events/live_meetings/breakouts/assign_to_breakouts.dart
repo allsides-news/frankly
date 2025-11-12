@@ -36,6 +36,7 @@ class AssignToBreakouts {
     required List<Participant> presentParticipants,
     required String creatorId,
     required CollectionReference breakoutRoomsCollection,
+    required bool shouldRecord,
   }) async {
     print('starting breakout assignment');
     final presentParticipantIds = presentParticipants.map((p) => p.id).toList();
@@ -93,6 +94,7 @@ class AssignToBreakouts {
           orderingPriority: i,
           participantIds: roomParticipants[i],
           originalParticipantIdsAssignment: roomParticipants[i],
+          record: shouldRecord,
         ),
       );
     }
@@ -174,6 +176,7 @@ class AssignToBreakouts {
     required String creatorId,
     required Event event,
     required CollectionReference breakoutRoomsCollection,
+    required bool shouldRecord,
   }) async {
     profile('starting smart match with authUid: $creatorId');
 
@@ -291,7 +294,8 @@ class AssignToBreakouts {
           participantIds: prematchEntries[i].value.map((p) => p.id).toList(),
           originalParticipantIdsAssignment:
               prematchEntries[i].value.map((p) => p.id).toList(),
-          record: breakoutMatchIdsToRecord.contains(prematchEntries[i].key),
+          record: shouldRecord ||
+              breakoutMatchIdsToRecord.contains(prematchEntries[i].key),
         ),
       for (var j = 0; j < matches.length; j++)
         BreakoutRoom(
@@ -301,6 +305,7 @@ class AssignToBreakouts {
           orderingPriority: j + i,
           participantIds: matches[j],
           originalParticipantIdsAssignment: matches[j],
+          record: shouldRecord,
         ),
     ];
   }
@@ -514,6 +519,7 @@ class AssignToBreakouts {
                     hasWaitingRoom: includeWaitingRoom,
                     breakoutRoomSessionId: breakoutSessionId,
                     targetParticipantsPerRoom: targetParticipantsPerRoom,
+                    scheduledTime: currentBreakoutSession?.scheduledTime,
                   ),
                 ).toJson(),
               ),
@@ -570,6 +576,12 @@ class AssignToBreakouts {
     final breakoutRoomsCollection =
         breakoutRoomsSessionDoc.collection('breakout-rooms');
 
+    // Determine if breakout rooms should be recorded based on event settings
+    final shouldRecord = event.eventSettings?.alwaysRecord ?? false;
+    print(
+      'Breakout rooms will be recorded: $shouldRecord (based on event.eventSettings.alwaysRecord)',
+    );
+
     List<BreakoutRoom> breakoutRooms;
     if (assignmentMethod == BreakoutAssignmentMethod.targetPerRoom) {
       breakoutRooms = await _assignBreakoutsBasedOnTargetSize(
@@ -577,6 +589,7 @@ class AssignToBreakouts {
         presentParticipants: presentParticipants,
         creatorId: creatorId,
         breakoutRoomsCollection: breakoutRoomsCollection,
+        shouldRecord: shouldRecord,
       );
     } else if (assignmentMethod == BreakoutAssignmentMethod.smartMatch) {
       breakoutRooms = await _assignBreakoutsForSmartMatch(
@@ -585,6 +598,7 @@ class AssignToBreakouts {
         creatorId: creatorId,
         event: event,
         breakoutRoomsCollection: breakoutRoomsCollection,
+        shouldRecord: shouldRecord,
       );
     } else {
       throw Exception(
@@ -605,6 +619,7 @@ class AssignToBreakouts {
           orderingPriority: -1,
           creatorId: creatorId,
           participantIds: [],
+          record: shouldRecord,
         ),
       );
     }
@@ -618,6 +633,7 @@ class AssignToBreakouts {
           orderingPriority: 0,
           creatorId: creatorId,
           participantIds: [],
+          record: shouldRecord,
         ),
       );
     }
@@ -676,6 +692,7 @@ class AssignToBreakouts {
       targetParticipantsPerRoom: targetParticipantsPerRoom,
       maxRoomNumber: maxBreakoutRoomNumber,
       assignmentMethod: assignmentMethod,
+      scheduledTime: currentLiveMeeting.currentBreakoutSession?.scheduledTime,
     );
     await breakoutRoomsSessionDoc.setData(
       DocumentData.fromMap(

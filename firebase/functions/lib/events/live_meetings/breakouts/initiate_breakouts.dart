@@ -34,19 +34,25 @@ class InitiateBreakouts extends OnCallMethod<InitiateBreakoutsRequest> {
     InitiateBreakoutsRequest request,
     CallableContext context,
   ) async {
-    final event = await firestoreUtils.getFirestoreObject(
-      path: request.eventPath,
-      constructor: (map) => Event.fromJson(map),
-    );
+    try {
+      final event = await firestoreUtils.getFirestoreObject(
+        path: request.eventPath,
+        constructor: (map) => Event.fromJson(map),
+      );
 
-    print('checking is authorized');
-    await _verifyCallerIsAuthorized(event, context);
+      print('checking is authorized');
+      await _verifyCallerIsAuthorized(event, context);
 
-    await initiateBreakouts(
-      request: request,
-      event: event,
-      creatorId: context.authUid!,
-    );
+      await initiateBreakouts(
+        request: request,
+        event: event,
+        creatorId: context.authUid!,
+      );
+    } catch (e, stackTrace) {
+      print('Error in InitiateBreakouts.action: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<void> _verifyCallerIsAuthorized(
@@ -74,23 +80,32 @@ class InitiateBreakouts extends OnCallMethod<InitiateBreakoutsRequest> {
     required Event event,
     required String creatorId,
   }) async {
-    if (event.isHosted) {
-      print('Assigning users to breakouts.');
-      await AssignToBreakouts().assignToBreakouts(
-        targetParticipantsPerRoom: request.targetParticipantsPerRoom,
-        breakoutSessionId: request.breakoutSessionId,
-        assignmentMethod:
-            request.assignmentMethod ?? BreakoutAssignmentMethod.targetPerRoom,
-        includeWaitingRoom: request.includeWaitingRoom,
-        event: event,
-        creatorId: creatorId,
-      );
-    } else {
-      print('Pinging breakout availability.');
-      await _pingBreakoutsAvailability(
-        event: event,
-        request: request,
-      );
+    print('InitiateBreakouts called for event ${event.id}, session ${request.breakoutSessionId}, creator: $creatorId');
+    
+    try {
+      if (event.isHosted) {
+        print('Event ${event.id} is hosted - assigning users to breakouts immediately.');
+        await AssignToBreakouts().assignToBreakouts(
+          targetParticipantsPerRoom: request.targetParticipantsPerRoom,
+          breakoutSessionId: request.breakoutSessionId,
+          assignmentMethod:
+              request.assignmentMethod ?? BreakoutAssignmentMethod.targetPerRoom,
+          includeWaitingRoom: request.includeWaitingRoom,
+          event: event,
+          creatorId: creatorId,
+        );
+      } else {
+        print('Event ${event.id} is hostless - pinging breakout availability.');
+        await _pingBreakoutsAvailability(
+          event: event,
+          request: request,
+        );
+      }
+      print('InitiateBreakouts completed successfully for event ${event.id}');
+    } catch (e, stackTrace) {
+      print('Error in initiateBreakouts for event ${event.id}: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
     }
   }
 
@@ -101,6 +116,22 @@ class InitiateBreakouts extends OnCallMethod<InitiateBreakoutsRequest> {
     final breakoutRoomSessionId = request.breakoutSessionId;
     final liveMeetingPath = '${event.fullPath}/live-meetings/${event.id}';
 
+    print('Pinging breakout availability for session: $breakoutRoomSessionId');
+
+    // Wait time before triggering smart matching. This buffer allows participants
+    // to fully load, see the breakout dialog, and mark themselves as available.
+    // The smart matching algorithm itself is fast (< 5s even for 10k+ participants),
+    // so this delay is for participant collection and user interaction time.
+    // 
+    // For hostless events, participants must:
+    // 1. Receive the pending breakout status update (network latency)
+    // 2. See the dialog asking to join breakouts
+    // 3. Click to confirm and mark themselves available
+    // 4. Firestore write must complete
+    //
+    // 30 seconds provides adequate time for this entire flow to complete reliably,
+    // even with network latency and multiple concurrent participants.
+    // Late arrivals can still be reassigned if needed.
     const smartMatchingWaitTime = Duration(seconds: 30);
 
     final now = DateTime.now();
@@ -108,55 +139,94 @@ class InitiateBreakouts extends OnCallMethod<InitiateBreakoutsRequest> {
         now.subtract(Duration(milliseconds: now.millisecond));
     final scheduledTime = nowWithoutMilliseconds.add(smartMatchingWaitTime);
 
-    final newlyInitiated = await firestore.runTransaction((transaction) async {
-      final liveMeetingDocRef = firestore.document(liveMeetingPath);
-      final liveMeetingDoc = await transaction.get(liveMeetingDocRef);
-      final liveMeeting = LiveMeeting.fromJson(
-        firestoreUtils.fromFirestoreJson(liveMeetingDoc.data.toMap()),
-      );
-      if (liveMeeting.currentBreakoutSession?.breakoutRoomSessionId ==
-          breakoutRoomSessionId) {
-        print('Breakout session already initiated. Returning');
-        return false;
-      }
-      final breakoutSession = BreakoutRoomSession(
-        breakoutRoomSessionId: breakoutRoomSessionId,
-        breakoutRoomStatus: BreakoutRoomStatus.pending,
-        assignmentMethod: request.assignmentMethod!,
-        targetParticipantsPerRoom: request.targetParticipantsPerRoom,
-        hasWaitingRoom: request.includeWaitingRoom,
-        scheduledTime: scheduledTime,
-      );
-      transaction.set(
-        liveMeetingDocRef,
-        DocumentData.fromMap(
-          jsonSubset(
-            [LiveMeeting.kFieldCurrentBreakoutSession],
-            firestoreUtils.toFirestoreJson(
-              LiveMeeting(
-                currentBreakoutSession: breakoutSession,
-              ).toJson(),
+    print('Will schedule smart matching for: $scheduledTime (in ${smartMatchingWaitTime.inSeconds} seconds)');
+
+    bool newlyInitiated = false;
+    try {
+      newlyInitiated = await firestore.runTransaction((transaction) async {
+        print('Running transaction to create pending breakout session');
+        final liveMeetingDocRef = firestore.document(liveMeetingPath);
+        final liveMeetingDoc = await transaction.get(liveMeetingDocRef);
+        
+        LiveMeeting? liveMeeting;
+        if (!liveMeetingDoc.exists) {
+          print('Live meeting document does not exist at $liveMeetingPath - will be created');
+          liveMeeting = null; // Will create new document
+        } else {
+          liveMeeting = LiveMeeting.fromJson(
+            firestoreUtils.fromFirestoreJson(liveMeetingDoc.data.toMap()),
+          );
+        }
+        
+        final currentSessionId = liveMeeting?.currentBreakoutSession?.breakoutRoomSessionId;
+        final currentStatus = liveMeeting?.currentBreakoutSession?.breakoutRoomStatus;
+        
+        print('Current breakout state: sessionId=$currentSessionId, status=$currentStatus');
+        
+        if (currentSessionId == breakoutRoomSessionId) {
+          print('Breakout session $breakoutRoomSessionId already initiated. Returning.');
+          return false;
+        }
+        
+        // Also check if there's already an active or pending session
+        if (currentStatus == BreakoutRoomStatus.active || 
+            currentStatus == BreakoutRoomStatus.pending) {
+          print('Breakout session already in progress with status $currentStatus. Returning.');
+          return false;
+        }
+        
+        final breakoutSession = BreakoutRoomSession(
+          breakoutRoomSessionId: breakoutRoomSessionId,
+          breakoutRoomStatus: BreakoutRoomStatus.pending,
+          assignmentMethod: request.assignmentMethod ?? BreakoutAssignmentMethod.targetPerRoom,
+          targetParticipantsPerRoom: request.targetParticipantsPerRoom,
+          hasWaitingRoom: request.includeWaitingRoom,
+          scheduledTime: scheduledTime,
+        );
+        
+        print('Creating pending breakout session in transaction');
+        transaction.set(
+          liveMeetingDocRef,
+          DocumentData.fromMap(
+            jsonSubset(
+              [LiveMeeting.kFieldCurrentBreakoutSession],
+              firestoreUtils.toFirestoreJson(
+                LiveMeeting(
+                  currentBreakoutSession: breakoutSession,
+                ).toJson(),
+              ),
             ),
           ),
-        ),
-        merge: true,
-      );
-      return true;
-    });
+          merge: true,
+        );
+        return true;
+      });
+    } catch (e, stackTrace) {
+      print('Error in transaction for event ${event.id}: $e');
+      print('Stack trace: $stackTrace');
+      // Don't rethrow - this might be a transient transaction failure
+      // The scheduled check will handle it
+      return;
+    }
 
     if (newlyInitiated) {
-      print('scheduling assign to breakouts server check');
-      await CheckAssignToBreakoutsServer().schedule(
-        CheckAssignToBreakoutsRequest(
-          eventPath: event.fullPath,
-          breakoutSessionId: breakoutRoomSessionId,
-        ),
-        scheduledTime,
-      );
+      print('Scheduling CheckAssignToBreakoutsServer for event ${event.id} at $scheduledTime');
+      try {
+        await CheckAssignToBreakoutsServer().schedule(
+          CheckAssignToBreakoutsRequest(
+            eventPath: event.fullPath,
+            breakoutSessionId: breakoutRoomSessionId,
+          ),
+          scheduledTime,
+        );
+        print('Successfully scheduled CheckAssignToBreakoutsServer');
+      } catch (e, stackTrace) {
+        print('Error scheduling CheckAssignToBreakoutsServer: $e');
+        print('Stack trace: $stackTrace');
+        rethrow;
+      }
     } else {
-      print(
-        'not enqueuing assign to breakouts checks since it was already setup.',
-      );
+      print('Not enqueuing CheckAssignToBreakoutsServer - session already setup or another process is handling it.');
     }
   }
 }

@@ -23,6 +23,7 @@ import 'package:client/core/widgets/navbar/nav_bar_provider.dart';
 import 'package:client/services.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
+import 'package:client/core/utils/persistent_f_toast_utils.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/live_meetings/live_meeting.dart';
@@ -54,11 +55,38 @@ class MeetingDialog extends StatefulWidget {
             final hideToast = hideOnMobile == true &&
                 responsiveLayoutService.isMobile(context);
             if (!hideToast) {
-              return showRegularToast(
-                context,
-                message,
-                toastType: ToastType.success,
-              );
+              // Check if this is a waiting room notification
+              // Match both old format ("waiting in the waiting room") and new format ("in a waiting room")
+              final isWaitingRoomNotification = message.toLowerCase().contains('waiting in the waiting room') || 
+                  message.toLowerCase().contains('in a waiting room');
+              
+              print('DEBUG: showToast called with message: "$message", isWaitingRoomNotification: $isWaitingRoomNotification');
+              
+              if (isWaitingRoomNotification) {
+                print('DEBUG: Showing persistent toast for waiting room notification');
+                // Show persistent red toast for waiting room notifications
+                PersistentFToast.show(
+                  context,
+                  message,
+                  backgroundColor: Colors.red,
+                  textColor: Colors.white,
+                  onDismiss: () {
+                    print('Waiting room toast dismissed');
+                    // Mark the notification as dismissed in the service
+                    final liveMeetingProvider =
+                        LiveMeetingProvider.read(context);
+                    liveMeetingProvider.markWaitingRoomNotificationDismissed();
+                  },
+                );
+              } else {
+                print('DEBUG: Showing regular toast (not a waiting room notification)');
+                // Show regular toast for other messages
+                return showRegularToast(
+                  context,
+                  message,
+                  toastType: ToastType.success,
+                );
+              }
             }
           },
         ),
@@ -82,6 +110,10 @@ class _MeetingDialogState extends State<MeetingDialog> {
     context.read<LiveMeetingProvider>().initialize();
     dialogProvider.isOnIframePage = true;
     super.initState();
+    // Set context for breakout room help notifications after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<LiveMeetingProvider>().setBreakoutRoomHelpNotificationContext(context);
+    });
   }
 
   @override

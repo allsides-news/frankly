@@ -36,6 +36,11 @@ class ChatMessage with _$ChatMessage {
     /// Setting this field to true indicates it should show up in all breakout
     /// rooms and show in the floating display on screen
     @Default(false) bool? broadcast,
+
+    /// Indicates the type of message for special styling
+    /// 'global_admin' - Global admin announcement from outside the meeting
+    /// null/other - Regular chat message
+    String? messageType,
   }) = _ChatMessage;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) =>

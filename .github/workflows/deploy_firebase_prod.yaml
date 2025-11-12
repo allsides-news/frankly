@@ -1,6 +1,9 @@
 name: Deploy Firebase Components to Production
 concurrency: production
-on: workflow_dispatch
+# Disabled: Cloud Functions auto-deploy via Cloud Build
+# Firestore rules can be deployed manually if needed
+on:
+  workflow_dispatch:
 
 jobs:
   deploy_firebase_prod:

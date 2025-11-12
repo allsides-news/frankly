@@ -907,6 +907,8 @@ mixin _$BreakoutRoom {
   BreakoutRoomFlagStatus get flagStatus => throw _privateConstructorUsedError;
   @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
   DateTime? get createdDate => throw _privateConstructorUsedError;
+  @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+  DateTime? get helpRequestedTimestamp => throw _privateConstructorUsedError;
   bool get record => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -934,6 +936,8 @@ abstract class $BreakoutRoomCopyWith<$Res> {
       BreakoutRoomFlagStatus flagStatus,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
       DateTime? createdDate,
+      @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+      DateTime? helpRequestedTimestamp,
       bool record});
 }
 
@@ -958,6 +962,7 @@ class _$BreakoutRoomCopyWithImpl<$Res, $Val extends BreakoutRoom>
     Object? originalParticipantIdsAssignment = null,
     Object? flagStatus = null,
     Object? createdDate = freezed,
+    Object? helpRequestedTimestamp = freezed,
     Object? record = null,
   }) {
     return _then(_value.copyWith(
@@ -993,6 +998,10 @@ class _$BreakoutRoomCopyWithImpl<$Res, $Val extends BreakoutRoom>
           ? _value.createdDate
           : createdDate // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      helpRequestedTimestamp: freezed == helpRequestedTimestamp
+          ? _value.helpRequestedTimestamp
+          : helpRequestedTimestamp // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
       record: null == record
           ? _value.record
           : record // ignore: cast_nullable_to_non_nullable
@@ -1022,6 +1031,8 @@ abstract class _$$_BreakoutRoomCopyWith<$Res>
       BreakoutRoomFlagStatus flagStatus,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
       DateTime? createdDate,
+      @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+      DateTime? helpRequestedTimestamp,
       bool record});
 }
 
@@ -1044,6 +1055,7 @@ class __$$_BreakoutRoomCopyWithImpl<$Res>
     Object? originalParticipantIdsAssignment = null,
     Object? flagStatus = null,
     Object? createdDate = freezed,
+    Object? helpRequestedTimestamp = freezed,
     Object? record = null,
   }) {
     return _then(_$_BreakoutRoom(
@@ -1079,6 +1091,10 @@ class __$$_BreakoutRoomCopyWithImpl<$Res>
           ? _value.createdDate
           : createdDate // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      helpRequestedTimestamp: freezed == helpRequestedTimestamp
+          ? _value.helpRequestedTimestamp
+          : helpRequestedTimestamp // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
       record: null == record
           ? _value.record
           : record // ignore: cast_nullable_to_non_nullable
@@ -1103,6 +1119,8 @@ class _$_BreakoutRoom implements _BreakoutRoom {
       this.flagStatus = BreakoutRoomFlagStatus.unflagged,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
       this.createdDate,
+      @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+      this.helpRequestedTimestamp,
       this.record = false});
 
   factory _$_BreakoutRoom.fromJson(Map<String, dynamic> json) =>
@@ -1134,12 +1152,15 @@ class _$_BreakoutRoom implements _BreakoutRoom {
   @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
   final DateTime? createdDate;
   @override
+  @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+  final DateTime? helpRequestedTimestamp;
+  @override
   @JsonKey()
   final bool record;
 
   @override
   String toString() {
-    return 'BreakoutRoom(roomId: $roomId, roomName: $roomName, orderingPriority: $orderingPriority, creatorId: $creatorId, participantIds: $participantIds, originalParticipantIdsAssignment: $originalParticipantIdsAssignment, flagStatus: $flagStatus, createdDate: $createdDate, record: $record)';
+    return 'BreakoutRoom(roomId: $roomId, roomName: $roomName, orderingPriority: $orderingPriority, creatorId: $creatorId, participantIds: $participantIds, originalParticipantIdsAssignment: $originalParticipantIdsAssignment, flagStatus: $flagStatus, createdDate: $createdDate, helpRequestedTimestamp: $helpRequestedTimestamp, record: $record)';
   }
 
   @override
@@ -1163,6 +1184,8 @@ class _$_BreakoutRoom implements _BreakoutRoom {
                 other.flagStatus == flagStatus) &&
             (identical(other.createdDate, createdDate) ||
                 other.createdDate == createdDate) &&
+            (identical(other.helpRequestedTimestamp, helpRequestedTimestamp) ||
+                other.helpRequestedTimestamp == helpRequestedTimestamp) &&
             (identical(other.record, record) || other.record == record));
   }
 
@@ -1178,6 +1201,7 @@ class _$_BreakoutRoom implements _BreakoutRoom {
       const DeepCollectionEquality().hash(originalParticipantIdsAssignment),
       flagStatus,
       createdDate,
+      helpRequestedTimestamp,
       record);
 
   @JsonKey(ignore: true)
@@ -1208,6 +1232,8 @@ abstract class _BreakoutRoom implements BreakoutRoom {
       final BreakoutRoomFlagStatus flagStatus,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
       final DateTime? createdDate,
+      @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+      final DateTime? helpRequestedTimestamp,
       final bool record}) = _$_BreakoutRoom;
 
   factory _BreakoutRoom.fromJson(Map<String, dynamic> json) =
@@ -1236,6 +1262,9 @@ abstract class _BreakoutRoom implements BreakoutRoom {
   @override
   @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestamp)
   DateTime? get createdDate;
+  @override
+  @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
+  DateTime? get helpRequestedTimestamp;
   @override
   bool get record;
   @override

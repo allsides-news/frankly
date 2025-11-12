@@ -20,6 +20,20 @@ extension DateTimeExtension on DateTime {
     final String formattedDateTime = DateFormat(format).format(this);
     return formattedDateTime;
   }
+
+  /// Formats the time difference as "X minutes ago" or "just now"
+  /// Returns "just now" if less than 1 minute has passed
+  String getHelpRequestedTimeAgo() {
+    final now = clockService.now();
+    final difference = now.difference(this);
+    final minutes = difference.inMinutes;
+    
+    if (minutes < 1) {
+      return 'just now';
+    }
+    
+    return '$minutes ${minutes == 1 ? 'minute' : 'minutes'} ago';
+  }
 }
 
 extension DurationExtension on Duration {

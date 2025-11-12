@@ -147,7 +147,7 @@ class LiveMeetingTestUtils {
       transaction.set(
         firestore
             .collection(
-                '${getLiveMeetingPath(event)}/participant-agenda-item-details/$agendaItemId/participant-details')
+                '${getLiveMeetingPath(event)}/participant-agenda-item-details/$agendaItemId/participant-details',)
             .document(participantAgendaItemDetails.userId),
         DocumentData.fromMap(
           firestoreUtils.toFirestoreJson(

@@ -453,6 +453,8 @@ class FirestoreEventService {
     String? externalCommunityId,
     bool setAttendeeStatus = true,
     SurveyDialogResult? breakoutRoomSurveyResults,
+    bool optInToCommunity = false,
+    bool optInToNewsletters = false,
   }) async {
     final uid = userService.currentUserId!;
 
@@ -471,6 +473,13 @@ class FirestoreEventService {
           'join it. Consider creating a new event!');
     }
 
+    // Check if event has ended based on its duration
+    if (event.hasEnded(clockService.now())) {
+      throw VisibleException(
+        'This event has ended. You can no longer join it.',
+      );
+    }
+
     final participant = Participant(
       id: uid,
       communityId: communityId,
@@ -481,6 +490,8 @@ class FirestoreEventService {
       joinParameters: queryParametersService.mostRecentQueryParameters,
       breakoutRoomSurveyQuestions: breakoutRoomSurveyResults?.questions ?? [],
       zipCode: breakoutRoomSurveyResults?.zipCode,
+      optInToCommunity: optInToCommunity,
+      optInToNewsletters: optInToNewsletters,
     );
     print('Participant $participant');
     final participantRef = reference.collection('event-participants').doc(uid);

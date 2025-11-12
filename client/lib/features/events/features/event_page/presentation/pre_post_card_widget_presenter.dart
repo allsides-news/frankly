@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/events/features/event_page/presentation/views/pre_post_card_widget_page.dart';
 import 'package:client/core/utils/error_utils.dart';
+import 'package:client/core/utils/html_sanitizer.dart';
 import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/services.dart';
 import 'package:client/features/user/data/services/user_service.dart';
@@ -60,6 +61,8 @@ class PrePostCardWidgetPresenter {
   String? validateMessage(String? text) {
     if (text == null || text.trim().isEmpty) {
       return 'Message cannot be empty';
+    } else if (text.trim().length > 500) {
+      return 'Message cannot exceed 500 characters';
     } else {
       return null;
     }
@@ -316,7 +319,9 @@ class PrePostCardWidgetPresenter {
   }
 
   void updateEnteredMessage(String text) {
-    _model.prePostCard = _model.prePostCard.copyWith(message: text);
+    // Sanitize HTML content for security
+    final sanitizedValue = HtmlSanitizer.sanitize(text.trim());
+    _model.prePostCard = _model.prePostCard.copyWith(message: sanitizedValue);
     _view.updateView();
   }
 

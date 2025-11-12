@@ -10,6 +10,7 @@ import 'package:client/features/events/features/event_page/presentation/views/pr
 import 'package:client/features/events/features/event_page/presentation/views/survey_dialog.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/utils/error_utils.dart';
+import 'package:client/core/utils/visible_exception.dart';
 import 'package:client/core/widgets/confirm_dialog.dart';
 import 'package:client/core/widgets/navbar/nav_bar_provider.dart';
 import 'package:client/features/auth/presentation/views/sign_in_dialog.dart';
@@ -18,7 +19,6 @@ import 'package:client/services.dart';
 import 'package:data_models/analytics/analytics_entities.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/community/community_tag.dart';
-import 'package:client/core/localization/localization_helper.dart';
 
 import '../../../../../../core/routing/locations.dart';
 
@@ -72,6 +72,7 @@ class EventPageProvider with ChangeNotifier {
   Future<JoinEventResults> joinEvent({
     bool showConfirm = true,
     bool joinCommunity = false,
+    bool optInToNewsletters = false,
   }) async {
     final prePostEnabledFuture =
         eventProvider.communityProvider.prePostEnabled();
@@ -119,6 +120,8 @@ class EventPageProvider with ChangeNotifier {
             templateId: eventProvider.templateId,
             eventId: eventProvider.eventId,
             breakoutRoomSurveyResults: surveyDialogResult,
+            optInToCommunity: joinCommunity,
+            optInToNewsletters: optInToNewsletters,
           );
 
           analytics.logEvent(
@@ -163,6 +166,11 @@ class EventPageProvider with ChangeNotifier {
   }
 
   Future<void> enterMeeting({List<BreakoutQuestion>? surveyQuestions}) async {
+    // Prevent entering ended events
+    if (eventProvider.event.hasEnded(clockService.now())) {
+      throw VisibleException('This event has ended. You cannot enter it.');
+    }
+
     final participant = await eventProvider.selfParticipantStream!.first;
     final participantAnswers =
         surveyQuestions ?? participant.breakoutRoomSurveyQuestions;

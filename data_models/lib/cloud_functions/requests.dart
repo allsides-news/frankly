@@ -201,7 +201,7 @@ class SendGridEmailMessage with _$SendGridEmailMessage {
   factory SendGridEmailMessage({
     required String subject,
     required String html,
-    List<EmailAttachment>? attachments,
+    @Default([]) List<EmailAttachment> attachments,
   }) = _SendGridEmailMessage;
 
   factory SendGridEmailMessage.fromJson(Map<String, dynamic> json) =>

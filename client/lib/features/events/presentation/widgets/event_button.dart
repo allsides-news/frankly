@@ -137,12 +137,18 @@ class _ParticipantsList extends HookWidget {
             responsiveLayoutService.isMobile(context) ? 4 : 6;
         final numberOfParticipantsToShow =
             min(maxNumberOfParticipantsToShow, participantCount);
+        
+        final canViewCounts = userDataService
+            .getMembership(event.communityId)
+            .isMod;
+        
         return ParticipantsList(
           key: Key('${snapshot.length}'),
           event: event,
           iconSize: 30,
           participantIds: snapshot.map((e) => e.id).toList(),
           numberOfIconsToShow: numberOfParticipantsToShow,
+          showParticipantCount: canViewCounts,
         );
       },
     );

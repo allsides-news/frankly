@@ -1,12 +1,13 @@
 import 'package:client/core/utils/toast_utils.dart';
 import 'package:client/core/utils/validation_utils.dart';
+import 'package:client/core/utils/html_sanitizer.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/community/features/create_community/presentation/widgets/choose_color_section.dart';
 import 'package:client/features/community/features/create_community/presentation/widgets/create_community_image_fields.dart';
 import 'package:client/features/community/features/create_community/presentation/widgets/create_community_text_fields.dart';
 import 'package:client/features/community/features/create_community/presentation/widgets/private_community_checkbox.dart';
-import 'package:client/features/community/utils/community_theme_utils.dart';
+import 'package:client/features/community/utils/community_theme_utils.dart.dart';
 import 'package:client/features/community/features/create_community/data/providers/community_tag_provider.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/widgets/buttons/action_button.dart';
@@ -158,24 +159,7 @@ class _CreateCommunityDialogState extends State<_CreateCommunityDialog> {
       );
     }
 
-    final isDefaultTheme =
-        _community.themeDarkColor == null && _community.themeLightColor == null;
-
-    final isThemeValid = isDefaultTheme ||
-        ThemeUtils.isColorComboValid(
-          context,
-          _community.themeLightColor,
-          _community.themeDarkColor,
-        );
-
-    if (!isThemeValid) {
-      showRegularToast(
-        context,
-        'Please select a valid color combination for your community theme.',
-        toastType: ToastType.failed,
-      );
-      return;
-    }
+    _verifyContrastOfSelectedTheme();
 
     final contactEmail = _community.contactEmail;
     if (contactEmail != null &&
@@ -214,6 +198,34 @@ class _CreateCommunityDialogState extends State<_CreateCommunityDialog> {
           ).communityHome,
         );
       }
+    }
+  }
+
+  void _verifyContrastOfSelectedTheme() {
+    final light = _community.themeLightColor ?? '';
+    final dark = _community.themeDarkColor ?? '';
+    if (light.isEmpty && dark.isEmpty) return;
+    if (!ThemeUtils.isColorValid(light)) {
+      _community = _community.copyWith(
+        themeLightColor:
+            ThemeUtils.convertToHexString(context.theme.colorScheme.surface),
+      );
+    }
+    if (!ThemeUtils.isColorValid(dark)) {
+      _community = _community.copyWith(
+        themeDarkColor:
+            ThemeUtils.convertToHexString(context.theme.colorScheme.primary),
+      );
+    }
+
+    final valid = ThemeUtils.isColorComboValid(
+      context,
+      _community.themeLightColor,
+      _community.themeDarkColor,
+    );
+
+    if (!valid) {
+      _community = _community.copyWith(themeDarkColor: '', themeLightColor: '');
     }
   }
 
@@ -351,7 +363,6 @@ class _CreateCommunityDialogState extends State<_CreateCommunityDialog> {
         if (widget.showAttributeEdit)
           CreateCommunityTextFields(
             showAllFields: true,
-            autoGenerateUrl: widget.isCreateCommunity,
             showChooseCustomDisplayId: widget.showChooseCustomDisplayId,
             onCustomDisplayIdChanged: (value) => _displayId = value,
             onNameChanged: (value) =>
@@ -359,9 +370,13 @@ class _CreateCommunityDialogState extends State<_CreateCommunityDialog> {
             onTaglineChanged: (value) => setState(
               () => _community = _community.copyWith(tagLine: value),
             ),
-            onAboutChanged: (value) => setState(
-              () => _community = _community.copyWith(description: value),
-            ),
+            onAboutChanged: (value) {
+              // Sanitize HTML content for security
+              final sanitizedValue = HtmlSanitizer.sanitize(value.trim());
+              setState(
+                () => _community = _community.copyWith(description: sanitizedValue),
+              );
+            },
             community: _community,
           ),
         if (widget.showImageEdit)

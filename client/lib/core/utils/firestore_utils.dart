@@ -9,9 +9,9 @@ import 'package:rxdart/rxdart.dart';
 /// on the stream. This is useful in many different ways when dealing with
 /// streams inside a widget.
 ///
-/// These BehaviorSubject should be disposed when a widget is done with them
-/// but more work is needed to figure out how to do that properly. Possibly a
-/// memory leak as they currently stand but I haven't seen any issues from it.
+/// These BehaviorSubject should be disposed when a widget is done with them.
+/// The wrapper includes guards against adding events to closed streams to
+/// prevent "Cannot add new events after calling close" errors.
 BehaviorSubjectWrapper<T> wrapInBehaviorSubject<T>(Stream<T> stream) {
   return BehaviorSubjectWrapper(stream);
 }
@@ -20,31 +20,50 @@ BehaviorSubjectWrapper<T> wrapInBehaviorSubject<T>(Stream<T> stream) {
 // to rather than as soon as it is constructed.
 class BehaviorSubjectWrapper<T> extends Stream<T> {
   final BehaviorSubject<T> stream;
-  final StreamSubscription streamSubscription;
+  late final StreamSubscription streamSubscription;
+  bool _isDisposed = false;
 
   factory BehaviorSubjectWrapper(Stream<T> stream) {
     final behaviorSubject = BehaviorSubject<T>();
-    final subscription = stream.listen(
-      (event) => behaviorSubject.add(event),
-      onError: (error) => behaviorSubject.addError(error),
-      onDone: () => behaviorSubject.close(),
-    );
-    return BehaviorSubjectWrapper._(
+    final wrapper = BehaviorSubjectWrapper._(
       stream: behaviorSubject,
-      streamSubscription: subscription,
     );
+    
+    wrapper.streamSubscription = stream.listen(
+      (event) {
+        if (!wrapper._isDisposed && !behaviorSubject.isClosed) {
+          behaviorSubject.add(event);
+        }
+      },
+      onError: (error) {
+        if (!wrapper._isDisposed && !behaviorSubject.isClosed) {
+          behaviorSubject.addError(error);
+        }
+      },
+      onDone: () {
+        if (!wrapper._isDisposed && !behaviorSubject.isClosed) {
+          behaviorSubject.close();
+        }
+      },
+    );
+    
+    return wrapper;
   }
 
   BehaviorSubjectWrapper._({
     required this.stream,
-    required this.streamSubscription,
   });
 
   T? get value => stream.valueOrNull;
 
   Future<void> dispose() async {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    
     await streamSubscription.cancel();
-    await stream.close();
+    if (!stream.isClosed) {
+      await stream.close();
+    }
   }
 
   @override

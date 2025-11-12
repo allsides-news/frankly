@@ -63,7 +63,7 @@ class CloudFunctionsCommunityService {
     GetCommunityDonationsEnabledRequest request,
   ) async {
     final result = await cloudFunctions.callFunction(
-        'GetCommunityDonationsEnabled', request.toJson());
+        'GetCommunityDonationsEnabled', request.toJson(),);
 
     return GetCommunityDonationsEnabledResponse.fromJson(result);
   }
@@ -72,7 +72,7 @@ class CloudFunctionsCommunityService {
     GetCommunityPrePostEnabledRequest request,
   ) async {
     final result = await cloudFunctions.callFunction(
-        'GetCommunityPrePostEnabled', request.toJson());
+        'GetCommunityPrePostEnabled', request.toJson(),);
 
     return GetCommunityPrePostEnabledResponse.fromJson(result);
   }

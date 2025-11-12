@@ -12,7 +12,12 @@ void setFirebaseAppFactory(App Function() factory) {
 }
 
 App get firebaseApp => _firebaseAppSingleton ??= _firebaseAppFactory();
-Firestore get firestore => firebaseApp.firestore();
+Firestore get firestore {
+  final databaseId = firebaseApp.options.databaseURL.contains('allsides-roundtables-db') ?? false;
+  // Note: firebase_admin_interop doesn't support named databases directly
+  // The database ID needs to be configured via the Node.js admin SDK initialization
+  return firebaseApp.firestore();
+}
 
 /// Use a global singleton to allow mocking in tests
 FirestoreUtils firestoreUtils = FirestoreUtils();

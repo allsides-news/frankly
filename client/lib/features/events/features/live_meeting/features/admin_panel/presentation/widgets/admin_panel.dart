@@ -1,4 +1,3 @@
-import 'package:client/core/widgets/custom_loading_indicator.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_ui_firestore/firebase_ui_firestore.dart';
@@ -16,7 +15,6 @@ import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/core/widgets/confirm_dialog.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
-import 'package:client/core/widgets/buttons/thick_outline_button.dart';
 import 'package:client/features/user/data/providers/user_info_builder.dart';
 import 'package:client/features/user/presentation/widgets/user_profile_chip.dart';
 import 'package:client/core/utils/visible_exception.dart';
@@ -31,6 +29,7 @@ import 'package:data_models/events/event.dart';
 import 'package:data_models/events/live_meetings/live_meeting.dart';
 import 'package:provider/provider.dart';
 import 'package:client/core/localization/localization_helper.dart';
+import 'package:client/core/utils/extensions.dart';
 
 final fakeWaitingRoomObject = BreakoutRoom(
   roomId: breakoutsWaitingRoomId,
@@ -80,7 +79,6 @@ class _AdminPanelState extends State<AdminPanel> {
     MeetingProviderParticipant participant,
   ) {
     final id = participant.userId;
-    final sessionId = participant.sessionId;
     final local = participant.local;
 
     return Padding(
@@ -782,138 +780,151 @@ class BreakoutRoomButton extends StatefulWidget {
 }
 
 class _BreakoutRoomButtonState extends State<BreakoutRoomButton> {
-  late BehaviorSubjectWrapper<List<Participant>> _breakoutParticipantsStream;
+  late BehaviorSubjectWrapper<BreakoutRoom?> _roomStream;
 
   bool get isWaitingRoom => widget.room.roomId == breakoutsWaitingRoomId;
 
   @override
   void initState() {
     super.initState();
-    _breakoutParticipantsStream =
-        firestoreLiveMeetingService.breakoutRoomParticipantsStream(
+    final breakoutSessionId = LiveMeetingProvider.read(context)
+        .liveMeeting!
+        .currentBreakoutSession!
+        .breakoutRoomSessionId;
+    _roomStream = firestoreLiveMeetingService.breakoutRoomStream(
       event: EventProvider.read(context).event,
-      breakoutRoomSessionId: LiveMeetingProvider.read(context)
-          .liveMeeting!
-          .currentBreakoutSession!
-          .breakoutRoomSessionId,
+      breakoutRoomSessionId: breakoutSessionId,
       breakoutRoomId: widget.room.roomId,
     );
   }
 
   @override
   void dispose() {
-    _breakoutParticipantsStream.dispose();
+    _roomStream.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Participant>>(
-      stream: _breakoutParticipantsStream,
-      builder: (context, participantsSnapshot) {
-        var participants =
-            participantsSnapshot.data?.map((p) => p.id).toList() ?? [];
-        if (isWaitingRoom) {
-          final assignedHere = widget.room.participantIds.toSet();
-          participants =
-              participants.where((id) => assignedHere.contains(id)).toList();
-        }
-        final participantCount = participants.length;
+    // Use eventParticipantsStream to get all participants, then filter by participantIds
+    // This ensures we use participantIds (which is updated correctly on reassignment)
+    // as the source of truth, rather than currentBreakoutRoomId (which may be stale)
+    return StreamBuilder<BreakoutRoom?>(
+      stream: _roomStream.stream,
+      builder: (context, roomSnapshot) {
+        // Use the latest room data from the stream, or fall back to widget.room
+        final room = roomSnapshot.data ?? widget.room;
 
-        final room = widget.room;
-        final roomDisplayName = room.roomId == breakoutsWaitingRoomId
-            ? room.roomName
-            : 'Room ${room.roomName}';
+        // During breakouts, eventParticipantsStream is empty, so we trust
+        // room.participantIds as the authoritative source maintained by the server
+        final participantCount = room.participantIds.length;
 
-        final needsHelp = widget.needsHelpOverride ||
-            room.flagStatus == BreakoutRoomFlagStatus.needsHelp ||
-            (room.roomId == breakoutsWaitingRoomId && participantCount > 0);
+        return Builder(
+          builder: (context) {
 
-        final liveMeetingProvider = LiveMeetingProvider.watch(context);
-        final isCurrentRoom =
-            liveMeetingProvider.currentBreakoutRoomId == room.roomId &&
-                liveMeetingProvider.userLeftBreakouts == false;
+            final roomDisplayName = room.roomId == breakoutsWaitingRoomId
+                ? room.roomName
+                : 'Room ${room.roomName}';
 
-        Color backgroundColor =
-            context.theme.colorScheme.scrim.withScrimOpacity;
-        if (isCurrentRoom) {
-          backgroundColor = context.theme.colorScheme.onPrimary;
-        } else if (needsHelp) {
-          backgroundColor = context.theme.colorScheme.error;
-        }
+            final needsHelp = widget.needsHelpOverride ||
+                room.flagStatus == BreakoutRoomFlagStatus.needsHelp ||
+                (room.roomId == breakoutsWaitingRoomId && participantCount > 0);
 
-        return CustomInkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: backgroundColor,
+            final liveMeetingProvider = LiveMeetingProvider.watch(context);
+            final isCurrentRoom =
+                liveMeetingProvider.currentBreakoutRoomId == room.roomId &&
+                    liveMeetingProvider.userLeftBreakouts == false;
+
+            Color backgroundColor =
+                context.theme.colorScheme.scrim.withScrimOpacity;
+            if (isCurrentRoom) {
+              backgroundColor = context.theme.colorScheme.onPrimary;
+            } else if (needsHelp) {
+              backgroundColor = context.theme.colorScheme.error;
+            }
+
+            // Show timestamp only for non-waiting rooms that need help
+            final showTimestamp = needsHelp &&
+                room.roomId != breakoutsWaitingRoomId &&
+                room.helpRequestedTimestamp != null;
+
+            return CustomInkWell(
+              onTap: widget.onTap,
               borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                HeightConstrainedText(
-                  roomDisplayName.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: isCurrentRoom
-                        ? Theme.of(context).primaryColor
-                        : context.theme.colorScheme.onPrimary,
-                  ),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(30),
-                    color: needsHelp
-                        ? context.theme.colorScheme.errorContainer
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (needsHelp) ...[
-                        Icon(
-                          Icons.notifications,
-                          color: context.theme.colorScheme.onErrorContainer,
-                          size: 16,
-                        ),
-                        SizedBox(width: 4),
-                      ],
-                      if (participantsSnapshot.connectionState ==
-                          ConnectionState.waiting)
-                        SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CustomLoadingIndicator(),
-                        )
-                      else if (participantsSnapshot.hasError)
-                        HeightConstrainedText(context.l10n.error)
-                      else
-                        HeightConstrainedText(
-                          '$participantCount people',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: needsHelp
-                                ? context.theme.colorScheme.onErrorContainer
-                                : (isCurrentRoom
-                                    ? context.theme.colorScheme.primary
-                                    : context.theme.colorScheme.onPrimary),
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    HeightConstrainedText(
+                      roomDisplayName.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: isCurrentRoom
+                            ? Theme.of(context).primaryColor
+                            : context.theme.colorScheme.onPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(30),
+                        color: needsHelp
+                            ? context.theme.colorScheme.errorContainer
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (needsHelp) ...[
+                            Icon(
+                              Icons.notifications,
+                              color: context.theme.colorScheme.onErrorContainer,
+                              size: 16,
+                            ),
+                            SizedBox(width: 4),
+                          ],
+                          HeightConstrainedText(
+                            '$participantCount people',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: needsHelp
+                                  ? context.theme.colorScheme.onErrorContainer
+                                  : (isCurrentRoom
+                                      ? context.theme.colorScheme.primary
+                                      : context.theme.colorScheme.onPrimary),
+                            ),
                           ),
+                        ],
+                      ),
+                    ),
+                    if (showTimestamp) ...[
+                      SizedBox(height: 4),
+                      HeightConstrainedText(
+                        room.helpRequestedTimestamp!.getHelpRequestedTimeAgo(),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: isCurrentRoom
+                              ? context.theme.colorScheme.error
+                              : context.theme.colorScheme.onError,
                         ),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -935,7 +946,6 @@ class BreakoutRoomDetails extends StatefulWidget {
 
 class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
   late BehaviorSubjectWrapper<BreakoutRoom?> _breakoutRoomStream;
-  late BehaviorSubjectWrapper<List<Participant>> _breakoutParticipantsStream;
 
   @override
   void initState() {
@@ -949,18 +959,11 @@ class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
       breakoutRoomSessionId: breakoutSessionId,
       breakoutRoomId: widget.roomId,
     );
-    _breakoutParticipantsStream =
-        firestoreLiveMeetingService.breakoutRoomParticipantsStream(
-      event: EventProvider.read(context).event,
-      breakoutRoomSessionId: breakoutSessionId,
-      breakoutRoomId: widget.roomId,
-    );
   }
 
   @override
   void dispose() {
     _breakoutRoomStream.dispose();
-    _breakoutParticipantsStream.dispose();
     super.dispose();
   }
 
@@ -1047,163 +1050,153 @@ class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
     return CustomStreamBuilder<BreakoutRoom?>(
       entryFrom: '_BreakoutRoomDetailsState.build',
       stream: _breakoutRoomStream.stream,
-      builder: (context, room) => CustomStreamBuilder<List<Participant>>(
-        entryFrom: '_BreakoutRoomDetailsState.build',
-        stream: _breakoutParticipantsStream,
-        builder: (context, liveBreakoutParticipants) {
-          final localRoom = room!;
-          final localLiveBreakoutParticipants = liveBreakoutParticipants!;
-          final isWaitingRoom = localRoom.roomId == breakoutsWaitingRoomId;
-          var participantIds =
-              localLiveBreakoutParticipants.map((p) => p.id).toList();
-          if (isWaitingRoom) {
-            final assignedHere = room.participantIds.toSet();
-            participantIds = participantIds
-                .where((id) => assignedHere.contains(id))
-                .toList();
-          }
-          final participantCount = participantIds.length;
+      builder: (context, room) {
+        final localRoom = room!;
+        
+        // During breakouts, eventParticipantsStream is empty, so we trust
+        // room.participantIds as the authoritative source maintained by the server
+        final participantIds = localRoom.participantIds;
+        final participantCount = participantIds.length;
 
-          final roomDisplayName = localRoom.roomId == breakoutsWaitingRoomId
-              ? localRoom.roomName
-              : 'Room ${localRoom.roomName}';
+        final roomDisplayName = localRoom.roomId == breakoutsWaitingRoomId
+            ? localRoom.roomName
+            : 'Room ${localRoom.roomName}';
 
-          final needsHelp =
-              localRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp ||
-                  (localRoom.roomId == breakoutsWaitingRoomId &&
-                      participantCount > 0);
-          final provider = LiveMeetingProvider.watch(context);
+        final needsHelp =
+            localRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp ||
+                (localRoom.roomId == breakoutsWaitingRoomId &&
+                    participantCount > 0);
+        final provider = LiveMeetingProvider.watch(context);
 
-          return Column(
-            children: [
-              CustomInkWell(
-                onTap: widget.goBack,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: needsHelp
-                        ? context.theme.colorScheme.error
-                        : context.theme.colorScheme.surfaceContainerLowest,
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.chevron_left,
-                        size: 36,
+        return Column(
+          children: [
+            CustomInkWell(
+              onTap: widget.goBack,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: needsHelp
+                      ? context.theme.colorScheme.error
+                      : context.theme.colorScheme.surfaceContainerLowest,
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.chevron_left,
+                      size: 36,
+                      color: needsHelp
+                          ? context.theme.colorScheme.onError
+                          : context.theme.colorScheme.onSurface,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: HeightConstrainedText(
+                        roomDisplayName,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.theme.textTheme.titleLarge!.copyWith(
+                          color: needsHelp
+                              ? context.theme.colorScheme.onError
+                              : context.theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    if (provider.currentBreakoutRoomId == localRoom.roomId &&
+                        (!provider.userLeftBreakouts))
+                      ActionButton(
                         color: needsHelp
-                            ? context.theme.colorScheme.onError
-                            : context.theme.colorScheme.onSurface,
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: HeightConstrainedText(
-                          roomDisplayName,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.theme.textTheme.titleLarge!.copyWith(
-                            color: needsHelp
-                                ? context.theme.colorScheme.onError
-                                : context.theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                      if (provider.currentBreakoutRoomId == localRoom.roomId &&
-                          (!provider.userLeftBreakouts))
-                        ActionButton(
-                          color: needsHelp
-                              ? context.theme.colorScheme.errorContainer
-                              : null,
-                          textColor: needsHelp
-                              ? context.theme.colorScheme.onErrorContainer
-                              : null,
-                          onPressed: () async {
-                            final reassignUser =
-                                provider.currentBreakoutRoomId ==
-                                    provider.assignedBreakoutRoomId;
+                            ? context.theme.colorScheme.errorContainer
+                            : null,
+                        textColor: needsHelp
+                            ? context.theme.colorScheme.onErrorContainer
+                            : null,
+                        onPressed: () async {
+                          final reassignUser =
+                              provider.currentBreakoutRoomId ==
+                                  provider.assignedBreakoutRoomId;
 
-                            provider.leaveBreakoutRoom();
+                          provider.leaveBreakoutRoom();
 
-                            if (reassignUser) {
-                              await provider.reassignBreakoutRoom(
-                                userId: userService.currentUserId!,
-                                newRoomNumber: null,
-                              );
-                            }
-                          },
-                          text: 'Leave Room',
-                        )
-                      else
-                        ActionButton(
-                          onPressed: () {
-                            provider.enterBreakoutRoom(
-                              roomId: localRoom.roomId,
+                          if (reassignUser) {
+                            await provider.reassignBreakoutRoom(
+                              userId: userService.currentUserId!,
+                              newRoomNumber: null,
                             );
-                          },
-                          color: needsHelp
-                              ? context.theme.colorScheme.errorContainer
-                              : null,
-                          textColor: needsHelp
-                              ? context.theme.colorScheme.onErrorContainer
-                              : null,
-                          text: 'Enter Room',
-                        ),
-                    ],
-                  ),
+                          }
+                        },
+                        text: 'Leave Room',
+                      )
+                    else
+                      ActionButton(
+                        onPressed: () {
+                          provider.enterBreakoutRoom(
+                            roomId: localRoom.roomId,
+                          );
+                        },
+                        color: needsHelp
+                            ? context.theme.colorScheme.errorContainer
+                            : null,
+                        textColor: needsHelp
+                            ? context.theme.colorScheme.onErrorContainer
+                            : null,
+                        text: 'Enter Room',
+                      ),
+                  ],
                 ),
               ),
-              if (localRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp) ...[
-                SizedBox(height: 6),
-                ActionButton(
-                  type: ActionButtonType.outline,
-                  onPressed: () async {
-                    final roomId = localRoom.roomId;
+            ),
+            if (localRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp) ...[
+              SizedBox(height: 6),
+              ActionButton(
+                type: ActionButtonType.outline,
+                onPressed: () async {
+                  final roomId = localRoom.roomId;
 
-                    await alertOnError(
-                      context,
-                      () => cloudFunctionsLiveMeetingService
-                          .updateBreakoutRoomFlagStatus(
-                        request: UpdateBreakoutRoomFlagStatusRequest(
-                          eventPath: provider.eventPath,
-                          breakoutSessionId: provider
-                                  .liveMeeting
-                                  ?.currentBreakoutSession
-                                  ?.breakoutRoomSessionId ??
-                              '',
-                          roomId: roomId,
-                          flagStatus: BreakoutRoomFlagStatus.unflagged,
-                        ),
+                  await alertOnError(
+                    context,
+                    () => cloudFunctionsLiveMeetingService
+                        .updateBreakoutRoomFlagStatus(
+                      request: UpdateBreakoutRoomFlagStatusRequest(
+                        eventPath: provider.eventPath,
+                        breakoutSessionId: provider
+                                .liveMeeting
+                                ?.currentBreakoutSession
+                                ?.breakoutRoomSessionId ??
+                            '',
+                        roomId: roomId,
+                        flagStatus: BreakoutRoomFlagStatus.unflagged,
                       ),
-                    );
-                  },
-                  expand: true,
-                  text: 'Cancel Help Needed',
-                ),
-              ],
-              SizedBox(height: 8),
-              if (participantCount == 0)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: HeightConstrainedText(context.l10n.noOneIsHereYet),
-                )
-              else
-                Expanded(
-                  child: ListView(
-                    children: [
-                      for (final participantId in participantIds)
-                        _buildBreakoutRoomParticipant(
-                          participantId,
-                          room,
-                          context,
-                        ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
+                expand: true,
+                text: 'Cancel Help Needed',
+              ),
             ],
-          );
-        },
-      ),
+            SizedBox(height: 8),
+            if (participantCount == 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: HeightConstrainedText(context.l10n.noOneIsHereYet),
+              )
+            else
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final participantId in participantIds)
+                      _buildBreakoutRoomParticipant(
+                        participantId,
+                        localRoom,
+                        context,
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

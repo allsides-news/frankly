@@ -1,7 +1,7 @@
 import 'package:client/features/auth/utils/auth_utils.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/material.dart';
-import 'package:client/features/community/utils/community_theme_utils.dart';
+import 'package:client/features/community/utils/community_theme_utils.dart.dart';
 import 'package:client/features/community/data/providers/community_permissions_provider.dart';
 import 'package:client/features/discussion_threads/presentation/views/manipulate_discussion_thread_page.dart';
 import 'package:client/features/events/features/create_event/presentation/views/create_event_dialog.dart';
@@ -19,8 +19,10 @@ import 'package:client/features/user/data/services/user_data_service.dart';
 import 'package:client/services.dart';
 import 'package:client/features/user/data/services/user_service.dart';
 import 'package:client/core/localization/localization_helper.dart';
+import 'package:client/core/utils/meta_tag_service.dart';
 import 'package:data_models/community/community.dart';
 import 'package:provider/provider.dart';
+import 'package:universal_html/html.dart' as html;
 
 class CommunityPage extends StatefulWidget {
   final bool fillViewport;
@@ -79,6 +81,17 @@ class CommunityPageState extends State<CommunityPage> {
         stream: context.watch<CommunityProvider>().communityStream,
         errorMessage: 'Something went wrong loading this community.',
         builder: (_, community) {
+          // Update meta tags for social sharing when community loads
+          if (community != null) {
+            final currentUrl = html.window.location.href;
+            MetaTagService.updateCommunityMetaTags(
+              communityName: community.name ?? 'Community',
+              communityDescription: community.description,
+              communityImageUrl: community.profileImageUrl ?? community.bannerImageUrl,
+              communityUrl: currentUrl,
+            );
+          }
+          
           final darkThemeColor =
               ThemeUtils.parseColor(community?.themeDarkColor) ??
                   context.theme.colorScheme.primary;

@@ -8,10 +8,10 @@ import 'package:client/features/events/features/event_page/presentation/event_ta
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_agenda/data/providers/user_submitted_agenda_provider.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
+import 'package:client/features/events/features/event_page/data/providers/event_permissions_provider.dart';
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
 import 'package:client/services.dart';
-import 'package:client/styles/app_asset.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:provider/provider.dart';
@@ -113,6 +113,12 @@ class _HostlessMeetingInfoState extends State<HostlessMeetingInfo> {
   }
 
   Widget _buildParticipantCountText() {
+    final canViewCounts = EventPermissionsProvider.read(context)
+            ?.canViewParticipantCounts ??
+        false;
+    
+    if (!canViewCounts) return SizedBox.shrink();
+    
     final liveMeetingProvider = Provider.of<LiveMeetingProvider>(context);
     final participants = max(
       liveMeetingProvider.conferenceRoom?.participants.length ??
@@ -144,6 +150,11 @@ class _HostlessMeetingInfoState extends State<HostlessMeetingInfo> {
   Widget _buildContent() {
     final provider = Provider.of<EventTabsControllerState>(context).widget;
     final isMobile = responsiveLayoutService.isMobile(context);
+    
+    // Check if chat should be disabled for this user in hostless waiting room
+    final eventPermissions = EventPermissionsProvider.watch(context);
+    final shouldDisableChat = 
+        eventPermissions?.shouldDisableChatInHostlessWaitingRoom(context) ?? false;
 
     final tabs = <Widget>[
       if (provider.enableGuide)
@@ -152,7 +163,7 @@ class _HostlessMeetingInfoState extends State<HostlessMeetingInfo> {
           icon: Icons.book_outlined,
           text: 'Agenda',
         ),
-      if (provider.enableChat)
+      if (provider.enableChat && !shouldDisableChat)
         _buildTab(
           tabType: TabType.chat,
           unreadMessages: Provider.of<ChatModel>(context).numUnreadMessages,

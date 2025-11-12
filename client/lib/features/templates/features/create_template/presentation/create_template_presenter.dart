@@ -1,4 +1,5 @@
 import 'package:client/core/utils/random_utils.dart';
+import 'package:client/core/utils/html_sanitizer.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/templates/features/create_template/presentation/views/create_custom_template_page.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_agenda/data/providers/meeting_agenda_provider.dart';
@@ -89,7 +90,9 @@ class CreateTemplatePresenter extends ChangeNotifier {
   }
 
   void onChangeDescription(value) {
-    _template = _template.copyWith(description: value);
+    // Sanitize HTML content for security
+    final sanitizedValue = HtmlSanitizer.sanitize(value.trim());
+    _template = _template.copyWith(description: sanitizedValue);
     notifyListeners();
   }
 

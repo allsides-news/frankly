@@ -43,7 +43,7 @@ Future<void> deleteAllCollections() async {
   final knownCollectionIds = [
     'events',
     'event-participants',
-    'participant-details'
+    'participant-details',
   ];
 
   for (final collectionId in knownCollectionIds) {

@@ -324,7 +324,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
                   prefixStyle: widget.textStyle,
                   alignLabelWithHint: true,
                   hintText: widget.hintText,
-                  hintStyle: context.theme.textTheme.bodyMedium,
+                  hintStyle: widget.hintStyle ?? context.theme.textTheme.bodyMedium,
                   helperText: widget.helperText,
                   fillColor: widget.fillColor,
                   filled: widget.fillColor != null,

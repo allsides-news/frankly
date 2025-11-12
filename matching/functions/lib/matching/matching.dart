@@ -378,7 +378,6 @@ Map<String, int> _groupsToMap(List<List<String>> groups) {
 
 void _testGroupMatchFromCsv(String csvpath, pidIdx, amIdx,
     {targetGroupSize = 6,
-    bool printPairs = false,
     bool printDistribution = false}) async {
   // Read CSV
   final fields = await new File(csvpath)

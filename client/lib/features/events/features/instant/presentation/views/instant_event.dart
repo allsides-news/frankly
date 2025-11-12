@@ -98,6 +98,8 @@ class _InstantEventState extends State<InstantEvent> {
       templateId: templateId,
       eventId: event.id,
       setAttendeeStatus: false,
+      optInToCommunity: false,
+      optInToNewsletters: false,
     );
 
     return event;

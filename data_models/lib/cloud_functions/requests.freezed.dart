@@ -2353,7 +2353,7 @@ SendGridEmailMessage _$SendGridEmailMessageFromJson(Map<String, dynamic> json) {
 mixin _$SendGridEmailMessage {
   String get subject => throw _privateConstructorUsedError;
   String get html => throw _privateConstructorUsedError;
-  List<EmailAttachment>? get attachments => throw _privateConstructorUsedError;
+  List<EmailAttachment> get attachments => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -2367,7 +2367,7 @@ abstract class $SendGridEmailMessageCopyWith<$Res> {
           $Res Function(SendGridEmailMessage) then) =
       _$SendGridEmailMessageCopyWithImpl<$Res, SendGridEmailMessage>;
   @useResult
-  $Res call({String subject, String html, List<EmailAttachment>? attachments});
+  $Res call({String subject, String html, List<EmailAttachment> attachments});
 }
 
 /// @nodoc
@@ -2386,7 +2386,7 @@ class _$SendGridEmailMessageCopyWithImpl<$Res,
   $Res call({
     Object? subject = null,
     Object? html = null,
-    Object? attachments = freezed,
+    Object? attachments = null,
   }) {
     return _then(_value.copyWith(
       subject: null == subject
@@ -2397,10 +2397,10 @@ class _$SendGridEmailMessageCopyWithImpl<$Res,
           ? _value.html
           : html // ignore: cast_nullable_to_non_nullable
               as String,
-      attachments: freezed == attachments
+      attachments: null == attachments
           ? _value.attachments
           : attachments // ignore: cast_nullable_to_non_nullable
-              as List<EmailAttachment>?,
+              as List<EmailAttachment>,
     ) as $Val);
   }
 }
@@ -2413,7 +2413,7 @@ abstract class _$$_SendGridEmailMessageCopyWith<$Res>
       __$$_SendGridEmailMessageCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String subject, String html, List<EmailAttachment>? attachments});
+  $Res call({String subject, String html, List<EmailAttachment> attachments});
 }
 
 /// @nodoc
@@ -2429,7 +2429,7 @@ class __$$_SendGridEmailMessageCopyWithImpl<$Res>
   $Res call({
     Object? subject = null,
     Object? html = null,
-    Object? attachments = freezed,
+    Object? attachments = null,
   }) {
     return _then(_$_SendGridEmailMessage(
       subject: null == subject
@@ -2440,10 +2440,10 @@ class __$$_SendGridEmailMessageCopyWithImpl<$Res>
           ? _value.html
           : html // ignore: cast_nullable_to_non_nullable
               as String,
-      attachments: freezed == attachments
+      attachments: null == attachments
           ? _value.attachments
           : attachments // ignore: cast_nullable_to_non_nullable
-              as List<EmailAttachment>?,
+              as List<EmailAttachment>,
     ));
   }
 }
@@ -2452,7 +2452,7 @@ class __$$_SendGridEmailMessageCopyWithImpl<$Res>
 @JsonSerializable()
 class _$_SendGridEmailMessage implements _SendGridEmailMessage {
   _$_SendGridEmailMessage(
-      {required this.subject, required this.html, this.attachments});
+      {required this.subject, required this.html, this.attachments = const []});
 
   factory _$_SendGridEmailMessage.fromJson(Map<String, dynamic> json) =>
       _$$_SendGridEmailMessageFromJson(json);
@@ -2462,7 +2462,8 @@ class _$_SendGridEmailMessage implements _SendGridEmailMessage {
   @override
   final String html;
   @override
-  final List<EmailAttachment>? attachments;
+  @JsonKey()
+  final List<EmailAttachment> attachments;
 
   @override
   String toString() {
@@ -2504,7 +2505,7 @@ abstract class _SendGridEmailMessage implements SendGridEmailMessage {
   factory _SendGridEmailMessage(
       {required final String subject,
       required final String html,
-      final List<EmailAttachment>? attachments}) = _$_SendGridEmailMessage;
+      final List<EmailAttachment> attachments}) = _$_SendGridEmailMessage;
 
   factory _SendGridEmailMessage.fromJson(Map<String, dynamic> json) =
       _$_SendGridEmailMessage.fromJson;
@@ -2514,7 +2515,7 @@ abstract class _SendGridEmailMessage implements SendGridEmailMessage {
   @override
   String get html;
   @override
-  List<EmailAttachment>? get attachments;
+  List<EmailAttachment> get attachments;
   @override
   @JsonKey(ignore: true)
   _$$_SendGridEmailMessageCopyWith<_$_SendGridEmailMessage> get copyWith =>

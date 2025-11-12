@@ -49,7 +49,6 @@ import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/community/community.dart';
 import 'package:data_models/community/membership.dart';
-import 'package:client/core/localization/localization_helper.dart';
 import 'package:data_models/templates/template.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
@@ -69,6 +68,7 @@ class EventInfo extends StatefulHookWidget {
   final Future<JoinEventResults> Function({
     bool showConfirm,
     bool joinCommunity,
+    bool optInToNewsletters,
   }) onJoinEvent;
 
   const EventInfo({
@@ -91,6 +91,9 @@ class _EventInfoState extends State<EventInfo> {
   /// Holds state for a checkbox indicating if the user should automatically join the community when
   /// RSVPing
   bool _joinCommunityDuringRsvp = true;
+
+  /// Holds state for a checkbox indicating if the user opted in to newsletters
+  bool _optInToNewsletters = true;
 
   Event get _event => _eventProvider.event;
 
@@ -393,7 +396,7 @@ class _EventInfoState extends State<EventInfo> {
       text = 'Starts Tomorrow';
     } else if (daysDifference == 0 && difference.inMinutes > 9) {
       text = 'Starts in ${durationString(difference)}';
-    } else if (daysDifference < 0) {
+    } else if (daysDifference < 0 || _event.hasEnded(now)) {
       text = 'Event Ended';
     } else {
       text = kEventOpenText;
@@ -454,11 +457,12 @@ class _EventInfoState extends State<EventInfo> {
         context.read<EventPermissionsProvider>().canJoinEvent &&
         _status != _ParticipantStatus.full;
 
-    final showEnterEventButton = _isParticipant ||
-        (showJoinButton &&
-            clockService
-                .now()
-                .isAfter(startTime.subtract(Duration(minutes: 15))));
+    final showEnterEventButton = (_isParticipant ||
+            (showJoinButton &&
+                clockService
+                    .now()
+                    .isAfter(startTime.subtract(Duration(minutes: 15))))) &&
+        !widget.event.hasEnded(clockService.now());
     if (showPrerequisiteWarning) {
       return WarningInfo(
         icon: CircleAvatar(
@@ -512,7 +516,8 @@ class _EventInfoState extends State<EventInfo> {
             onPressed: () => alertOnError(context, () async {
               await widget.onJoinEvent(
                 joinCommunity:
-                    canShowFollowCommunity ? _joinCommunityDuringRsvp : false,
+                    canShowFollowCommunity ? _joinCommunityDuringRsvp : true,
+                optInToNewsletters: _optInToNewsletters,
               );
             }),
             expand: true,
@@ -522,6 +527,8 @@ class _EventInfoState extends State<EventInfo> {
             SizedBox(height: 10),
             _buildFollowCommunityCheckbox(),
           ],
+          SizedBox(height: 10),
+          _buildNewsletterOptInCheckbox(),
         ],
       );
     } else {
@@ -689,6 +696,33 @@ class _EventInfoState extends State<EventInfo> {
     );
   }
 
+  Widget _buildNewsletterOptInCheckbox() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Checkbox(
+          activeColor: context.theme.colorScheme.primary,
+          checkColor: context.theme.colorScheme.onPrimary,
+          value: _optInToNewsletters,
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _optInToNewsletters = value;
+              });
+            }
+          },
+        ),
+        SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            'Sign me up to receive Newsweek\'s political discourse newsletter, The 1600, and AllSides newsletters.',
+            style: context.theme.textTheme.bodyMedium,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildShareSection() {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -727,12 +761,10 @@ class _EventInfoState extends State<EventInfo> {
   Widget build(BuildContext context) {
     final eventPageProvider = context.watch<EventPageProvider>();
     final eventProvider = context.watch<EventProvider>();
-    final canEditCommunity =
-        Provider.of<CommunityPermissionsProvider>(context).canEditCommunity;
-    final canCancelParticipation =
-        Provider.of<EventPermissionsProvider>(context).canCancelParticipation;
-    final canAccessParticipantListDetails =
-        eventProvider.event.isHosted || canEditCommunity;
+    final eventPermissions = Provider.of<EventPermissionsProvider>(context);
+    final canCancelParticipation = eventPermissions.canCancelParticipation;
+    final canViewCounts = eventPermissions.canViewParticipantCounts;
+    final canAccessParticipantListDetails = canViewCounts;
     final isMobile = responsiveLayoutService.isMobile(context);
 
     return Card.outlined(
@@ -856,7 +888,10 @@ class _EventInfoState extends State<EventInfo> {
                                           .read<EventPermissionsProvider>(),
                                     ).show(context)
                                 : null,
-                            child: EventPageParticipantsList(_event),
+                            child: EventPageParticipantsList(
+                              _event,
+                              showParticipantCount: canViewCounts,
+                            ),
                           ),
                         ),
                       ),

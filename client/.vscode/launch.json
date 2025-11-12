@@ -8,14 +8,14 @@
             "name": "Client",
             "request": "launch",
             "type": "dart", 
-            "args": ["--web-port=5000", "--dart-define-from-file=.env"]      
+            "args": ["--web-port=5000", "--dart-define-from-file=.env.json"]      
         },
         {
             "name": "Client Dev (Emulators)",
             "request": "launch",
             "type": "dart",
             "program": "lib/dev_emulators_main.dart",
-            "args": ["--web-port=5000", "--dart-define-from-file=.env"]
+            "args": ["--web-port=5000", "--dart-define-from-file=.env.json"]
             
         },
         {
@@ -23,14 +23,14 @@
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile",
-            "args": ["--web-port=5000", "--dart-define-from-file=.env"]
+            "args": ["--web-port=5000", "--dart-define-from-file=.env.json"]
         },
         {
             "name": "Client(release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release",
-            "args": ["--web-port=5000", "--dart-define-from-file=.env"]
+            "args": ["--web-port=5000", "--dart-define-from-file=.env.json"]
         },
     ]
 }

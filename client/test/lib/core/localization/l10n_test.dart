@@ -17,7 +17,7 @@ void main() {
       final l10n = AppLocalizations.of(tester.element(find.byType(SizedBox)))!;
       
       // Test some key strings in English
-      expect(l10n.appTitle, equals('Frankly'));
+      expect(l10n.appTitle, equals('AllSides Roundtables'));
       expect(l10n.anonymous, equals('Anonymous'));
       expect(l10n.yes, equals('Yes'));
       expect(l10n.no, equals('No'));
@@ -40,7 +40,7 @@ void main() {
       final l10n = AppLocalizations.of(tester.element(find.byType(SizedBox)))!;
       
       // Verify that Spanish translations are loaded
-      expect(l10n.appTitle, equals('Frankly')); // App name should remain the same
+      expect(l10n.appTitle, equals('AllSides')); // App name should remain the same
       expect(l10n.yes, isNot('Yes')); // Should be translated
       // Note: In Spanish, 'No' is also 'No', so we don't check this
       expect(l10n.anonymous, isNot('Anonymous')); // Should be translated
@@ -63,7 +63,7 @@ void main() {
       final l10n = AppLocalizations.of(tester.element(find.byType(SizedBox)))!;
       
       // Verify that Chinese translations are loaded
-      expect(l10n.appTitle, equals('Frankly')); // App name should remain the same
+      expect(l10n.appTitle, equals('AllSides')); // App name should remain the same
       expect(l10n.yes, isNot('Yes')); // Should be translated
       expect(l10n.no, isNot('No')); // Should be translated
       expect(l10n.anonymous, isNot('Anonymous')); // Should be translated
@@ -90,7 +90,7 @@ void main() {
       final l10n = AppLocalizations.of(tester.element(find.byType(SizedBox)))!;
       
       // Verify that Traditional Chinese translations are loaded
-      expect(l10n.appTitle, equals('Frankly')); // App name should remain the same
+      expect(l10n.appTitle, equals('AllSides')); // App name should remain the same
       expect(l10n.yes, isNot('Yes')); // Should be translated
       expect(l10n.no, isNot('No')); // Should be translated
       expect(l10n.anonymous, isNot('Anonymous')); // Should be translated

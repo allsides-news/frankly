@@ -7,6 +7,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:client/features/chat/data/providers/chat_model.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
+import 'package:client/features/events/features/event_page/data/providers/event_permissions_provider.dart';
 import 'package:client/features/events/features/event_page/presentation/event_tabs_model.dart';
 import 'package:client/features/events/features/live_meeting/presentation/widgets/hostless_meeting_info.dart';
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
@@ -15,6 +16,7 @@ import 'package:client/features/events/features/live_meeting/features/video/pres
 import 'package:client/features/events/features/live_meeting/features/video/presentation/widgets/participant_widget.dart';
 import 'package:client/features/events/features/live_meeting/features/video/presentation/views/video_flutter_meeting.dart';
 import 'package:client/features/events/features/live_meeting/features/live_stream/presentation/widgets/live_stream_widget.dart';
+import 'package:client/features/events/features/live_meeting/presentation/widgets/event_countdown_timer.dart';
 import 'package:client/features/events/features/event_page/presentation/widgets/waiting_room.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/utils/error_utils.dart';
@@ -209,8 +211,23 @@ class _LiveMeetingDesktopLayoutState extends State<LiveMeetingDesktopLayout> {
                               Expanded(child: _buildEvent(context)),
                             ],
                           ),
+                          // Event countdown timer - shows X minutes before event ends
+                          Positioned(
+                            top: 8,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: EventCountdownTimer(
+                                event: eventProvider.event,
+                                minutesBeforeEnd: 5,
+                              ),
+                            ),
+                          ),
                           if (eventTabsModel.widget.enableChat &&
-                              eventProvider.enableFloatingChat)
+                              eventProvider.enableFloatingChat &&
+                              !(EventPermissionsProvider.watch(context)
+                                      ?.shouldDisableChatInHostlessWaitingRoom(context) ??
+                                  false))
                             Align(
                               alignment: Alignment.bottomCenter,
                               child: FloatingChatDisplay(),
@@ -252,9 +269,9 @@ class _FloatingChatDisplayState extends State<FloatingChatDisplay> {
   StreamSubscription? _onMainMeetingNewMessageSubscription;
 
   void _onNewMessage(ChatMessage newMessage, {bool onlyShowBroadcast = false}) {
-    final snapshotIsAdmin =
-        newMessage.membershipStatusSnapshot?.isAdmin ?? false;
-    final isBroadcast = (newMessage.broadcast ?? false) && snapshotIsAdmin;
+    final snapshotIsMod =
+        newMessage.membershipStatusSnapshot?.isMod ?? false;
+    final isBroadcast = (newMessage.broadcast ?? false) && snapshotIsMod;
     final floatMessage = !onlyShowBroadcast || isBroadcast;
     if (floatMessage) {
       setState(() => _floatingMessages[newMessage.id!] = newMessage);
@@ -385,19 +402,30 @@ class _FloatingChatState extends State<FloatingChat> {
       if (localOnComplete != null) localOnComplete();
     });
 
+    // NEW: Detect global admin messages for teal styling
+    final isGlobalAdminMessage = widget.chatMessage.messageType == 'global_admin';
+    final globalAdminTeal = Color(0xFF009688); // Material Teal 500
+
     return FadeTransition(
       opacity: _getOpacityTransition(animation),
       child: SlideTransition(
         position: _getPositionTransition(animation),
         child: Container(
           decoration: BoxDecoration(
-            color: context.theme.colorScheme.surfaceContainer,
+            // NEW: Teal background for global admin messages, white border
+            color: isGlobalAdminMessage 
+                ? globalAdminTeal 
+                : context.theme.colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(10),
+            border: isGlobalAdminMessage ? Border.all(
+              color: Colors.white,
+              width: 2,
+            ) : null,
             boxShadow: [
               BoxShadow(
-                blurRadius: 3,
+                blurRadius: isGlobalAdminMessage ? 6 : 3,
                 offset: Offset(2, 2),
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withOpacity(isGlobalAdminMessage ? 0.4 : 0.5),
               ),
             ],
           ),
@@ -405,6 +433,16 @@ class _FloatingChatState extends State<FloatingChat> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // NEW: Megaphone icon for global admin messages
+              if (isGlobalAdminMessage)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Icon(
+                    Icons.campaign,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
               UserProfileChip(
                 userId: widget.chatMessage.creatorId,
                 showName: false,
@@ -426,7 +464,12 @@ class _FloatingChatState extends State<FloatingChat> {
                     text: widget.chatMessage.message ?? '',
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w400),
+                    // NEW: White text for purple background, bold for emphasis
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: isGlobalAdminMessage ? FontWeight.w600 : FontWeight.w400,
+                      color: isGlobalAdminMessage ? Colors.white : null,
+                    ),
                     options: LinkifyOptions(looseUrl: true),
                     onOpen: (link) => launch(link.url),
                   ),
@@ -600,6 +643,17 @@ class BreakoutStatusInformation extends StatelessWidget {
           final breakoutsMessage = areBreakoutsPending
               ? 'Breakout room matching starting in $breakoutRoomRemainingTimeDisplay'
               : 'Generating breakout room assignments';
+
+          // Log message transitions for debugging
+          if (areBreakoutsPending) {
+            loggingService.log(
+              'Breakout room countdown: $breakoutRoomRemainingTimeDisplay (status: ${breakoutSession?.breakoutRoomStatus})',
+            );
+          } else {
+            loggingService.log(
+              'Breakout room message: Generating assignments (status: ${breakoutSession?.breakoutRoomStatus}, scheduledTime: ${breakoutSession?.scheduledTime})',
+            );
+          }
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             alignment: Alignment.center,

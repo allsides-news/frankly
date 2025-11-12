@@ -63,6 +63,7 @@ class EventEnded extends OnCallMethod<EventEndedRequest> {
           event: event,
           allowPrePost: hasPrePost,
         ),
+        attachments: [],
       ),
     );
   }

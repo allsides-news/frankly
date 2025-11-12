@@ -66,6 +66,7 @@ class CreateAnnouncement extends OnCallMethod<CreateAnnouncementRequest> {
           announcement: request.announcement,
           unsubscribeUrl: unsubscribeUrl,
         ),
+        attachments: [],
       ),
     );
   }

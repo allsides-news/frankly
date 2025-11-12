@@ -9,6 +9,7 @@ import 'live_meetings/breakouts/check_hostless_go_to_breakouts.dart';
 import '../on_firestore_function.dart';
 import 'notifications/event_emails.dart';
 import '../utils/infra/firestore_utils.dart';
+import 'live_meetings/agora_api.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/community/community.dart';
 
@@ -91,6 +92,33 @@ class OnEvent extends OnFirestoreFunction<Event> {
       emailType = EventEmailType.canceled;
     } else if (before.scheduledTime != after.scheduledTime) {
       emailType = EventEmailType.updated;
+    } else if (!before.isLocked && after.isLocked) {
+      // Event was just locked - but only stop recordings if event has ACTUALLY ended
+      // This allows admins to lock events (prevent new joins) while keeping recordings active
+      
+      final now = DateTime.now();
+      final hasActuallyEnded = after.hasEnded(now);
+      
+      if (hasActuallyEnded) {
+        // Event has truly ended - stop recordings and send thank you emails
+        emailType = EventEmailType.ended;
+        
+        print('Event locked AND past end time - stopping all recordings for event: ${after.id}');
+        try {
+          await AgoraUtils().stopAllRecordingsForEvent(
+            eventPath: after.fullPath,
+            eventId: after.id,
+          );
+        } catch (e) {
+          print('Error stopping recordings for event ${after.id}: $e');
+          // Continue with event ending even if recording stop fails
+        }
+      } else {
+        // Event locked but still within duration - keep recordings running
+        print('Event locked but still within scheduled duration - keeping recordings active for event: ${after.id}');
+        print('Scheduled end: ${after.scheduledEndTime}, Current time: $now');
+        // Don't send ended email or stop recordings yet
+      }
     }
 
     if (emailType == null) return;
@@ -106,6 +134,13 @@ class OnEvent extends OnFirestoreFunction<Event> {
         true)) {
       return;
     }
+
+    // Send email notification to all participants
+    await eventEmails.sendEmailsToUsers(
+      eventPath: after.fullPath,
+      emailType: emailType,
+      sendId: after.id,
+    );
 
     if (emailType == EventEmailType.updated) {
       // Note: Old reminders in the task queue will still
@@ -157,6 +192,10 @@ class OnEvent extends OnFirestoreFunction<Event> {
       firestoreHelper,
       OnboardingStep.hostEvent,
     );
+
+    // Schedule reminder emails for the new event
+    print('Scheduling reminder emails for new event: ${parsedData.id}');
+    await eventEmails.enqueueReminders(parsedData);
   }
 
   @override

@@ -21,9 +21,11 @@ import 'package:client/app.dart';
 import 'package:client/core/routing/locations.dart';
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
-import 'package:client/styles/styles.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 import 'package:client/features/events/features/live_meeting/presentation/hostless_action_fallback_controller.dart';
+import 'package:client/features/events/features/live_meeting/data/services/waiting_room_notification_service.dart';
+import 'package:client/features/events/features/live_meeting/data/services/breakout_room_help_notification_service.dart';
+import 'package:client/core/utils/persistent_f_toast_utils.dart';
 import 'package:client/core/utils/platform_utils.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
@@ -122,11 +124,20 @@ class LiveMeetingProvider with ChangeNotifier {
   Timer? _checkAssignToBreakoutsTimer;
 
   Timer? _presenceUpdater;
+  Timer? _eventEndChecker;
 
   HostlessActionFallbackController? _hostlessGoToBreakoutsFallbackController;
   HostlessActionFallbackController? _pendingBreakoutsFallbackController;
 
+  WaitingRoomNotificationService? _waitingRoomNotificationService;
+  BreakoutRoomHelpNotificationService? _breakoutRoomHelpNotificationService;
+
   bool _clickedEnterMeeting = false;
+
+  /// Mark that the user has dismissed the waiting room notification
+  void markWaitingRoomNotificationDismissed() {
+    _waitingRoomNotificationService?.markNotificationDismissed();
+  }
 
   bool get clickedEnterMeeting => _clickedEnterMeeting;
 
@@ -367,17 +378,70 @@ class LiveMeetingProvider with ChangeNotifier {
     _updateTimersBeforeStart();
     canAutoplayLookupFuture = _checkIfCanAutoplay();
 
+    // Update presence every 5 seconds to ensure accurate participant counts
+    // This is required for the UpdateLiveStreamParticipantCount Cloud Function
+    // which looks for participants updated in the last ~19 seconds
     _presenceUpdater = Timer.periodic(Duration(seconds: 5), (_) {
-      if (_activeBreakoutRoomId != null &&
-          eventProvider.selfParticipant?.currentBreakoutRoomId !=
-              _activeBreakoutRoomId) {
-        firestoreLiveMeetingService.updateMeetingPresence(
-          event: eventProvider.event,
-          currentBreakoutRoomId: _activeBreakoutRoomId,
-          isPresent: true,
+      // Use the current breakout room ID from the participant data, not the internal state
+      // This prevents flashing caused by inconsistent state updates
+      final currentBreakoutRoomId =
+          eventProvider.selfParticipant?.currentBreakoutRoomId;
+
+      firestoreLiveMeetingService.updateMeetingPresence(
+        event: eventProvider.event,
+        currentBreakoutRoomId: currentBreakoutRoomId,
+        isPresent: true,
+      );
+    });
+
+    // Check every 10 seconds if the event has ended
+    // If so, automatically end the meeting for this participant
+    _eventEndChecker = Timer.periodic(Duration(seconds: 10), (_) async {
+      final event = eventProvider.event;
+      if (event.hasEnded(clockService.now()) && !_leftMeeting) {
+        loggingService.log(
+          'Event has ended (time is up). Automatically ending meeting and showing post-event flow.',
         );
+        await leaveMeeting();
       }
     });
+
+    // Initialize waiting room notification service for admins
+    _waitingRoomNotificationService = WaitingRoomNotificationService(
+      eventProvider: eventProvider,
+      showToast: showToast,
+      getCurrentBreakoutSessionId: () =>
+          liveMeeting?.currentBreakoutSession?.breakoutRoomSessionId,
+      showPersistentToast: (
+        context,
+        message, {
+        backgroundColor = Colors.red,
+        textColor = Colors.white,
+        onDismiss,
+      }) {
+        PersistentFToast.show(
+          context,
+          message,
+          backgroundColor: backgroundColor,
+          textColor: textColor,
+          onDismiss: onDismiss,
+        );
+      },
+    );
+    _waitingRoomNotificationService!.startMonitoring();
+
+    // Initialize breakout room help notification service for admins
+    _breakoutRoomHelpNotificationService = BreakoutRoomHelpNotificationService(
+      eventProvider: eventProvider,
+      getCurrentBreakoutSessionId: () =>
+          liveMeeting?.currentBreakoutSession?.breakoutRoomSessionId,
+    );
+  }
+
+  /// Set the context for breakout room help notifications
+  void setBreakoutRoomHelpNotificationContext(BuildContext context) {
+    _breakoutRoomHelpNotificationService?.setContext(context);
+    _breakoutRoomHelpNotificationService?.startMonitoring();
   }
 
   Future<bool> _checkIfCanAutoplay() async {
@@ -448,6 +512,7 @@ class LiveMeetingProvider with ChangeNotifier {
     _assignedBreakoutRoomsStreamSubscription?.cancel();
 
     _presenceUpdater?.cancel();
+    _eventEndChecker?.cancel();
 
     _scheduledStartTimer?.cancel();
     _meetingStartTimer?.cancel();
@@ -455,6 +520,9 @@ class LiveMeetingProvider with ChangeNotifier {
 
     _hostlessGoToBreakoutsFallbackController?.cancel();
     _pendingBreakoutsFallbackController?.cancel();
+
+    _waitingRoomNotificationService?.stopMonitoring();
+    _breakoutRoomHelpNotificationService?.stopMonitoring();
 
     firestoreLiveMeetingService.updateMeetingPresence(
       event: eventProvider.event,
@@ -533,6 +601,11 @@ class LiveMeetingProvider with ChangeNotifier {
         loggingService.log('Assigned breakout room: $assignedBreakoutRooms');
         notifyListeners();
       });
+
+      // Restart waiting room notification monitoring now that breakouts are active
+      _waitingRoomNotificationService?.restartMonitoring();
+      // Restart breakout room help notification monitoring
+      _breakoutRoomHelpNotificationService?.restartMonitoring();
     } else if (liveMeeting.currentBreakoutSession?.breakoutRoomStatus !=
         BreakoutRoomStatus.active) {
       _currentBreakoutRoomsStreamSession = null;
@@ -760,14 +833,16 @@ class LiveMeetingProvider with ChangeNotifier {
         ),
       );
 
-      final location = leaveLocation ??
-          CommunityPageRoutes(
-            communityDisplayId: communityProvider.displayId,
-          ).communityHome;
+      // Build event page URL with CTAs tab parameter
+      final eventPagePath =
+          '/space/${communityProvider.displayId}/discuss/${eventProvider.event.templateId}/${eventProvider.event.id}';
+      final hasPostEventData =
+          eventProvider.event.postEventCardData?.hasData ?? false;
+      final urlWithTab =
+          hasPostEventData ? '$eventPagePath?tab=ctas' : eventPagePath;
 
       // ignore: unnecessary_non_null_assertion
-      html.window.location.href = html.window.location.origin! +
-          (location.state as BeamState).uri.toString();
+      html.window.location.href = html.window.location.origin! + urlWithTab;
     }
   }
 

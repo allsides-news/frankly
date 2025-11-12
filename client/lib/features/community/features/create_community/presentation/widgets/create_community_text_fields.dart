@@ -1,10 +1,9 @@
 import 'package:client/config/environment.dart';
 import 'package:flutter/material.dart';
-import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/widgets/custom_text_field.dart';
+import 'package:client/core/widgets/rich_text_editor.dart';
 import 'package:data_models/community/community.dart';
 import 'package:client/core/localization/localization_helper.dart';
-import 'package:client/styles/styles.dart';
 import 'package:flutter/services.dart';
 
 class CreateCommunityTextFields extends StatefulWidget {
@@ -18,7 +17,6 @@ class CreateCommunityTextFields extends StatefulWidget {
   final Community community;
   final bool compact;
   final bool showAllFields;
-  final bool autoGenerateUrl;
 
   final FocusNode? taglineFocus;
   const CreateCommunityTextFields({
@@ -34,7 +32,6 @@ class CreateCommunityTextFields extends StatefulWidget {
     required this.community,
     this.compact = false,
     this.showAllFields = false,
-    this.autoGenerateUrl = true,
   }) : super(key: key);
 
   @override
@@ -79,13 +76,11 @@ class _CreateCommunityTextFieldsState extends State<CreateCommunityTextFields> {
           label: context.l10n.name,
           onChanged: (String val) => {
             widget.onNameChanged.call(val),
-            if(widget.autoGenerateUrl){
-              widget.onCustomDisplayIdChanged.call(_formatDisplayIdFromName(val)),
-              setState(() {
-                // Update the displayId when the name changes
-                _displayIdController.text = _formatDisplayIdFromName(val);
-              }),
-            },
+            widget.onCustomDisplayIdChanged.call(_formatDisplayIdFromName(val)),
+            setState(() {
+              // Update the displayId when the name changes
+              _displayIdController.text = _formatDisplayIdFromName(val);
+            }),
           },
           focus: widget.nameFocus,
           helperText: context.l10n.youCanChangeThisLater,
@@ -129,16 +124,12 @@ class _CreateCommunityTextFieldsState extends State<CreateCommunityTextFields> {
               SizedBox(
                 height: widget.compact ? 0 : 10,
               ),
-              _buildCreateCommunityTextField(
-                label: 'About',
-                hint: 'Add more detail as to the goals of this community',
+              RichTextEditor(
+                labelText: 'About',
                 initialValue: widget.community.description,
                 onChanged: widget.onAboutChanged,
-                focus: widget.aboutFocus,
-                isOptional: true,
-                maxLines: 3,
-                minLines: 3,
-                keyboardType: TextInputType.multiline,
+                minLines: 4,
+                maxLines: 10,
               ),
             ],
           ),

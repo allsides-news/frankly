@@ -5,6 +5,7 @@ import 'package:client/features/community/utils/guard_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/chat/data/providers/chat_model.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
+import 'package:client/features/events/features/event_page/data/providers/event_permissions_provider.dart';
 import 'package:client/features/events/features/event_page/presentation/event_tabs_model.dart';
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
 import 'package:client/features/events/features/live_meeting/features/video/presentation/views/audio_video_error.dart';
@@ -241,6 +242,17 @@ class _ChatAndEmojisInputState extends State<ChatAndEmojisInput> {
     final spacer = SizedBox(width: isMobile ? 4 : 10);
     final isInLiveStreamLobby = EventProvider.watch(context).isLiveStream &&
         !LiveMeetingProvider.watch(context).isInBreakout;
+    
+    // Check if chat should be disabled for this user in hostless waiting room
+    final eventPermissions = EventPermissionsProvider.watch(context);
+    final shouldDisableChat = 
+        eventPermissions?.shouldDisableChatInHostlessWaitingRoom(context) ?? false;
+    
+    // Hide entire chat input for restricted users in waiting room
+    if (shouldDisableChat) {
+      return SizedBox.shrink();
+    }
+    
     return AnimatedBuilder(
       animation: _controller,
       builder: (_, __) => Row(

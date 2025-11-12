@@ -1,4 +1,4 @@
-import 'package:client/core/utils/toast_utils.dart';
+import 'package:client/core/utils/persistent_f_toast_utils.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -57,16 +57,15 @@ void _listenForClosedKickProposals(
           .firstWhereOrNull((proposal) => prevOpenSet.contains(proposal!.id));
       if (newlyClosed != null) {
         if (newlyClosed.status == EventProposalStatus.accepted) {
-          showRegularToast(
-            context,
-            'The reported user was removed from the event.',
-            toastType: ToastType.success,
-          );
+          // Get the removed user's name and original reason
+          _showRemovedUserNotification(context, newlyClosed);
         } else if (newlyClosed.status == EventProposalStatus.rejected) {
-          showRegularToast(
+          PersistentFToast.show(
             context,
             'Consensus not reached, the reported user will remain in the event.',
-            toastType: ToastType.failed,
+            backgroundColor: Colors.red,
+            textColor: Colors.white,
+            icon: Icons.warning_amber_rounded,
           );
         }
       }
@@ -134,6 +133,56 @@ void _listenForOpenKickProposals(
   );
 }
 
+Future<void> _showRemovedUserNotification(
+  BuildContext context,
+  EventProposal proposal,
+) async {
+  final targetUserId = proposal.targetUserId;
+  if (targetUserId == null) return;
+
+  // Get the target user's name
+  final targetUser =
+      await firestoreUserService.getPublicUser(userId: targetUserId);
+  final userName = targetUser.displayName ?? 'Unknown user';
+
+  // Get the original reason from the first vote (initiating user's vote)
+  String? originalReason;
+  if (proposal.votes != null && proposal.votes!.isNotEmpty) {
+    // Find the first vote with a reason, or the initiating user's vote
+    final initiatingUserId = proposal.initiatingUserId;
+    if (initiatingUserId != null) {
+      final initiatingVote = proposal.votes!.firstWhereOrNull(
+        (vote) =>
+            vote.voterUserId == initiatingUserId &&
+            vote.reason != null &&
+            vote.reason!.isNotEmpty,
+      );
+      originalReason = initiatingVote?.reason;
+    }
+
+    // If no initiating user vote with reason, get first vote with reason
+    if (originalReason == null || originalReason.isEmpty) {
+      final firstVoteWithReason = proposal.votes!.firstWhereOrNull(
+        (vote) => vote.reason != null && vote.reason!.isNotEmpty,
+      );
+      originalReason = firstVoteWithReason?.reason;
+    }
+  }
+
+  // Build the message
+  final message = originalReason != null && originalReason.isNotEmpty
+      ? '$userName was removed from the event. Reason: $originalReason'
+      : '$userName was removed from the event.';
+
+  PersistentFToast.show(
+    context,
+    message,
+    backgroundColor: Colors.red,
+    textColor: Colors.white,
+    icon: Icons.person_remove,
+  );
+}
+
 Future<String?> _kickProposalConfirmation(
   EventProposal proposalToShow,
   BuildContext context,
@@ -152,7 +201,7 @@ Future<String?> _kickProposalConfirmation(
         ' kick them out? They will not be allowed back in.',
     textLabel: 'Enter reason',
     textHint: 'e.g. They are trying to sabotage the event',
-    cancelText: 'No, let them stay',
-    confirmText: 'Yes, kick them out',
+    cancelText: 'Don\'t kick out',
+    confirmText: 'Kick out',
   ).show(context: context);
 }

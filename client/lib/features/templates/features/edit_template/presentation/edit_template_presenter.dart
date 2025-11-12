@@ -1,4 +1,5 @@
 import 'package:client/core/utils/toast_utils.dart';
+import 'package:client/core/utils/html_sanitizer.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:client/features/community/data/providers/community_permissions_provider.dart';
@@ -73,7 +74,9 @@ class EditTemplatePresenter {
   }
 
   void updateDescription(String value) {
-    _model.template = _model.template.copyWith(description: value.trim());
+    // Sanitize HTML content for security
+    final sanitizedValue = HtmlSanitizer.sanitize(value.trim());
+    _model.template = _model.template.copyWith(description: sanitizedValue);
     _appDrawerProvider.setUnsavedChanges(_helper.wereChangesMade(_model));
     _view.updateView();
   }

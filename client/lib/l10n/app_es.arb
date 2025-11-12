@@ -71,7 +71,7 @@
       }
     }
   },
-  "appTitle": "Frankly",
+  "appTitle": "AllSides",
   "appTitleHome": "{appName} - Inicio",
   "@appTitleHome": {
     "placeholders": {
@@ -349,7 +349,7 @@
   "password": "Contraseña",
   "passwordInvalid": "La contraseña no es válida. Haga clic en Olvidé mi contraseña para restablecerla. O regístrese de nuevo con un email diferente.",
   "passwordResetLinkSent": "Enlace de restablecimiento de contraseña enviado a {email}",
-  "passwordRequirements": "Debe tener al menos 12 caracteres y contener una letra minúscula y una mayúscula.",
+  "passwordRequirements": "Debe tener al menos 6 caracteres y contener una letra minúscula y una mayúscula.",
   "pasteOrEnterAUrl": "Pegue o ingrese una URL",
   "pasteOrEnterUrl": "Pega o ingresa una URL",
   "people": "personas",
@@ -421,7 +421,7 @@
   "sidebarUnfollowButton": "Botón de dejar de seguir barra lateral",
   "sidebarFollowCommunityButton": "Botón de seguir comunidad barra lateral",
   "followCommunityButton": "Botón seguir comunidad",
-  "franklyLogo": "Logo de Frankly",
+  "franklyLogo": "Logo de AllSides",
   "signIn": "Iniciar sesión",
   "signingUp": "registrándose",
   "signUp": "Registrarse",
@@ -508,7 +508,7 @@
   "videoInputDevice": "Dispositivo de entrada de vídeo:",
   "vimeoVideoLookupFailed": "Lo sentimos, la búsqueda del video de Vimeo falló.",
   "waitingRoom": "Sala de espera",
-  "welcome": "Bienvenido a Frankly",
+  "welcome": "Bienvenido a AllSides",
   "welcomeName": "Bienvenido, {name}",
   "welcomeToApp": "Bienvenido a {appName}",
   "@welcomeToApp": {

@@ -10,6 +10,7 @@ import 'package:client/features/community/presentation/widgets/create_tag_widget
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
 import 'package:client/core/widgets/custom_text_field.dart';
+import 'package:client/core/widgets/rich_text_editor.dart';
 import 'package:client/core/data/services/media_helper_service.dart';
 import 'package:client/styles/app_asset.dart';
 import 'package:client/core/utils/dialogs.dart';
@@ -161,10 +162,12 @@ class _EditTemplateDrawerState extends State<EditTemplateDrawer>
   }
 
   Widget _buildDescriptionSection() {
-    return CustomTextField(
+    return RichTextEditor(
       labelText: 'Description',
       initialValue: _model.template.description,
       onChanged: (value) => _presenter.updateDescription(value),
+      minLines: 4,
+      maxLines: 10,
     );
   }
 

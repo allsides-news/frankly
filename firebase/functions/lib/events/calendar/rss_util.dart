@@ -47,7 +47,7 @@ class RssUtil {
     );
     final participantCounts = Map.fromEntries(participantCountEntries);
 
-    final domain = functions.config.get('app.domain') as String;
+    final domain = functions.config.get('app.domain') as String? ?? 'roundtables.allsides.com';
     final appName = functions.config.get('app.name') as String;
     final link = 'https://$domain/space/${community.displayId}';
     final xmlnsUrl = functions.config.get('xmlns.url') as String;

@@ -17,7 +17,7 @@ class ScheduledFunctions {
       _client ??= tasks.createCloudTasksClient();
 
   String get parentPath => client.queuePath(
-        functions.config.get('app.project_id') as String,
+        functions.config.get('app.project_id') as String? ?? 'allsides-roundtables',
         'us-east4',
         'scheduled-functions',
       );
@@ -50,7 +50,7 @@ class ScheduledFunctions {
     DateTime scheduledTime,
   ) async {
     final urlPrefix =
-        functions.config.get('app.functions_url_prefix') as String;
+        functions.config.get('app.functions_url_prefix') as String? ?? 'https://us-central1-allsides-roundtables.cloudfunctions.net';
 
     final createTaskRequest = jsify({
       'parent': parentPath,
