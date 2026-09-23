@@ -24,6 +24,10 @@ import 'package:client/services.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:client/core/utils/persistent_f_toast_utils.dart';
+import 'package:client/core/utils/platform_utils.dart' as platform_utils;
+import 'package:client/styles/app_asset.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/live_meetings/live_meeting.dart';
@@ -40,11 +44,31 @@ class MeetingDialog extends StatefulWidget {
     Function()? onLeave,
     bool avCheckEnabled = false,
   }) {
-    if (!sharedPreferencesService.getAvCheckComplete() && avCheckEnabled) {
-      return AvCheckPage();
-    } else {
-      return ChangeNotifierProvider(
-        create: (context) => LiveMeetingProvider(
+    // Stateful gate: the AV check -> meeting swap must not depend on an
+    // ambient rebuild. It used to ride on updateQueryParameterToJoinEvent
+    // notifying Beamer, but that is a no-op when status=joined is already in
+    // the URL (guard added to stop join remount crashes), which left Join
+    // doing nothing until some unrelated stream rebuilt the page.
+    return _AvCheckGate(
+      isInstant: isInstant,
+      leaveLocation: leaveLocation,
+      onLeave: onLeave,
+      avCheckEnabled: avCheckEnabled,
+    );
+  }
+
+  static Widget _createMeeting({
+    required bool isInstant,
+    BeamLocation? leaveLocation,
+    Function()? onLeave,
+  }) {
+    return ChangeNotifierProvider(
+      create: (context) {
+        // `create`'s context is the InheritedProviderScope itself, so
+        // LiveMeetingProvider.read(context) cannot see this provider.
+        // Capture the instance instead of looking it up later.
+        LiveMeetingProvider? provider;
+        provider = LiveMeetingProvider(
           communityProvider: CommunityProvider.read(context),
           eventProvider: EventProvider.read(context),
           navBarProvider: Provider.of<NavBarProvider>(context, listen: false),
@@ -55,32 +79,22 @@ class MeetingDialog extends StatefulWidget {
             final hideToast = hideOnMobile == true &&
                 responsiveLayoutService.isMobile(context);
             if (!hideToast) {
-              // Check if this is a waiting room notification
-              // Match both old format ("waiting in the waiting room") and new format ("in a waiting room")
-              final isWaitingRoomNotification = message.toLowerCase().contains('waiting in the waiting room') || 
+              final isWaitingRoomNotification = message
+                      .toLowerCase()
+                      .contains('waiting in the waiting room') ||
                   message.toLowerCase().contains('in a waiting room');
-              
-              print('DEBUG: showToast called with message: "$message", isWaitingRoomNotification: $isWaitingRoomNotification');
-              
+
               if (isWaitingRoomNotification) {
-                print('DEBUG: Showing persistent toast for waiting room notification');
-                // Show persistent red toast for waiting room notifications
                 PersistentFToast.show(
                   context,
                   message,
                   backgroundColor: Colors.red,
                   textColor: Colors.white,
                   onDismiss: () {
-                    print('Waiting room toast dismissed');
-                    // Mark the notification as dismissed in the service
-                    final liveMeetingProvider =
-                        LiveMeetingProvider.read(context);
-                    liveMeetingProvider.markWaitingRoomNotificationDismissed();
+                    provider?.markWaitingRoomNotificationDismissed();
                   },
                 );
               } else {
-                print('DEBUG: Showing regular toast (not a waiting room notification)');
-                // Show regular toast for other messages
                 return showRegularToast(
                   context,
                   message,
@@ -89,14 +103,57 @@ class MeetingDialog extends StatefulWidget {
               }
             }
           },
-        ),
-        child: MeetingDialog._(),
-      );
-    }
+        );
+        return provider;
+      },
+      child: MeetingDialog._(),
+    );
   }
 
   @override
   _MeetingDialogState createState() => _MeetingDialogState();
+}
+
+/// Shows the AV check until the user completes it, then swaps to the meeting
+/// in the same element (no router round-trip required).
+class _AvCheckGate extends StatefulWidget {
+  const _AvCheckGate({
+    required this.isInstant,
+    required this.leaveLocation,
+    required this.onLeave,
+    required this.avCheckEnabled,
+  });
+
+  final bool isInstant;
+  final BeamLocation? leaveLocation;
+  final Function()? onLeave;
+  final bool avCheckEnabled;
+
+  @override
+  State<_AvCheckGate> createState() => _AvCheckGateState();
+}
+
+class _AvCheckGateState extends State<_AvCheckGate> {
+  @override
+  Widget build(BuildContext context) {
+    if (widget.avCheckEnabled &&
+        !sharedPreferencesService.getAvCheckComplete()) {
+      return AvCheckPage(
+        onLeave: widget.onLeave,
+        leaveLocation: widget.leaveLocation,
+        // joinNowPressed persists the AV choices; this re-runs the check
+        // above, which now passes.
+        onComplete: () {
+          if (mounted) setState(() {});
+        },
+      );
+    }
+    return MeetingDialog._createMeeting(
+      isInstant: widget.isInstant,
+      leaveLocation: widget.leaveLocation,
+      onLeave: widget.onLeave,
+    );
+  }
 }
 
 class _MeetingDialogState extends State<MeetingDialog> {
@@ -107,13 +164,71 @@ class _MeetingDialogState extends State<MeetingDialog> {
 
   @override
   void initState() {
-    context.read<LiveMeetingProvider>().initialize();
-    dialogProvider.isOnIframePage = true;
     super.initState();
-    // Set context for breakout room help notifications after first frame
+    dialogProvider.isOnIframePage = true;
+    final liveMeetingProvider = context.read<LiveMeetingProvider>();
+    liveMeetingProvider.initialize();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LiveMeetingProvider>().setBreakoutRoomHelpNotificationContext(context);
+      if (!mounted) return;
+      liveMeetingProvider.setBreakoutRoomHelpNotificationContext(context);
+      _checkBrowserCompatibility();
     });
+  }
+
+  void _checkBrowserCompatibility() async {
+    final result = platform_utils.checkBrowserCompatibility();
+    if (!result.isCompatible && result.message != null) {
+      // Delay to avoid overlapping with camera/mic permission dialogs
+      await Future.delayed(const Duration(seconds: 8));
+      if (!mounted) return;
+      final fToast = FToast().init(context);
+      fToast.showToast(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10.0),
+            color: Colors.amber.shade800,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SvgPicture.asset(
+                AppAsset.kExclamationSvg.path,
+                color: Colors.white,
+                width: 20,
+                height: 20,
+              ),
+              SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  result.message!,
+                  style: AppTextStyle.subhead.copyWith(color: Colors.white),
+                ),
+              ),
+              SizedBox(width: 10),
+              IconButton(
+                onPressed: () => fToast.removeCustomToast(),
+                tooltip: 'Dismiss browser compatibility warning',
+                icon: Icon(
+                  Icons.close,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+        toastDuration: Duration(seconds: 10),
+        positionedToastBuilder: (context, child) {
+          return Positioned(
+            top: 16.0,
+            left: 24.0,
+            right: 24.0,
+            child: child,
+          );
+        },
+      );
+    }
   }
 
   @override
@@ -196,6 +311,7 @@ class _MeetingDialogState extends State<MeetingDialog> {
                 meetingGuideCardModel: MeetingGuideCardStore.read(context)!,
                 roomName: response.meetingId,
                 token: response.meetingToken,
+                screenShareToken: response.screenShareToken,
               )..initialize(context),
               builder: (_, __) => child,
             );
@@ -207,7 +323,10 @@ class _MeetingDialogState extends State<MeetingDialog> {
 
   Widget _buildAgendaWrapper(BuildContext context) {
     final eventProvider = Provider.of<EventProvider>(context);
-    final event = eventProvider.event;
+    final event = eventProvider.eventOrNull;
+    if (event == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final permissions = Provider.of<EventPermissionsProvider>(context);
 
     return MeetingAgendaWrapper(
@@ -247,7 +366,7 @@ class _MeetingDialogState extends State<MeetingDialog> {
               ),
               enableGuide: enableGuide,
               enableUserSubmittedAgenda:
-                  eventProvider.event.eventType == EventType.livestream &&
+                  event.eventType == EventType.livestream &&
                       !liveMeetingProvider.isInBreakout,
               enableChat: (permissions.canChat && eventProvider.enableChat),
               enableAdminPanel: permissions.canAccessAdminTabInEvent,
@@ -262,6 +381,12 @@ class _MeetingDialogState extends State<MeetingDialog> {
   }
 
   Widget _buildLoading() {
+    final liveMeetingStream =
+        Provider.of<LiveMeetingProvider>(context).liveMeetingStream;
+    if (liveMeetingStream == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Center(
       child: CustomStreamBuilder(
         entryFrom: '_MeetingDialogState._buildLoading1',
@@ -277,8 +402,7 @@ class _MeetingDialogState extends State<MeetingDialog> {
             errorMessage: 'There was an error loading event details.',
             builder: (_, __) => CustomStreamBuilder(
               entryFrom: '_MeetingDialogState._buildLoading4',
-              stream:
-                  Provider.of<LiveMeetingProvider>(context).liveMeetingStream,
+              stream: liveMeetingStream,
               errorMessage: 'There was an error loading event details.',
               builder: (context, __) => _buildAgendaWrapper(context),
             ),

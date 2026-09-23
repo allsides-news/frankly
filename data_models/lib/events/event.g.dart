@@ -39,6 +39,7 @@ _$_Event _$$_EventFromJson(Map<String, dynamic> json) => _$_Event(
       breakoutRoomDefinition: BreakoutRoomDefinition.fromJsonMigration(
           json['breakoutRoomDefinition'] as Map<String, dynamic>?),
       isLocked: json['isLocked'] as bool? ?? false,
+      isEnded: json['isEnded'] as bool? ?? false,
       liveStreamInfo: json['liveStreamInfo'] == null
           ? null
           : LiveStreamInfo.fromJson(
@@ -91,6 +92,7 @@ Map<String, dynamic> _$$_EventToJson(_$_Event instance) => <String, dynamic>{
       'waitingRoomInfo': instance.waitingRoomInfo?.toJson(),
       'breakoutRoomDefinition': instance.breakoutRoomDefinition?.toJson(),
       'isLocked': instance.isLocked,
+      'isEnded': instance.isEnded,
       'liveStreamInfo': instance.liveStreamInfo?.toJson(),
       'preEventCardData': instance.preEventCardData?.toJson(),
       'postEventCardData': instance.postEventCardData?.toJson(),
@@ -122,6 +124,7 @@ _$_EventSettings _$$_EventSettingsFromJson(Map<String, dynamic> json) =>
       chat: json['chat'] as bool?,
       showChatMessagesInRealTime: json['showChatMessagesInRealTime'] as bool?,
       talkingTimer: json['talkingTimer'] as bool?,
+      allowScreenshare: json['allowScreenshare'] as bool?,
       allowPredefineBreakoutsOnHosted:
           json['allowPredefineBreakoutsOnHosted'] as bool?,
       defaultStageView: json['defaultStageView'] as bool?,
@@ -130,6 +133,7 @@ _$_EventSettings _$$_EventSettingsFromJson(Map<String, dynamic> json) =>
       showSmartMatchingForBreakouts:
           json['showSmartMatchingForBreakouts'] as bool?,
       alwaysRecord: json['alwaysRecord'] as bool?,
+      alwaysTranscribe: json['alwaysTranscribe'] as bool?,
       enablePrerequisites: json['enablePrerequisites'] as bool?,
       agendaPreview: json['agendaPreview'] as bool?,
     );
@@ -140,6 +144,7 @@ Map<String, dynamic> _$$_EventSettingsToJson(_$_EventSettings instance) =>
       'chat': instance.chat,
       'showChatMessagesInRealTime': instance.showChatMessagesInRealTime,
       'talkingTimer': instance.talkingTimer,
+      'allowScreenshare': instance.allowScreenshare,
       'allowPredefineBreakoutsOnHosted':
           instance.allowPredefineBreakoutsOnHosted,
       'defaultStageView': instance.defaultStageView,
@@ -147,6 +152,7 @@ Map<String, dynamic> _$$_EventSettingsToJson(_$_EventSettings instance) =>
       'allowMultiplePeopleOnStage': instance.allowMultiplePeopleOnStage,
       'showSmartMatchingForBreakouts': instance.showSmartMatchingForBreakouts,
       'alwaysRecord': instance.alwaysRecord,
+      'alwaysTranscribe': instance.alwaysTranscribe,
       'enablePrerequisites': instance.enablePrerequisites,
       'agendaPreview': instance.agendaPreview,
     };
@@ -192,6 +198,9 @@ _$_Participant _$$_ParticipantFromJson(Map<String, dynamic> json) =>
       joinParameters: (json['joinParameters'] as Map<String, dynamic>?)?.map(
         (k, e) => MapEntry(k, e as String),
       ),
+      utmSource: json['utm_source'] as String?,
+      utmMedium: json['utm_medium'] as String?,
+      utmCampaign: json['utm_campaign'] as String?,
       breakoutRoomSurveyQuestions: (json['breakoutRoomSurveyQuestions']
                   as List<dynamic>?)
               ?.map((e) => BreakoutQuestion.fromJson(e as Map<String, dynamic>))
@@ -220,6 +229,9 @@ Map<String, dynamic> _$$_ParticipantToJson(_$_Participant instance) =>
       'currentBreakoutRoomId': instance.currentBreakoutRoomId,
       'muteOverride': instance.muteOverride,
       'joinParameters': instance.joinParameters,
+      'utm_source': instance.utmSource,
+      'utm_medium': instance.utmMedium,
+      'utm_campaign': instance.utmCampaign,
       'breakoutRoomSurveyQuestions':
           instance.breakoutRoomSurveyQuestions.map((e) => e.toJson()).toList(),
       'mostRecentPresentTime':

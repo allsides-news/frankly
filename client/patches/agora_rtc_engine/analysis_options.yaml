@@ -1,0 +1,18 @@
+include: package:flutter_lints/flutter.yaml
+
+# Additional information about this file can be found at
+# https://dart.dev/guides/language/analysis-options
+analyzer:
+  exclude:
+    # Ignore generated files
+    - "**/*.g.dart"
+    # Large FFI codegen; not edited here and triggers Struct sealing rules on newer SDKs
+    - lib/src/impl/platform/io/native_iris_api_engine_bindings.dart
+    - test_shard/**
+    # Upstream sample app — separate package graph; not part of path-dep surface
+    - example/**
+    - tool/**
+    
+linter:
+  rules:
+    # - public_member_api_docs

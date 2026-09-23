@@ -81,6 +81,20 @@ class AgendaProvider with ChangeNotifier {
           ? liveMeetingProvider?.breakoutRoomLiveMeeting
           : liveMeetingProvider?.liveMeeting;
 
+  /// Breakout docs may not have agenda events yet; inherit timing from main room.
+  LiveMeeting? get _agendaTimingSource {
+    final main = liveMeetingProvider?.liveMeeting;
+    if (liveMeetingProvider?.isInBreakout != true) return main;
+    final breakout = liveMeetingProvider?.breakoutRoomLiveMeeting;
+    if (breakout != null &&
+        breakout.events.any(
+          (e) => e.event == LiveMeetingEventType.agendaItemStarted,
+        )) {
+      return breakout;
+    }
+    return main ?? breakout;
+  }
+
   AgendaProviderParams get params => _params;
 
   bool get inLiveMeeting => liveMeetingProvider != null;
@@ -89,12 +103,12 @@ class AgendaProvider with ChangeNotifier {
       liveMeetingProvider?.activeLiveMeetingPath ?? '';
 
   bool get isMeetingStarted =>
-      currentLiveMeeting?.events
+      _agendaTimingSource?.events
           .any((e) => e.event == LiveMeetingEventType.agendaItemStarted) ??
       false;
 
   bool get isMeetingFinished =>
-      currentLiveMeeting?.events.lastOrNull?.event ==
+      _agendaTimingSource?.events.lastOrNull?.event ==
       LiveMeetingEventType.finishMeeting;
 
   bool get isInBreakouts => liveMeetingProvider?.isInBreakout ?? false;
@@ -109,7 +123,7 @@ class AgendaProvider with ChangeNotifier {
       _params.allowButtonForUserSubmittedAgenda;
 
   AgendaItem? get currentAgendaItem =>
-      _currentAgendaItemForLiveMeeting(currentLiveMeeting);
+      _currentAgendaItemForLiveMeeting(_agendaTimingSource);
 
   void initialize() {
     liveMeetingProvider?.addListener(onLiveMeetingUpdate);
@@ -143,23 +157,23 @@ class AgendaProvider with ChangeNotifier {
   }
 
   void onLiveMeetingUpdate() {
+    final timingSource = _agendaTimingSource;
     final isDifferentMeeting =
-        _previousLiveMeeting?.meetingId != currentLiveMeeting?.meetingId;
+        _previousLiveMeeting?.meetingId != timingSource?.meetingId;
 
     final liveMeetingChanged = isDifferentMeeting ||
-        (_previousLiveMeeting?.events.length !=
-            currentLiveMeeting?.events.length);
+        (_previousLiveMeeting?.events.length != timingSource?.events.length);
     if (isMeetingStarted && liveMeetingChanged) {
       collapsedAgendaItemIds.clear();
       collapsedAgendaItemIds.addAll(
         agendaItems.map((item) => item.id).toSet()
-          ..remove(_currentAgendaItemForLiveMeeting(currentLiveMeeting)?.id),
+          ..remove(_currentAgendaItemForLiveMeeting(timingSource)?.id),
       );
     } else if (!isMeetingStarted) {
       collapsedAgendaItemIds.clear();
     }
 
-    _previousLiveMeeting = currentLiveMeeting;
+    _previousLiveMeeting = timingSource;
 
     notifyListeners();
   }
@@ -409,6 +423,7 @@ class AgendaProvider with ChangeNotifier {
           templateId: templateId,
           duration: durationInSeconds,
         ),
+        eventTitle: event?.title,
       );
     }
   }
@@ -448,14 +463,14 @@ class AgendaProvider with ChangeNotifier {
     if (!isMeetingStarted) return false;
 
     final currentAgendaItem =
-        _currentAgendaItemForLiveMeeting(currentLiveMeeting)?.id;
+        _currentAgendaItemForLiveMeeting(_agendaTimingSource)?.id;
     return currentAgendaItem == agendaItemId;
   }
 
   bool isCompleted(String agendaItemId) {
     if (!isMeetingStarted) return false;
 
-    final meetingTimingEvents = (currentLiveMeeting?.events ?? [])
+    final meetingTimingEvents = (_agendaTimingSource?.events ?? [])
         .where(
           (e) => [
             LiveMeetingEventType.agendaItemStarted,
@@ -475,7 +490,7 @@ class AgendaProvider with ChangeNotifier {
   }
 
   Duration timeInSection(String agendaItemId) {
-    final localCurrentLiveMeeting = currentLiveMeeting;
+    final localCurrentLiveMeeting = _agendaTimingSource;
     if (localCurrentLiveMeeting == null ||
         localCurrentLiveMeeting.events.isEmpty) {
       return Duration.zero;

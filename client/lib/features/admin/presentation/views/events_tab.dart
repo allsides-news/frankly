@@ -1,6 +1,5 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:archive/archive.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/material.dart';
@@ -16,11 +15,20 @@ import 'package:client/core/routing/locations.dart';
 
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:client/core/utils/platform_utils.dart';
 import 'package:data_models/events/event.dart';
 import 'package:universal_html/html.dart' as html;
+
+enum _RecordingCheckState {
+  checking,
+  available,
+  none,
+  failed,
+  /// Firestore DB used by Cloud Functions does not contain the event (e.g. wrong FIREBASE_DATABASE_ID).
+  eventNotFound,
+}
+
 
 class EventsTab extends StatefulWidget {
   @override
@@ -28,10 +36,19 @@ class EventsTab extends StatefulWidget {
 }
 
 class _EventsTabState extends State<EventsTab> {
+  final _participantCountFutures = <String, Future<List<Participant>>>{};
+
   late BehaviorSubjectWrapper<List<Event>> _allEvents;
 
   var _numToShow = 10;
   bool _isDownloadingRecordings = false;
+  final Map<String, bool> _isDownloadingTranscription = {};
+
+  final Map<String, _RecordingCheckState> _recordingAvailability = {};
+  final Set<String> _recordingCheckScheduled = {};
+
+  final Map<String, _RecordingCheckState> _transcriptionAvailability = {};
+  final Set<String> _transcriptionCheckScheduled = {};
 
   @override
   void initState() {
@@ -85,7 +102,7 @@ class _EventsTabState extends State<EventsTab> {
           _buildRowEntry(
             width: 80,
             child: Text(
-              'Live?',
+              'Status',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -93,7 +110,7 @@ class _EventsTabState extends State<EventsTab> {
           _buildRowEntry(
             width: 100,
             child: Text(
-              'Num Participants',
+              'Participants',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -104,356 +121,289 @@ class _EventsTabState extends State<EventsTab> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
+        _buildRowEntry(
+          width: 180,
+          child: Text(
+            'Transcriptions',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildRecordingSection(Event event) {
-    // Only show download button if:
-    // 1. Recording is enabled
-    // 2. Event has ended (isLocked = true)
-    final hasRecording = event.eventSettings?.alwaysRecord ?? false;
-    final hasEnded = event.isLocked;
-    
-    if (!hasRecording || !hasEnded) {
-      return Text('');
-    } else {
-      return ActionButton(
-        type: ActionButtonType.outline,
-        loadingHeight: 16,
-        borderSide: BorderSide(
-          color: _isDownloadingRecordings 
-            ? Colors.grey 
-            : Theme.of(context).primaryColor
-        ),
-        textColor: _isDownloadingRecordings 
-          ? Colors.grey 
-          : Theme.of(context).primaryColor,
-        onPressed: _isDownloadingRecordings 
-          ? null 
-          : () => _downloadRecordings(event),
-        text: _isDownloadingRecordings ? 'Downloading...' : 'Download',
+  ButtonStyle get _compactRecordingButtonStyle => TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
       );
+
+  Widget _buildRecordingSection(Event event, {required int index}) {
+    final hasRecording = event.eventSettings?.alwaysRecord ?? false;
+    final hasEnded = event.isEnded || event.isLocked;
+
+    if (!hasRecording || !hasEnded) return const Text('');
+
+    if (!_recordingCheckScheduled.contains(event.id)) {
+      _recordingCheckScheduled.add(event.id);
+      // Stagger checks by 500ms per row so all events don't hit the Cloud
+      // Function simultaneously (maxInstances: 10 + 30s timeout → failures).
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => Future.delayed(
+          Duration(milliseconds: index * 1000),
+          () => _checkRecordingAvailability(event),
+        // Silence the unawaited future: any escaped error would reach FlutterFire's
+        // zone handler on web and throw a spurious TypeError (TimeoutException is not
+        // a JavaScriptObject). Errors are already handled inside _checkRecordingAvailability.
+        ).catchError((_, __) {}),
+      );
+    }
+
+    final availability = _recordingAvailability[event.id];
+    if (availability == null || availability == _RecordingCheckState.checking) {
+      return const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          semanticsLabel: 'Checking recording availability',
+        ),
+      );
+    }
+
+    if (availability == _RecordingCheckState.failed) {
+      return TextButton(
+        style: _compactRecordingButtonStyle,
+        onPressed: () => _checkRecordingAvailability(event),
+        child: const Text('Retry'),
+      );
+    }
+
+    if (availability == _RecordingCheckState.eventNotFound) {
+      return Tooltip(
+        message:
+            'Cloud Functions returned EVENT_NOT_FOUND: the event document is missing '
+            'in the Firestore database the functions use. Set app.firebase_database_id '
+            '(or FIREBASE_DATABASE_ID at deploy) to match this app.',
+        child: TextButton(
+          style: _compactRecordingButtonStyle,
+          onPressed: () => _checkRecordingAvailability(event),
+          child: const Text('DB config'),
+        ),
+      );
+    }
+
+    if (availability == _RecordingCheckState.none) {
+      return Tooltip(
+        message:
+            'No recording file in storage yet. Use Recheck if the event '
+            'just ended and upload may still be finishing.',
+        child: TextButton(
+          style: _compactRecordingButtonStyle,
+          onPressed: () => _checkRecordingAvailability(event),
+          child: const Text('Recheck'),
+        ),
+      );
+    }
+
+    // available
+    return ActionButton(
+      type: ActionButtonType.outline,
+      loadingHeight: 16,
+      borderSide: BorderSide(
+        color: _isDownloadingRecordings
+            ? AppNeutralColors.of(context).neutral400
+            : Theme.of(context).colorScheme.primary,
+      ),
+      textColor: _isDownloadingRecordings
+          ? AppNeutralColors.of(context).neutral400
+          : Theme.of(context).colorScheme.primary,
+      onPressed:
+          _isDownloadingRecordings ? null : () => _downloadRecordings(event),
+      text: _isDownloadingRecordings ? 'Downloading...' : 'Download',
+    );
+  }
+
+  Future<void> _checkRecordingAvailability(Event event) async {
+    if (mounted) {
+      setState(() => _recordingAvailability[event.id] = _RecordingCheckState.checking);
+    }
+
+    try {
+      final idToken =
+          await userService.firebaseAuth.currentUser?.getIdToken();
+      final response = await http
+          .post(
+            Uri.parse(
+              '${Environment.functionsUrlPrefix}/downloadRecording',
+            ),
+            headers: {
+              'Authorization': 'Bearer $idToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'eventPath': event.fullPath,
+              'checkOnly': true,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        setState(() => _recordingAvailability[event.id] = _RecordingCheckState.available);
+      } else if (response.statusCode == 404) {
+        String? errorCode;
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) {
+            errorCode = decoded['code'] as String?;
+          }
+        } catch (_) {}
+        setState(
+          () => _recordingAvailability[event.id] =
+              errorCode == 'EVENT_NOT_FOUND'
+                  ? _RecordingCheckState.eventNotFound
+                  : _RecordingCheckState.none,
+        );
+      } else {
+        setState(() => _recordingAvailability[event.id] = _RecordingCheckState.failed);
+      }
+    } on TimeoutException catch (_) {
+      // Caught explicitly so TimeoutException doesn't propagate through
+      // FlutterFire's zone handler on web (causes spurious TypeError).
+      if (mounted) {
+        setState(() => _recordingAvailability[event.id] = _RecordingCheckState.failed);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _recordingAvailability[event.id] = _RecordingCheckState.failed);
+      }
     }
   }
 
   Future<void> _downloadRecordings(Event event) async {
-    // Clear ALL existing snackbars at the start
+    if (_isDownloadingRecordings) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Download already in progress. Please wait for it to complete.',
+          ),
+          duration: Duration(seconds: 5),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _isDownloadingRecordings = true);
     ScaffoldMessenger.of(context).clearSnackBars();
-    
-    await alertOnError(
-      context,
-      () async {
-        final idToken = await userService.firebaseAuth.currentUser?.getIdToken();
-        final response = await http.post(
-          Uri.parse('${Environment.functionsUrlPrefix}/downloadRecording'),
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({'eventPath': event.fullPath}),
-        );
 
-        final data = jsonDecode(response.body);
-        
-        if (response.statusCode == 202) {
-          // ZIP is being created in background - poll for completion
-          final jobId = data['jobId'] as String;
-          final message = data['message'] as String? ?? 'Creating ZIP file...';
-          final estimatedTimeSec = data['estimatedTimeSeconds'] as int? ?? 30;
-          
-          // Show initial message - will stay visible during polling
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('$message ~$estimatedTimeSec seconds...'),
-              duration: Duration(seconds: estimatedTimeSec * 2), // Long duration
-            ),
+    try {
+      await alertOnError(
+        context,
+        () async {
+          final idToken =
+              await userService.firebaseAuth.currentUser?.getIdToken();
+          final response = await http.post(
+            Uri.parse('${Environment.functionsUrlPrefix}/downloadRecording'),
+            headers: {
+              'Authorization': 'Bearer $idToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'eventPath': event.fullPath}),
           );
-          
-          // Poll for job completion
-          final downloadUrl = await _pollForZipCompletion(jobId, estimatedTimeSec);
-          
-          // Clear progress message
-          ScaffoldMessenger.of(context).clearSnackBars();
-          
-          if (downloadUrl != null) {
-            // Download the ZIP file
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Downloading ZIP file...'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-            
-            html.window.open(downloadUrl, '_blank');
-            
-            // Wait a moment then show success
-            await Future.delayed(Duration(milliseconds: 500));
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Recording downloaded successfully!'),
-                duration: Duration(seconds: 3),
-              ),
-            );
-          } else {
-            throw Exception('ZIP creation timed out or failed');
-          }
-          
-          return;
-        }
-        
-        if (response.statusCode == 200) {
-          // Check what type of 200 response this is
-          final status = data['status'] as String?;
-          final downloadUrl = data['downloadUrl'] as String?;
-          final files = data['files'] as List?;
-          
-          // Case 1: Job already completed - has downloadUrl
-          if (downloadUrl != null) {
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Downloading ZIP file...')),
-            );
-            html.window.open(downloadUrl, '_blank');
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Recording downloaded successfully!'),
-                duration: Duration(seconds: 3),
-              ),
-            );
-            return;
-          }
-          
-          // Case 2: Job still processing - poll for completion
-          if (status == 'processing') {
-            final jobId = data['jobId'] as String;
-            final message = data['message'] as String? ?? 'Creating ZIP file...';
-            final progress = data['progress'] as int? ?? 0;
-            
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('$message $progress%...')),
-            );
-            
-            final completedUrl = await _pollForZipCompletion(jobId, 60);
-            if (completedUrl != null) {
-              html.window.open(completedUrl, '_blank');
-              ScaffoldMessenger.of(context).clearSnackBars();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Recording downloaded successfully!'),
-                  duration: Duration(seconds: 3),
-                ),
-              );
-            } else {
-              throw Exception('ZIP creation timed out');
-            }
-            return;
-          }
-          
-          // Case 3: Signed URLs - either for individual downloads or client-side ZIP
-          if (files == null || files.isEmpty) {
-            throw Exception('No files or downloadUrl in 200 response');
-          }
-          
-          final filesList = files.cast<Map<String, dynamic>>();
-          final totalFiles = data['totalFiles'] as int;
-          final totalSizeMB = data['totalSizeMB'] as int;
-          final mode = data['mode'] as String? ?? 'clientZip'; // Default to clientZip for backwards compat
-          final message = data['message'] as String?;
 
-          // For very large files (>150MB), download individually without ZIP
-          if (mode == 'individual') {
-            ScaffoldMessenger.of(context).clearSnackBars();
-            
-            // Check if download is already in progress
-            if (_isDownloadingRecordings) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Download already in progress. Please wait for it to complete.'),
-                  duration: Duration(seconds: 5),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-              return;
+          dynamic data;
+          try {
+            data = jsonDecode(response.body);
+          } catch (_) {
+            data = null;
+          }
+
+          if (response.statusCode == 404) {
+            String msg = 'Recording download failed (404).';
+            if (data is Map && data['error'] != null) {
+              final code = data['code'] as String?;
+              msg = '${data['error']}${code != null ? ' [$code]' : ''}';
+              if (code == 'EVENT_NOT_FOUND') {
+                msg += ' If events use a named Firestore database, set app.firebase_database_id (or FIREBASE_DATABASE_ID) on Cloud Functions.';
+              }
             }
-            
-            // Show initial message with file count and total size
-            final sizeGB = (totalSizeMB / 1024).toStringAsFixed(1);
-            final estimatedMinutes = (totalFiles * 5 / 60).ceil();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  message ?? 
-                  'Starting sequential download of $totalFiles files (${sizeGB}GB total). '
-                  'This will take approximately $estimatedMinutes minutes. '
-                  'DO NOT close this tab during download!'
-                ),
-                duration: Duration(seconds: 10),
-                backgroundColor: Colors.blue[700],
-              ),
-            );
-            
-            // Wait a moment for user to see the message
-            await Future.delayed(Duration(seconds: 3));
-            
-            // Set download flag
-            setState(() {
-              _isDownloadingRecordings = true;
-            });
-            
+            throw Exception(msg);
+          }
+
+          if (response.statusCode != 200) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            var msg = 'Failed to get recording files: ${response.statusCode}';
             try {
-              // Download files sequentially with proper delays
-              // This prevents browser queue overflow and ensures all downloads complete
-              await _downloadFilesSequentially(filesList, totalFiles);
-            } finally {
-              // Clear download flag
-              setState(() {
-                _isDownloadingRecordings = false;
-              });
-            }
-            
-            return;
+              final errBody = jsonDecode(response.body);
+              if (errBody is Map && errBody['error'] != null) {
+                msg =
+                    '${errBody['error']} (${errBody['code'] ?? response.statusCode})';
+              }
+            } catch (_) {}
+            throw Exception(msg);
           }
 
-          // Clear and show initial progress for client-side ZIP
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Downloading files for ZIP... 0%'),
-              duration: Duration(seconds: 120),
-            ),
-          );
-
-          // Create ZIP in browser (for files 10-150MB)
-          final archive = Archive();
-          
-          for (var i = 0; i < filesList.length; i++) {
-            final fileData = filesList[i];
-            final url = fileData['url'] as String;
-            final name = fileData['name'] as String;
-            
-            // Download file
-            final fileResponse = await http.get(Uri.parse(url));
-            
-            // Add to archive (store mode - no compression)
-            archive.addFile(ArchiveFile(
-              name,
-              fileResponse.bodyBytes.length,
-              fileResponse.bodyBytes,
-            ),);
-
-            // Update progress after each file
-            final percentComplete = ((i + 1) / filesList.length * 100).toInt();
-            
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Creating ZIP... $percentComplete% (${i + 1}/$totalFiles)'),
-                duration: Duration(seconds: 120),
-              ),
+          if (data is! Map<String, dynamic>) {
+            throw Exception('Invalid download response');
+          }
+          final map = data;
+          final files = map['files'] as List?;
+          if (files == null || files.isEmpty) {
+            throw Exception('Invalid download response: no files');
+          }
+          if ((map['mode'] as String?) != 'individual') {
+            throw Exception(
+              'Recording download requires an updated downloadRecording function '
+              '(expected mode "individual").',
             );
           }
 
-          // Encode archive (store mode)
+          final filesList = files.cast<Map<String, dynamic>>();
+          final totalFiles = map['totalFiles'] as int? ?? filesList.length;
+          final totalSizeMB = map['totalSizeMB'] as int? ?? 0;
+          final message = map['message'] as String?;
+
           ScaffoldMessenger.of(context).clearSnackBars();
+
+          final sizeGB = (totalSizeMB / 1024).toStringAsFixed(1);
+          final estimatedMinutes = (totalFiles * 5 / 60).ceil();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Finalizing ZIP...'),
-              duration: Duration(seconds: 5),
+              content: Text(
+                message ??
+                    'Starting sequential download of $totalFiles files (${sizeGB}GB total). '
+                    'This will take approximately $estimatedMinutes minutes. '
+                    'DO NOT close this tab during download!',
+              ),
+              duration: Duration(seconds: 10),
+              backgroundColor: Colors.blue[700],
             ),
           );
 
-          final zipBytes = ZipEncoder().encode(archive, level: Deflate.NO_COMPRESSION);
-          
-          if (zipBytes == null) {
-            throw Exception('Failed to create ZIP');
-          }
+          await Future.delayed(Duration(seconds: 3));
 
-          // Trigger download
-          final blob = html.Blob([Uint8List.fromList(zipBytes)]);
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          final anchor = html.AnchorElement(href: url)
-            ..setAttribute('download', 'recordings-${event.id}.zip')
-            ..setAttribute('target', '_blank');
-          
-          anchor.click();
-          
-          // Small delay to ensure download initiates
-          await Future.delayed(Duration(milliseconds: 200));
-          
-          html.Url.revokeObjectUrl(url);
-
-          // Clear ALL snackbars
-          ScaffoldMessenger.of(context).clearSnackBars();
-        } else {
-          ScaffoldMessenger.of(context).clearSnackBars();
-          throw Exception('Failed to get recording files: ${response.statusCode}');
-        }
-      },
-    );
-  }
-
-  Future<String?> _pollForZipCompletion(String jobId, int estimatedTimeSec) async {
-    const pollIntervalSec = 3;
-    final maxAttempts = (estimatedTimeSec / pollIntervalSec).ceil() + 10; // Extra buffer
-    
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      await Future.delayed(Duration(seconds: pollIntervalSec));
-      
-      try {
-        final jobDoc = await FirebaseFirestore.instance
-            .collection('recordingJobs')
-            .doc(jobId)
-            .get();
-        
-        if (!jobDoc.exists) {
-          print('Job $jobId not found in Firestore');
-          continue;
-        }
-        
-        final jobData = jobDoc.data()!;
-        final status = jobData['status'] as String?;
-        final downloadUrl = jobData['downloadUrl'] as String?;
-        final progress = jobData['progress'] as int? ?? 0;
-        
-        print('Job $jobId status: $status, progress: $progress%');
-        
-        if (status == 'completed' && downloadUrl != null) {
-          return downloadUrl;
-        } else if (status == 'error') {
-          final errorMessage = jobData['message'] as String? ?? 'Unknown error';
-          throw Exception('ZIP creation failed: $errorMessage');
-        }
-        
-        // Update snackbar with progress (only clear and replace if needed)
-        // Keep showing continuously - no flickering
-        if (progress > 0 && attempt > 0) {
-          ScaffoldMessenger.of(context).removeCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Creating ZIP... $progress%'),
-              duration: Duration(seconds: estimatedTimeSec * 2), // Long duration - we'll manually dismiss
-            ),
+          await _downloadFilesSequentially(
+            filesList,
+            totalFiles,
           );
-        }
-      } catch (e) {
-        print('Error polling job $jobId: $e');
-        // Continue polling despite errors
+        },
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingRecordings = false);
       }
     }
-    
-    return null; // Timeout
   }
 
   /// Downloads files sequentially with proper delays to handle large-scale downloads
   /// This method ensures all files download even in extreme cases (2500+ files)
   Future<void> _downloadFilesSequentially(
-    List<Map<String, dynamic>> filesList, 
-    int totalFiles
+    List<Map<String, dynamic>> filesList,
+    int totalFiles,
   ) async {
     const delayBetweenDownloads = Duration(seconds: 5);
     int successCount = 0;
@@ -545,6 +495,298 @@ class _EventsTabState extends State<EventsTab> {
     }
   }
 
+  Widget _buildTranscriptionSection(Event event, {required int index}) {
+    final hasTranscription = event.eventSettings?.alwaysTranscribe ?? false;
+    final hasEnded = event.isEnded || event.isLocked;
+
+    if (!hasTranscription || !hasEnded) return const Text('');
+
+    if (!_transcriptionCheckScheduled.contains(event.id)) {
+      _transcriptionCheckScheduled.add(event.id);
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => Future.delayed(
+          // Offset by 500ms from the recording check (which uses index * 1000ms)
+          // so the two checkOnly requests per event interleave rather than burst
+          // simultaneously — keeps peak concurrency within maxInstances:10.
+          Duration(milliseconds: index * 1000 + 500),
+          () => _checkTranscriptionAvailability(event),
+        ).catchError((_, __) {}),
+      );
+    }
+
+    final availability = _transcriptionAvailability[event.id];
+    if (availability == null || availability == _RecordingCheckState.checking) {
+      return const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          semanticsLabel: 'Checking transcription availability',
+        ),
+      );
+    }
+
+    if (availability == _RecordingCheckState.failed) {
+      return TextButton(
+        style: _compactRecordingButtonStyle,
+        onPressed: () => _checkTranscriptionAvailability(event),
+        child: const Text('Retry'),
+      );
+    }
+
+    if (availability == _RecordingCheckState.eventNotFound) {
+      return Tooltip(
+        message: 'Event not found in Cloud Functions Firestore database.',
+        child: TextButton(
+          style: _compactRecordingButtonStyle,
+          onPressed: () => _checkTranscriptionAvailability(event),
+          child: const Text('DB config'),
+        ),
+      );
+    }
+
+    if (availability == _RecordingCheckState.none) {
+      return Tooltip(
+        message: 'No transcription files yet. Use Recheck if the event just ended.',
+        child: TextButton(
+          style: _compactRecordingButtonStyle,
+          onPressed: () => _checkTranscriptionAvailability(event),
+          child: const Text('Recheck'),
+        ),
+      );
+    }
+
+    final isDownloading = _isDownloadingTranscription[event.id] ?? false;
+    return ActionButton(
+      type: ActionButtonType.outline,
+      loadingHeight: 16,
+      borderSide: BorderSide(
+        color: isDownloading
+            ? AppNeutralColors.of(context).neutral400
+            : Theme.of(context).colorScheme.primary,
+      ),
+      textColor: isDownloading
+          ? AppNeutralColors.of(context).neutral400
+          : Theme.of(context).colorScheme.primary,
+      onPressed: isDownloading ? null : () => _downloadTranscription(event),
+      text: isDownloading ? 'Zipping...' : 'Download ZIP',
+    );
+  }
+
+  Future<void> _checkTranscriptionAvailability(Event event) async {
+    if (mounted) {
+      setState(
+        () => _transcriptionAvailability[event.id] = _RecordingCheckState.checking,
+      );
+    }
+
+    try {
+      final idToken = await userService.firebaseAuth.currentUser?.getIdToken();
+      final response = await http
+          .post(
+            Uri.parse('${Environment.functionsUrlPrefix}/downloadTranscription'),
+            headers: {
+              'Authorization': 'Bearer $idToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'eventPath': event.fullPath,
+              'checkOnly': true,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        setState(
+          () => _transcriptionAvailability[event.id] = _RecordingCheckState.available,
+        );
+      } else if (response.statusCode == 404) {
+        String? errorCode;
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) errorCode = decoded['code'] as String?;
+        } catch (_) {}
+        setState(
+          () => _transcriptionAvailability[event.id] =
+              errorCode == 'EVENT_NOT_FOUND'
+                  ? _RecordingCheckState.eventNotFound
+                  : _RecordingCheckState.none,
+        );
+      } else {
+        setState(
+          () => _transcriptionAvailability[event.id] = _RecordingCheckState.failed,
+        );
+      }
+    } on TimeoutException catch (_) {
+      if (mounted) {
+        setState(
+          () => _transcriptionAvailability[event.id] = _RecordingCheckState.failed,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _transcriptionAvailability[event.id] = _RecordingCheckState.failed,
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadTranscription(Event event) async {
+    if (_isDownloadingTranscription[event.id] ?? false) return;
+    if (!mounted) return;
+    setState(() => _isDownloadingTranscription[event.id] = true);
+    ScaffoldMessenger.of(context).clearSnackBars();
+
+    try {
+      await alertOnError(context, () async {
+        final idToken = await userService.firebaseAuth.currentUser?.getIdToken();
+        final response = await http
+            .post(
+              Uri.parse(
+                '${Environment.functionsUrlPrefix}/downloadTranscription',
+              ),
+              headers: {
+                'Authorization': 'Bearer $idToken',
+                'Content-Type': 'application/json',
+              },
+              body: jsonEncode({'eventPath': event.fullPath}),
+            )
+            .timeout(const Duration(minutes: 7));
+
+        dynamic data;
+        try {
+          data = jsonDecode(response.body);
+        } catch (_) {
+          data = null;
+        }
+
+        if (response.statusCode == 404) {
+          String msg = 'Transcription download failed (404).';
+          if (data is Map && data['error'] != null) {
+            msg = data['error'] as String;
+          }
+          throw Exception(msg);
+        }
+
+        if (response.statusCode != 200) {
+          String msg = 'Failed to get transcription files: ${response.statusCode}';
+          if (data is Map && data['error'] != null) {
+            msg = data['error'] as String;
+          }
+          throw Exception(msg);
+        }
+
+        if (data is! Map<String, dynamic>) {
+          throw Exception('Invalid transcription download response');
+        }
+
+        final url = data['url'] as String?;
+        final fileName = data['fileName'] as String? ?? 'transcriptions.zip';
+        final fileCount = data['fileCount'] as int? ?? 0;
+        final message = data['message'] as String?;
+
+        if (url == null) throw Exception('No download URL in response');
+
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              message ??
+                  'Transcription ZIP ready ($fileCount file(s)). Starting download...',
+            ),
+            duration: const Duration(seconds: 5),
+            backgroundColor: Colors.blue[700],
+          ),
+        );
+
+        await Future.delayed(const Duration(seconds: 2));
+
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', fileName)
+          ..setAttribute('target', '_blank')
+          ..style.display = 'none';
+        html.document.body?.append(anchor);
+        anchor.click();
+        anchor.remove();
+
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Transcription ZIP download started: $fileName'),
+            duration: const Duration(seconds: 6),
+            backgroundColor: Colors.green,
+          ),
+        );
+      });
+    } on TimeoutException catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Transcription ZIP timed out. The event may have many rooms — '
+              'please try again.',
+            ),
+            duration: Duration(seconds: 8),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloadingTranscription[event.id] = false);
+    }
+  }
+
+  String _eventLiveStatus(Event event) {
+    if (event.isEnded || event.isLocked) return 'Ended';
+    final scheduled = event.scheduledTime;
+    if (scheduled == null) return '—';
+    final now = clockService.now();
+    if (scheduled.isAfter(now)) return 'Upcoming';
+    return 'Live';
+  }
+
+  Future<List<Participant>> _participantCountFuture(Event event) {
+    return _participantCountFutures.putIfAbsent(
+      event.fullPath,
+      () => firestoreEventService.getEventParticipants(event: event),
+    );
+  }
+
+  String _participantCountText(Event event) {
+    final count =
+        event.participantCountEstimate ?? event.presentParticipantCountEstimate;
+    return count != null ? count.toString() : '—';
+  }
+
+  Widget _buildParticipantCountCell(Event event) {
+    return FutureBuilder<List<Participant>>(
+      future: _participantCountFuture(event),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          final activeParticipantCount = snapshot.data!
+              .where(
+                (participant) => participant.status == ParticipantStatus.active,
+              )
+              .length;
+
+          return HeightConstrainedText(activeParticipantCount.toString());
+        }
+
+        if (snapshot.hasError) {
+          return Tooltip(
+            message: 'Could not load participant count.',
+            child: HeightConstrainedText(_participantCountText(event)),
+          );
+        }
+
+        return HeightConstrainedText(_participantCountText(event));
+      },
+    );
+  }
+
   Widget _buildEventRow({
     required int index,
     required Event event,
@@ -569,6 +811,7 @@ class _EventsTabState extends State<EventsTab> {
                 ).eventPage(
                   templateId: event.templateId,
                   eventId: event.id,
+                  eventTitle: event.title,
                 ),
               ),
               child: HeightConstrainedText(
@@ -591,9 +834,43 @@ class _EventsTabState extends State<EventsTab> {
                 event.isPublic == true ? 'Public' : 'Private',
               ),
             ),
+          if (showDetails)
+            _buildRowEntry(
+              width: 80,
+              child: HeightConstrainedText(_eventLiveStatus(event)),
+            ),
+          if (showDetails)
+            _buildRowEntry(
+              width: 100,
+              child: _buildParticipantCountCell(event),
+            ),
           _buildRowEntry(
             width: 170,
-            child: _buildRecordingSection(event),
+            child: SizedBox(
+              width: 170,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: _buildRecordingSection(event, index: index),
+                ),
+              ),
+            ),
+          ),
+          _buildRowEntry(
+            width: 180,
+            child: SizedBox(
+              width: 180,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: _buildTranscriptionSection(event, index: index),
+                ),
+              ),
+            ),
           ),
         ],
       ),

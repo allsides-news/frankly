@@ -10,9 +10,16 @@ AnalyticsUtil analyticsUtil = AnalyticsUtil();
 class AnalyticsUtil {
   String get _secretKey => functions.config.get('segment.write_key') as String;
 
-  /// Call to track a user event
-  void logEvent({required String userId, required AnalyticsEvent event}) {
-    _doLogEvent(userId: userId, event: event);
+  /// Call to track a user event.
+  ///
+  /// Returns the delivery future so callers can await it (cloud functions
+  /// may freeze background work once the HTTP response closes) or opt out
+  /// explicitly with unawaited().
+  Future<void> logEvent({
+    required String userId,
+    required AnalyticsEvent event,
+  }) {
+    return _doLogEvent(userId: userId, event: event);
   }
 
   Future<void> _doLogEvent({

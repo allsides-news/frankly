@@ -167,7 +167,7 @@ class _InstantEventState extends State<InstantEvent> {
                     ChangeNotifierProvider<CommunityPermissionsProvider>(
                   create: (context) => CommunityPermissionsProvider(
                     communityProvider: context.read<CommunityProvider>(),
-                  ),
+                  )..initialize(),
                   builder: (_, __) =>
                       ChangeNotifierProvider<EventPermissionsProvider>(
                     create: (context) => EventPermissionsProvider(
@@ -175,7 +175,7 @@ class _InstantEventState extends State<InstantEvent> {
                       communityPermissions:
                           context.read<CommunityPermissionsProvider>(),
                       communityProvider: context.read<CommunityProvider>(),
-                    ),
+                    )..initialize(),
                     builder: (_, __) => _buildMeeting(context),
                   ),
                 ),

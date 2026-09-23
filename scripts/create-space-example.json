@@ -1,0 +1,12 @@
+{
+  "ownerUserId": "GP1IFvzLnKa1b81zDiNcH0u9EER2",
+  "name": "The Common Ground Lounge",
+  "displayId": "common-ground-lounge",
+  "makePrivate": false,
+  "tagLine": "Where every perspective gets a seat at the table.",
+  "about": "<p>The Common Ground Lounge is a Space for structured, respectful conversations across the political spectrum. We host weekly roundtables on current events, media literacy workshops, and open-mic discussion nights. All viewpoints are welcome as long as they come with curiosity and good faith.</p>",
+  "logoUrl": "https://picsum.photos/seed/common-ground-logo/512",
+  "bannerImageUrl": "https://picsum.photos/seed/common-ground-banner/1200/400",
+  "contactEmail": "otomoto2000@hotmail.com",
+  "tags": ["Politics", "Current Events", "Civil Discourse", "Media Literacy"]
+}

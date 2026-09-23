@@ -17,5 +17,7 @@
 node_modules/
 .dart_tool/
 
-# Make sure build/ is included (needed for deployment)
+# Include only the runtime build artifacts (node + js bundles).
+# build/packages/ is 85MB of Dart compilation cache — not needed at runtime.
 !build/
+build/packages/

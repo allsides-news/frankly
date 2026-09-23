@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:client/features/auth/presentation/widgets/sign_in_options_content.dart';
+import 'package:client/services.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 
@@ -38,12 +39,25 @@ class SignInDialog extends StatefulWidget {
 
 class _SignInDialogState extends State<SignInDialog> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      analytics.logPageView('sign_in');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: context.theme.colorScheme.surfaceContainerLowest,
-shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(5),
-        
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        // In dark mode the modal and the scrim behind it are both near-black,
+        // so without an edge the dialog has no discernible boundary.
+        side: BorderSide(
+          color: AppNeutralColors.of(context).neutral300,
+          width: 1,
+        ),
       ),
       child: Stack(
         children: [

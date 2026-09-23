@@ -18,4 +18,12 @@ class FirebaseAuthUtils {
 
     return Future.wait(getUserFutures);
   }
+
+  Future<UserRecord?> getUserByEmail(String email) async {
+    try {
+      return await firebaseApp.auth().getUserByEmail(email);
+    } catch (e) {
+      return null;
+    }
+  }
 }

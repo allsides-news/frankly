@@ -138,7 +138,12 @@ class _AgendaItemCardState extends State<AgendaItemCard>
     final canReorder =
         _presenter.canReorder(allowEdit, isEditMode, isCompleted, isCardActive);
     final agendaItemType = _model.agendaItem.type;
-    final title = _presenter.getTitle();
+    // Hide the position label while actively editing this item's title --
+    // at that point it's shown as an editable field, not a heading, and the
+    // prefix isn't meaningful in the builder form.
+    final title = _model.isEditMode
+        ? _presenter.getTitle()
+        : '${_presenter.getPositionLabel()} ${_presenter.getTitle()}';
     final formattedTime =
         Duration(seconds: _model.agendaItem.timeInSeconds ?? 0)
             .getFormattedTime(showHours: false);
@@ -168,11 +173,10 @@ class _AgendaItemCardState extends State<AgendaItemCard>
                   ),
                 ),
               SizedBox(width: 8),
-              ProxiedImage(
-                null,
-                asset: agendaItemType.pngIconPath,
-                width: 24,
-                height: 24,
+              Icon(
+                agendaItemType.icon,
+                size: 24,
+                color: context.theme.colorScheme.onSurfaceVariant,
               ),
               SizedBox(width: 10),
               Expanded(
@@ -230,11 +234,10 @@ class _AgendaItemCardState extends State<AgendaItemCard>
     return Row(
       children: [
         SizedBox(width: 8),
-        ProxiedImage(
-          null,
-          asset: agendaItemType.pngIconPath,
-          width: 24,
-          height: 24,
+        Icon(
+          agendaItemType.icon,
+          size: 24,
+          color: context.theme.colorScheme.onSurfaceVariant,
         ),
         SizedBox(width: 8),
         HeightConstrainedText(

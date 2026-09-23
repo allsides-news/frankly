@@ -80,9 +80,9 @@ class _FeaturedToggleButtonState extends State<FeaturedToggleButton> {
                 controlAffinity:
                     widget.controlAffinity ?? ListTileControlAffinity.trailing,
                 name: 'featured',
-                inactiveTrackColor: Colors.grey,
+                inactiveTrackColor: AppNeutralColors.of(context).neutral400,
                 activeColor: context.theme.colorScheme.surfaceContainerLowest,
-                activeTrackColor: Theme.of(context).colorScheme.secondary,
+                activeTrackColor: Theme.of(context).colorScheme.primaryContainer,
                 decoration: InputDecoration(
                   enabledBorder: OutlineInputBorder(
                     borderSide: BorderSide(

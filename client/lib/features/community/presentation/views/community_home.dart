@@ -1,3 +1,4 @@
+import 'package:client/core/widgets/section_heading.dart';
 import 'dart:math';
 
 import 'package:client/features/auth/utils/auth_utils.dart';
@@ -6,9 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:client/features/community/data/providers/community_permissions_provider.dart';
 import 'package:client/features/events/features/create_event/presentation/views/create_event_dialog.dart';
 import 'package:client/features/community/presentation/widgets/about_section.dart';
-import 'package:client/features/community/presentation/widgets/carousel/carousel_initializer.dart';
 import 'package:client/features/community/presentation/widgets/event_card.dart';
-import 'package:client/features/community/presentation/widgets/edit_community_button.dart';
+import 'package:client/features/community/presentation/widgets/space_page_header.dart';
 import 'package:client/features/community/data/providers/community_home_provider.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/features/community/presentation/views/app_share.dart';
@@ -31,6 +31,8 @@ import 'package:data_models/events/event.dart';
 import 'package:data_models/community/community.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
+import 'package:client/core/widgets/pulse_loading_placeholder.dart';
+import 'package:client/core/widgets/delayed_loading_placeholder.dart';
 
 class CommunityHome extends StatefulWidget {
   const CommunityHome._();
@@ -57,6 +59,12 @@ class _CommunityHomeState extends State<CommunityHome> {
   @override
   void initState() {
     context.read<CommunityHomeProvider>().initialize();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      analytics.logPageView(
+        'community_home',
+        communityId: context.read<CommunityProvider>().community.id,
+      );
+    });
     super.initState();
   }
 
@@ -69,6 +77,7 @@ class _CommunityHomeState extends State<CommunityHome> {
         keys: [community.id],
         builder: (context, showDonations) => Column(
           children: [
+            SpacePageHeader(community: community),
             if (responsiveLayoutService.isMobile(context))
               ..._mobileLayout(showDonations!)
             else
@@ -80,46 +89,15 @@ class _CommunityHomeState extends State<CommunityHome> {
   }
 
   List<Widget> _mobileLayout(bool showDonations) => [
-        if (MediaQuery.of(context).size.width > AppSize.kMaxCarouselSize)
-          SizedBox(height: 30),
-        Stack(
-          children: [
-            Center(
-              child: Container(
-                clipBehavior:
-                    MediaQuery.of(context).size.width > AppSize.kMaxCarouselSize
-                        ? Clip.hardEdge
-                        : Clip.none,
-                decoration:
-                    MediaQuery.of(context).size.width > AppSize.kMaxCarouselSize
-                        ? BoxDecoration(borderRadius: BorderRadius.circular(10))
-                        : null,
-                constraints: BoxConstraints(maxWidth: AppSize.kMaxCarouselSize),
-                child: CarouselInitializer(),
-              ),
-            ),
-            if (Provider.of<CommunityPermissionsProvider>(context)
-                .canEditCommunity)
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: EditCommunityButton(),
-                ),
-              ),
-          ],
-        ),
         ConstrainedBody(
           maxWidth: 524,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(height: 30),
-              _buildEvents(),
+              _buildUpcoming(),
               SizedBox(height: 30),
-              CommunityHomeAboutSection(community: community),
-              SizedBox(height: 30),
-              _buildContactUsSection(showDonations),
+              _buildAbout(showDonations),
               SizedBox(height: 30),
             ],
           ),
@@ -127,59 +105,54 @@ class _CommunityHomeState extends State<CommunityHome> {
       ];
 
   List<Widget> _desktopLayout(bool showDonations) => [
+        SizedBox(height: 30),
         ConstrainedBody(
-          child: Column(
-            children: [
-              SizedBox(
-                height: 48,
-                child: Provider.of<CommunityPermissionsProvider>(context)
-                        .canEditCommunity
-                    ? Align(
-                        alignment: Alignment.centerRight,
-                        child: EditCommunityButton(),
-                      )
-                    : null,
-              ),
-              Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const columnGap = 52.0;
+              final columnWidth = (constraints.maxWidth - columnGap) / 2;
+              return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: _buildLeftSideOfDesktop(showDonations),
+                  // Upcoming leads on the left; About sits alongside it.
+                  SizedBox(
+                    width: columnWidth,
+                    child: _buildUpcoming(),
                   ),
-                  SizedBox(width: 52),
-                  Expanded(
-                    child: _buildRightSideOfDesktop(),
+                  SizedBox(width: columnGap),
+                  SizedBox(
+                    width: columnWidth,
+                    child: _buildAbout(showDonations),
                   ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
         ),
         SizedBox(height: 100),
       ];
 
-  Widget _buildLeftSideOfDesktop(bool showDonations) {
+  Widget _buildUpcoming() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
-          clipBehavior: Clip.hardEdge,
-          child: CarouselInitializer(),
-        ),
-        SizedBox(height: 30),
-        CommunityHomeAboutSection(community: community),
-        SizedBox(height: 20),
-        _buildContactUsSection(showDonations),
-        SizedBox(height: 30),
+        SectionHeading('Upcoming'),
+        SizedBox(height: 16),
+        _buildEvents(),
       ],
     );
   }
 
-  Widget _buildRightSideOfDesktop() => Column(
-        children: [
-          _buildEvents(),
-        ],
-      );
+  Widget _buildAbout(bool showDonations) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CommunityHomeAboutSection(community: community),
+        SizedBox(height: 20),
+        _buildContactUsSection(showDonations),
+      ],
+    );
+  }
 
   Widget _buildEngagementButtons(bool showDonation) {
     return Align(
@@ -230,7 +203,9 @@ class _CommunityHomeState extends State<CommunityHome> {
       shareCallback: (ShareType type) {
         analytics.logEvent(
           AnalyticsPressShareCommunityLinkEvent(
-            communityId: community.id,
+            // Use a non-listening read: this runs from a tap handler, outside
+            // of build, where listening to the provider is not allowed.
+            communityId: CommunityProvider.read(context).community.id,
             shareType: type,
           ),
         );
@@ -241,6 +216,9 @@ class _CommunityHomeState extends State<CommunityHome> {
   Widget _buildEvents() {
     return CustomStreamBuilder<List<Event>>(
       entryFrom: '_CommunityHomeState._buildEvents',
+      loadingBuilder: (_) => const DelayedLoadingPlaceholder(
+        child: PulseLoadingPlaceholder(height: 220),
+      ),
       stream: Provider.of<CommunityHomeProvider>(context).eventsStream,
       errorMessage: 'Error loading events. Please refresh!',
       builder: (_, events) {
@@ -260,16 +238,6 @@ class _CommunityHomeState extends State<CommunityHome> {
         } else {
           return Column(
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: HeightConstrainedText(
-                  'Upcoming Events',
-                  style: AppTextStyle.headline4.copyWith(
-                    color: context.theme.colorScheme.secondary,
-                  ),
-                ),
-              ),
-              SizedBox(height: 10),
               for (var i = 0; i < min(events.length, _eventsToShow); i++) ...[
                 EventCard(events[i]),
                 SizedBox(height: 20),
@@ -330,22 +298,24 @@ class _CommunityHomeState extends State<CommunityHome> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (email != null && email.isNotEmpty) ...[
-          Text(
-            'Contact',
-            style: AppTextStyle.headline4
-                .copyWith(color: context.theme.colorScheme.secondary),
-          ),
+          SectionHeading('Contact'),
           SizedBox(height: 10),
           GestureDetector(
             onTap: () => url_launcher.launch('mailto:$email'),
             child: Text(
               email,
+              // Not colorScheme.secondary: Spaces can theme that to white,
+              // which left the address invisible against the page.
               style: AppTextStyle.bodyMedium
-                  .copyWith(color: context.theme.colorScheme.secondary),
+                  .copyWith(color: context.theme.colorScheme.onSurface),
             ),
           ),
-          SizedBox(height: 10),
+          SizedBox(height: 20),
         ],
+        // These are share targets, not ways to contact the Space -- they were
+        // previously unlabelled and read as part of the Contact block.
+        SectionHeading('Share'),
+        SizedBox(height: 10),
         Row(
           children: [
             _buildShare(),

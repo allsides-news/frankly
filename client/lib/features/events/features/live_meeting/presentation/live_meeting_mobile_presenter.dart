@@ -2,6 +2,7 @@ import 'package:client/core/utils/provider_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:client/features/chat/data/providers/chat_model.dart';
+import 'package:client/features/events/features/event_page/data/providers/event_permissions_provider.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
 import 'package:client/features/events/features/event_page/presentation/widgets/event_tabs.dart';
 import 'package:client/features/events/features/event_page/presentation/event_tabs_model.dart';
@@ -15,6 +16,7 @@ import 'package:client/core/data/services/responsive_layout_service.dart';
 import 'package:client/services.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/live_meetings/meeting_guide.dart';
+import 'package:client/core/utils/js_interop_bridge.dart';
 import 'package:provider/provider.dart';
 
 import 'views/live_meeting_mobile_contract.dart';
@@ -25,12 +27,13 @@ class LiveMeetingMobilePresenter {
   final LiveMeetingMobileModel _model;
   final ResponsiveLayoutService _responsiveLayoutService;
   final EventProvider _eventProvider;
+  final EventPermissionsProvider? _eventPermissions;
   final EventTabsControllerState _eventTabsControllerState;
   final ConferenceRoom? _conferenceRoom;
   final AgendaProvider _agendaProvider;
   final LiveMeetingProvider _liveMeetingProvider;
   final ChatModel? _chatModel;
-  final MeetingGuideCardStore _meetingGuideCardStore;
+  final MeetingGuideCardStore? _meetingGuideCardStore;
 
   LiveMeetingMobilePresenter(
     BuildContext context,
@@ -38,6 +41,7 @@ class LiveMeetingMobilePresenter {
     this._model, {
     ResponsiveLayoutService? responsiveLayoutService,
     EventProvider? eventProvider,
+    EventPermissionsProvider? eventPermissions,
     EventTabsControllerState? eventTabsControllerState,
     ConferenceRoom? conferenceRoom,
     ChatModel? chatModel,
@@ -47,6 +51,8 @@ class LiveMeetingMobilePresenter {
   })  : _responsiveLayoutService = responsiveLayoutService ??
             GetIt.instance<ResponsiveLayoutService>(),
         _eventProvider = eventProvider ?? context.read<EventProvider>(),
+        _eventPermissions =
+            eventPermissions ?? EventPermissionsProvider.read(context),
         _eventTabsControllerState = eventTabsControllerState ??
             context.read<EventTabsControllerState>(),
         _conferenceRoom = conferenceRoom ?? ConferenceRoom.read(context),
@@ -56,17 +62,29 @@ class LiveMeetingMobilePresenter {
             chatModel ?? providerOrNull(() => context.read<ChatModel>()),
         _agendaProvider = agendaProvider ?? context.read<AgendaProvider>(),
         _meetingGuideCardStore =
-            meetingGuideCardStore ?? context.read<MeetingGuideCardStore>();
+            meetingGuideCardStore ?? MeetingGuideCardStore.read(context);
 
   bool get canUserControlMeeting => _agendaProvider.canUserControlMeeting;
 
-  bool get isRaisedHandVisible =>
-      _conferenceRoom != null && _agendaProvider.currentAgendaItem != null;
+  // Not gated on there being a current agenda item: you may still want to be
+  // heard after the last one, and the button vanishing at that point read as
+  // a bug rather than a rule. Hand raises fall back to a meeting-wide scope
+  // so the button works wherever it's offered.
+  //
+  // Takes the room from the caller rather than the one captured when this
+  // presenter was built: that capture happens in initState, before the
+  // ConferenceRoom provider necessarily exists, and a stale null there hid
+  // the button from a bar that was otherwise fully rendered.
+  bool isRaisedHandVisible(BuildContext context) =>
+      ConferenceRoom.read(context) != null;
 
   bool isBottomSheetPresent() {
     switch (_model.bottomSheetState) {
       case LiveMeetingMobileBottomSheetState.fullyVisible:
       case LiveMeetingMobileBottomSheetState.partiallyVisible:
+      // A peeking panel still counts as present: its handle is on screen, so
+      // the bottom bar must not offer a button to reopen it.
+      case LiveMeetingMobileBottomSheetState.peek:
         return true;
       case LiveMeetingMobileBottomSheetState.hidden:
         return false;
@@ -75,21 +93,17 @@ class LiveMeetingMobilePresenter {
 
   Stream<List<ParticipantAgendaItemDetails>>?
       getParticipantAgendaItemDetailsStream() {
-    return _meetingGuideCardStore.participantAgendaItemDetailsStream;
+    return _meetingGuideCardStore?.participantAgendaItemDetailsStream;
   }
 
   bool isHandRaised() {
-    return _meetingGuideCardStore.getHandIsRaised(userService.currentUserId!);
+    return _meetingGuideCardStore
+            ?.getHandIsRaised(userService.currentUserId!) ??
+        false;
   }
 
-  Future<void> toggleHandRaise() async {
-    await firestoreMeetingGuideService.toggleHandRaise(
-      agendaItemId: _meetingGuideCardStore.meetingGuideCardAgendaItem?.id ?? '',
-      userId: userService.currentUserId!,
-      liveMeetingPath: _agendaProvider.liveMeetingPath,
-      isHandRaised: !isHandRaised(),
-    );
-  }
+  Future<void> toggleHandRaise() async =>
+      _meetingGuideCardStore?.toggleHandRaise();
 
   List<String> getPresentParticipantIds() {
     return _liveMeetingProvider.presentParticipantIds;
@@ -131,8 +145,16 @@ class LiveMeetingMobilePresenter {
   }
 
   bool isScreenShareEnabled() {
-    return false; //_eventProvider.event.eventSettings?.allowScreenshare == true;
+    return canInitiateScreenShare();
   }
+
+  bool canInitiateScreenShare() {
+    return _eventProvider.enableScreenshare &&
+        jsCanInitiateScreenShare() &&
+        (_eventPermissions?.canInitiateScreenShare ?? false);
+  }
+
+  AgoraParticipant? getScreenSharer() => _conferenceRoom?.screenSharer;
 
   Future<void> toggleScreenShare() async {
     await _conferenceRoom?.toggleScreenShare();
@@ -161,10 +183,11 @@ class LiveMeetingMobilePresenter {
   bool isReadyToAdvance(
     List<ParticipantAgendaItemDetails>? participantAgendaItemDetailsList,
   ) {
-    return _meetingGuideCardStore.isReadyToAdvance(
-      participantAgendaItemDetailsList,
-      userService.currentUserId,
-    );
+    return _meetingGuideCardStore?.isReadyToAdvance(
+          participantAgendaItemDetailsList,
+          userService.currentUserId,
+        ) ??
+        false;
   }
 
   int getTemplateIndex(List<AgendaItem> agendaItems, AgendaItem? currentItem) {
@@ -172,7 +195,7 @@ class LiveMeetingMobilePresenter {
   }
 
   AgendaItem? getCurrentAgendaItem() {
-    return _meetingGuideCardStore.meetingGuideCardAgendaItem;
+    return _meetingGuideCardStore?.meetingGuideCardAgendaItem;
   }
 
   List<AgendaItem> getAgendaItems() {
@@ -188,7 +211,7 @@ class LiveMeetingMobilePresenter {
   }
 
   String? getCurrentAgendaItemId() {
-    return _meetingGuideCardStore.currentAgendaModelItemId;
+    return _meetingGuideCardStore?.currentAgendaModelItemId;
   }
 
   bool isMeetingStarted() {
@@ -219,7 +242,8 @@ class LiveMeetingMobilePresenter {
   }
 
   void dismissFullBottomSheet() {
-    _model.bottomSheetState = LiveMeetingMobileBottomSheetState.hidden;
+    // Retracts to the handle rather than vanishing.
+    _model.bottomSheetState = LiveMeetingMobileBottomSheetState.peek;
     _view.updateView();
   }
 
@@ -239,6 +263,6 @@ class LiveMeetingMobilePresenter {
   }
 
   bool isCardPending() {
-    return _meetingGuideCardStore.meetingGuideCardIsPending;
+    return _meetingGuideCardStore?.meetingGuideCardIsPending ?? false;
   }
 }

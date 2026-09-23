@@ -60,10 +60,12 @@ class _CollapsibleBottomEventContentState
           behavior: HitTestBehavior.opaque,
           child: Container(
             alignment: Alignment.topCenter,
-            color: Theme.of(context).colorScheme.secondary,
+            color: Theme.of(context).colorScheme.primaryContainer,
             child: Icon(
               _isCollapsed ? Icons.expand_less : Icons.expand_more,
-              color: Theme.of(context).primaryColor,
+              // Pairs with the primaryContainer fill above; primaryColor
+              // was near-identical to it in light mode.
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
               size: 30,
             ),
           ),

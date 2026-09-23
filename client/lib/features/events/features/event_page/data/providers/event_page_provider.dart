@@ -11,14 +11,18 @@ import 'package:client/features/events/features/event_page/presentation/views/su
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/utils/visible_exception.dart';
+import 'package:client/core/utils/web_utils.dart';
 import 'package:client/core/widgets/confirm_dialog.dart';
 import 'package:client/core/widgets/navbar/nav_bar_provider.dart';
 import 'package:client/features/auth/presentation/views/sign_in_dialog.dart';
 import 'package:client/core/utils/firestore_utils.dart';
+import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/services.dart';
 import 'package:data_models/analytics/analytics_entities.dart';
 import 'package:data_models/events/event.dart';
+import 'package:data_models/events/pre_post_card.dart';
 import 'package:data_models/community/community_tag.dart';
+import 'package:data_models/events/live_meetings/live_meeting.dart';
 
 import '../../../../../../core/routing/locations.dart';
 
@@ -30,8 +34,13 @@ class JoinEventResults {
 }
 
 Future<bool> verifyAvailableForEvent(Event event) async {
-  final date = DateFormat('E, MMM d').format(event.scheduledTime!);
-  final time = DateFormat('h:mm a').format(event.scheduledTime!);
+  final scheduledTime = event.scheduledTime!;
+  final date = DateFormat('E, MMM d').format(scheduledTime);
+  final formattedTime = DateFormat('h:mm a').format(scheduledTime);
+  final timezone = getTimezoneAbbreviation(scheduledTime);
+  final time = timezone == null || timezone.isEmpty
+      ? formattedTime
+      : '$formattedTime $timezone';
 
   final cancel = await ConfirmDialog(
     title: appLocalizationService.getLocalization().confirm,
@@ -52,9 +61,10 @@ class EventPageProvider with ChangeNotifier {
   bool _cancelProcessed = false;
   bool _isEnteredMeeting = false;
   bool _isInstant = false;
+  bool _joinEventCFCalled = false;
 
-  late BehaviorSubjectWrapper<List<CommunityTag>> _tagsStream;
-  late StreamSubscription _tagListener;
+  BehaviorSubjectWrapper<List<CommunityTag>>? _tagsStream;
+  StreamSubscription? _tagListener;
 
   EventPageProvider({
     required this.eventProvider,
@@ -64,22 +74,40 @@ class EventPageProvider with ChangeNotifier {
   });
 
   bool get isEnteredMeeting => _isEnteredMeeting;
+
+  void leaveMeetingPrescreen() {
+    _isEnteredMeeting = false;
+    notifyListeners();
+  }
+
   bool get isInstant => _isInstant;
 
   List<CommunityTag> get tags =>
-      _tagsStream.stream.valueOrNull?.take(5).toList() ?? [];
+      _tagsStream?.stream.valueOrNull?.take(5).toList() ?? [];
 
+  /// Registers the current user for the event.
+  ///
+  /// [showBreakoutSurveyDialog] and [showPreEventCta] control whether the
+  /// smart-match survey dialog and the pre-event CTA dialog are shown as part
+  /// of joining. The enter-meeting flow passes false for both because
+  /// [enterMeeting] shows them itself (CTA first, then smart match), for
+  /// everyone entering - including owners and users who registered earlier.
   Future<JoinEventResults> joinEvent({
     bool showConfirm = true,
     bool joinCommunity = false,
     bool optInToNewsletters = false,
+    bool showBreakoutSurveyDialog = true,
+    bool showPreEventCta = true,
   }) async {
     final prePostEnabledFuture =
         eventProvider.communityProvider.prePostEnabled();
 
     final joinResults = await guardSignedIn<JoinEventResults>(() async {
           // Wait for self participant stream to load
-          await eventProvider.selfParticipantStream?.first;
+          final selfStream = eventProvider.selfParticipantStream;
+          if (selfStream != null) {
+            await firstEmittedOrNull(selfStream);
+          }
           if (eventProvider.isParticipant) {
             return JoinEventResults(isJoined: true);
           }
@@ -100,7 +128,8 @@ class EventPageProvider with ChangeNotifier {
           final hasSurveyQuestions = eventProvider
                   .event.breakoutRoomDefinition?.breakoutQuestions.isNotEmpty ??
               false;
-          final showSurveyDialog = hasSurveyQuestions &&
+          final showSurveyDialog = showBreakoutSurveyDialog &&
+              hasSurveyQuestions &&
               (!eventProvider.event.isHosted ||
                   eventProvider.allowPredefineBreakoutsOnHosted);
           SurveyDialogResult? surveyDialogResult;
@@ -130,6 +159,7 @@ class EventPageProvider with ChangeNotifier {
               eventId: eventProvider.eventId,
               templateId: eventProvider.templateId,
             ),
+            eventTitle: eventProvider.event.title,
           );
 
           if (joinCommunity) {
@@ -139,11 +169,19 @@ class EventPageProvider with ChangeNotifier {
             );
           }
 
-          unawaited(
-            swallowErrors(
-              () => cloudFunctionsEventService.joinEvent(eventProvider.event),
-            ),
-          );
+          if (!_joinEventCFCalled) {
+            _joinEventCFCalled = true;
+            unawaited(
+              cloudFunctionsEventService
+                  .joinEvent(eventProvider.event)
+                  .catchError((e) {
+                loggingService.log('Error calling joinEvent function: $e');
+                // Reset on failure so a transient error doesn't permanently
+                // block the confirmation email for this provider instance.
+                _joinEventCFCalled = false;
+              }),
+            );
+          }
           return JoinEventResults(
             isJoined: true,
             surveyQuestions: surveyDialogResult?.questions,
@@ -151,15 +189,22 @@ class EventPageProvider with ChangeNotifier {
         }) ??
         JoinEventResults(isJoined: false);
 
-    final prePostEnabled = await prePostEnabledFuture;
-    final preEventCardData = eventProvider.event.preEventCardData;
-    if (prePostEnabled && joinResults.isJoined && preEventCardData != null) {
-      if (preEventCardData.hasData) {
-        await PrePostEventDialogPage.show(
-          prePostCardData: preEventCardData,
-          event: eventProvider.event,
-        );
-      }
+    // A failure while showing the CTA dialog must not make a successful join
+    // look like a failed one, otherwise callers would bail out before
+    // entering the meeting even though the user is registered.
+    if (joinResults.isJoined && showPreEventCta) {
+      await swallowErrors(() async {
+        final prePostEnabled = await prePostEnabledFuture;
+        final preEventCardData = eventProvider.event.preEventCardData;
+        if (prePostEnabled && preEventCardData != null) {
+          if (preEventCardData.hasData) {
+            await PrePostEventDialogPage.show(
+              prePostCardData: preEventCardData,
+              event: eventProvider.event,
+            );
+          }
+        }
+      });
     }
 
     return joinResults;
@@ -171,7 +216,55 @@ class EventPageProvider with ChangeNotifier {
       throw VisibleException('This event has ended. You cannot enter it.');
     }
 
-    final participant = await eventProvider.selfParticipantStream!.first;
+    final selfStream = eventProvider.selfParticipantStream;
+    if (selfStream == null) {
+      throw VisibleException(
+        'Cannot enter this event yet. Sign in may still be loading—please wait '
+        'a moment and try again, or refresh the page.',
+      );
+    }
+    // Do not use .first alone: BehaviorSubject replays the last value immediately, so
+    // right after joinEvent() the cache can still be pre-join until Firestore updates.
+    final Participant participant;
+    try {
+      participant = await selfStream
+          .where((p) => p.status == ParticipantStatus.active)
+          .first
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      throw VisibleException(
+        'Could not confirm your registration in time. Please wait a moment and try again, or refresh the page.',
+      );
+    }
+
+    // Require answering the pre-event CTA survey before entering. This runs
+    // for everyone entering the meeting - including event owners and users
+    // who registered earlier - and is skipped once answers are recorded.
+    // Deliberately fail-open (swallowErrors logs the error): the survey is
+    // required when systems work, but a failing flag/response lookup or
+    // dialog must never block participants from entering the meeting itself.
+    await swallowErrors(() async {
+      final preEventCardData = eventProvider.event.preEventCardData;
+      if (preEventCardData == null || !preEventCardData.hasSurveyQuestions) {
+        return;
+      }
+
+      final prePostEnabled =
+          await eventProvider.communityProvider.prePostEnabled();
+      if (!prePostEnabled) return;
+
+      final hasAnswered = await firestoreEventService.hasPrePostSurveyResponse(
+        event: eventProvider.event,
+        prePostCardType: PrePostCardType.preEvent,
+      );
+      if (hasAnswered) return;
+
+      await PrePostEventDialogPage.show(
+        prePostCardData: preEventCardData,
+        event: eventProvider.event,
+      );
+    });
+
     final participantAnswers =
         surveyQuestions ?? participant.breakoutRoomSurveyQuestions;
     final currentSurveyQuestions =
@@ -233,12 +326,33 @@ class EventPageProvider with ChangeNotifier {
             'joined') {
       unawaited(
         Future.microtask(() async {
-          // Wait to load if the user is a participant or not and only enter the meeting if so.
-          await eventProvider.selfParticipantStream?.first;
-          if (eventProvider.isParticipant) {
-            _isInstant = true;
+          // enterMeeting reads eventProvider.event; the first Firestore
+          // snapshot may not have arrived yet when this microtask runs.
+          final loaded = await firstEmittedOrNull(eventProvider.eventStream);
+          if (loaded == null) return;
+          final stream = eventProvider.selfParticipantStream;
+          if (stream == null) return;
+          await firstEmittedOrNull(stream);
+          if (!eventProvider.isParticipant) return;
+          _isInstant = true;
+          try {
             await enterMeeting();
+          } on VisibleException catch (e) {
+            loggingService.log('enterMeeting after status=joined: ${e.msg}');
+          } catch (e, stackTrace) {
+            loggingService.log(
+              'enterMeeting after status=joined failed',
+              logType: LogType.error,
+              error: e,
+              stackTrace: stackTrace,
+            );
           }
+        }),
+      );
+    } else if (userService.isSignedIn) {
+      unawaited(
+        Future.microtask(() async {
+          await _checkAndRejoinBreakoutRoom();
         }),
       );
     }
@@ -261,9 +375,94 @@ class EventPageProvider with ChangeNotifier {
         taggedItemType: TaggedItemType.template,
       ),
     );
-    _tagListener = _tagsStream.stream.listen((tags) {
-      notifyListeners();
-    });
+    _tagListener = _tagsStream?.stream.listen(
+      (tags) {
+        notifyListeners();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        logStreamErrorUnlessPermissionDenied(
+          'EventPageProvider tags stream error',
+          error,
+          stackTrace,
+        );
+        notifyListeners();
+      },
+    );
+  }
+
+  Future<void> _checkAndRejoinBreakoutRoom() async {
+    final storedEventId = sharedPreferencesService.getActiveBreakoutEventId();
+    final storedRoomId = sharedPreferencesService.getActiveBreakoutRoomId();
+    final storedSessionId =
+        sharedPreferencesService.getActiveBreakoutSessionId();
+
+    if (storedEventId == null ||
+        storedRoomId == null ||
+        storedSessionId == null) {
+      return;
+    }
+
+    // This runs from a microtask in initialize(), before the event stream's
+    // first Firestore snapshot arrives — reading eventProvider.event here
+    // throws. Await the first snapshot instead.
+    Event event;
+    try {
+      final loaded = await firstEmittedOrNull(eventProvider.eventStream);
+      if (loaded == null) return;
+      event = loaded;
+    } catch (e) {
+      loggingService.log('Error awaiting event for breakout rejoin', error: e);
+      return;
+    }
+    if (storedEventId != event.id) {
+      return;
+    }
+
+    final selfParticipantStream = eventProvider.selfParticipantStream;
+    if (selfParticipantStream == null) {
+      return;
+    }
+
+    await selfParticipantStream.first;
+    if (!eventProvider.isParticipant) {
+      await sharedPreferencesService.clearActiveBreakoutRoomInfo();
+      return;
+    }
+
+    final liveMeetingStream = firestoreLiveMeetingService.liveMeetingStream(
+      parentDoc: event.fullPath,
+      id: event.id,
+    );
+
+    try {
+      final liveMeeting = await liveMeetingStream.stream.first;
+      final currentBreakoutSession = liveMeeting.currentBreakoutSession;
+
+      if (currentBreakoutSession == null ||
+          currentBreakoutSession.breakoutRoomSessionId != storedSessionId ||
+          currentBreakoutSession.breakoutRoomStatus !=
+              BreakoutRoomStatus.active) {
+        await sharedPreferencesService.clearActiveBreakoutRoomInfo();
+        return;
+      }
+
+      final confirmed = await ConfirmDialog(
+        title: 'Rejoin Breakout Room?',
+        mainText:
+            'You were previously in a breakout room. Would you like to rejoin your conversation?',
+        confirmText: 'Rejoin',
+        cancelText: 'Stay in waiting room',
+      ).show();
+
+      if (confirmed) {
+        _isInstant = true;
+        await enterMeeting();
+      } else {
+        await sharedPreferencesService.clearActiveBreakoutRoomInfo();
+      }
+    } finally {
+      await liveMeetingStream.dispose();
+    }
   }
 
   Future<void> _setupTest(String email) async {
@@ -312,8 +511,13 @@ class EventPageProvider with ChangeNotifier {
 
     Event event;
     try {
-      event = await eventProvider.eventStream.first;
-      await eventProvider.selfParticipantStream!.first;
+      final loaded = await firstEmittedOrNull(eventProvider.eventStream);
+      if (loaded == null) return;
+      event = loaded;
+      final selfStream = eventProvider.selfParticipantStream;
+      if (selfStream != null) {
+        await firstEmittedOrNull(selfStream);
+      }
     } catch (e) {
       loggingService.log('Error during cancel param processing', error: e);
       return;
@@ -344,8 +548,8 @@ class EventPageProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _tagListener.cancel();
-    _tagsStream.dispose();
+    _tagListener?.cancel();
+    _tagsStream?.dispose();
     super.dispose();
   }
 }

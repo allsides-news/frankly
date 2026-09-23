@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:data_models/utils/event_slug.dart';
+
 import 'package:beamer/beamer.dart';
 import 'package:client/core/utils/provider_utils.dart';
 import 'package:client/core/utils/random_utils.dart';
@@ -33,7 +35,6 @@ import 'package:data_models/events/event_proposal.dart';
 import 'package:data_models/events/live_meetings/live_meeting.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
-import 'package:universal_html/js_util.dart';
 import 'package:client/core/localization/localization_helper.dart';
 
 abstract class MeetingProviderParticipant {
@@ -86,6 +87,12 @@ class LiveMeetingProvider with ChangeNotifier {
   bool _leftMeeting = false;
   bool _userLeftBreakouts = false;
   String? _activeBreakoutRoomId;
+
+  /// When true the heartbeat writes null for currentBreakoutRoomId instead of
+  /// reading the Firestore stream value, preventing a timer-race where a
+  /// stale roomId from the stream re-creates the ghost-participant state during
+  /// the window between a rollback write and its reflection in the stream.
+  bool _pendingPresenceRollback = false;
   String? _breakoutRoomOverride;
 
   /// Holds a reference to the current breakout room join info
@@ -99,7 +106,7 @@ class LiveMeetingProvider with ChangeNotifier {
 
   final Set<String> _handledBreakoutSessionIds = {};
 
-  late BehaviorSubjectWrapper<LiveMeeting> _liveMeetingStream;
+  BehaviorSubjectWrapper<LiveMeeting>? _liveMeetingStream;
   BehaviorSubjectWrapper<LiveMeeting>? _breakoutLiveMeetingStream;
 
   /// Used to detect changes in the main live meeting object
@@ -112,12 +119,14 @@ class LiveMeetingProvider with ChangeNotifier {
 
   ConferenceRoom? _conferenceRoom;
 
-  late StreamSubscription _liveMeetingSubscription;
+  StreamSubscription? _liveMeetingSubscription;
   StreamSubscription? _selfParticipantSubscription;
   StreamSubscription? _assignedBreakoutRoomsStreamSubscription;
 
   StreamSubscription? _breakoutLiveMeetingSubscription;
-  late StreamSubscription _onUnloadSubscription;
+  StreamSubscription? _onUnloadSubscription;
+  StreamSubscription? _eventStreamInitSubscription;
+  bool _didCompleteInitialize = false;
 
   Timer? _scheduledStartTimer;
   Timer? _meetingStartTimer;
@@ -137,6 +146,13 @@ class LiveMeetingProvider with ChangeNotifier {
   /// Mark that the user has dismissed the waiting room notification
   void markWaitingRoomNotificationDismissed() {
     _waitingRoomNotificationService?.markNotificationDismissed();
+  }
+
+  /// Called when a competing persistent toast (e.g. a kick notification) is
+  /// dismissed. Resets the waiting-room notification state and re-subscribes
+  /// so a fresh notification fires immediately if anyone is still waiting.
+  void onKickNotificationDismissed() {
+    _waitingRoomNotificationService?.resetAndRestart();
   }
 
   bool get clickedEnterMeeting => _clickedEnterMeeting;
@@ -185,12 +201,12 @@ class LiveMeetingProvider with ChangeNotifier {
   List<MeetingProviderParticipant>? get meetingProviderParticipants =>
       _meetingProviderParticipants;
 
-  Stream<LiveMeeting>? get liveMeetingStream => _liveMeetingStream.stream;
+  Stream<LiveMeeting>? get liveMeetingStream => _liveMeetingStream?.stream;
 
   Stream<LiveMeeting>? get breakoutRoomLiveMeetingStream =>
       _breakoutLiveMeetingStream?.stream;
 
-  LiveMeeting? get liveMeeting => _liveMeetingStream.stream.valueOrNull;
+  LiveMeeting? get liveMeeting => _liveMeetingStream?.stream.valueOrNull;
 
   LiveMeeting? get breakoutRoomLiveMeeting =>
       _breakoutLiveMeetingStream?.stream.valueOrNull;
@@ -231,6 +247,11 @@ class LiveMeetingProvider with ChangeNotifier {
 
   String? get assignedBreakoutRoomId =>
       _assignedBreakoutRoomStream?.stream.valueOrNull?.firstOrNull?.roomId;
+
+  /// The breakout room currently being joined (set by getBreakoutRoomFuture,
+  /// cleared by getMeetingJoinInfo and leaveBreakoutRoom). Null when joining
+  /// the main meeting, so callers can use this to guard breakout-only logic.
+  String? get activeBreakoutRoomId => _activeBreakoutRoomId;
 
   bool get assignedBreakoutRoomIsLoading =>
       _assignedBreakoutRoomStream?.stream.valueOrNull == null;
@@ -329,66 +350,135 @@ class LiveMeetingProvider with ChangeNotifier {
 
   void initialize() {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      if (_leftMeeting) return;
       updateQueryParameterToJoinEvent();
     });
+
+    shouldStartLocalAudioOn = audioDefaultOn;
+    shouldStartLocalVideoOn = videoDefaultOn;
+    canAutoplayLookupFuture = _checkIfCanAutoplay();
+
+    final event = eventProvider.eventOrNull;
+    if (event == null) {
+      _eventStreamInitSubscription = eventProvider.eventStream.listen(
+        (loaded) {
+          _eventStreamInitSubscription?.cancel();
+          _eventStreamInitSubscription = null;
+          if (_leftMeeting) return;
+          _completeInitialize(loaded);
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          logStreamErrorUnlessPermissionDenied(
+            'LiveMeetingProvider waiting for event',
+            error,
+            stackTrace,
+          );
+        },
+      );
+      return;
+    }
+
+    _completeInitialize(event);
+  }
+
+  void _completeInitialize(Event event) {
+    if (_didCompleteInitialize) return;
+    _didCompleteInitialize = true;
 
     _liveMeetingViewType = eventProvider.defaultStageView
         ? LiveMeetingViewType.stage
         : LiveMeetingViewType.bradyBunch;
 
-    shouldStartLocalAudioOn = audioDefaultOn;
-    shouldStartLocalVideoOn = videoDefaultOn;
-
     _resetAudioVideoOn();
 
     _liveMeetingStream = firestoreLiveMeetingService.liveMeetingStream(
-      parentDoc: eventPath,
-      id: eventProvider.event.id,
+      parentDoc: event.fullPath,
+      id: event.id,
     );
 
-    _liveMeetingSubscription =
-        _liveMeetingStream.stream.listen(_onLiveMeetingChange);
-    _selfParticipantSubscription =
-        eventProvider.selfParticipantStream?.listen((currentParticipant) {
-      if (currentParticipant.status == ParticipantStatus.banned) {
-        leaveMeeting();
-      }
+    _liveMeetingSubscription = _liveMeetingStream!.stream.listen(
+      _onLiveMeetingChange,
+      onError: (Object error, StackTrace stackTrace) {
+        logStreamErrorUnlessPermissionDenied(
+          'LiveMeetingProvider live meeting stream error',
+          error,
+          stackTrace,
+        );
+      },
+    );
+    _selfParticipantSubscription = eventProvider.selfParticipantStream?.listen(
+      (currentParticipant) {
+        if (currentParticipant.status == ParticipantStatus.banned) {
+          leaveMeeting();
+        }
 
-      if (currentParticipant.muteOverride &&
-          (conferenceRoom?.audioEnabled ?? false)) {
-        conferenceRoom?.toggleAudioEnabled(setEnabled: false);
-        showToast('You have been muted by the host.');
-      }
+        if (currentParticipant.muteOverride &&
+            (conferenceRoom?.audioEnabled ?? false)) {
+          conferenceRoom?.toggleAudioEnabled(setEnabled: false);
+          showToast('You have been muted by the host.');
+        }
 
-      _checkShowBreakoutDialog();
-    });
+        _checkShowBreakoutDialog();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        logStreamErrorUnlessPermissionDenied(
+          'LiveMeetingProvider self-participant stream error',
+          error,
+          stackTrace,
+        );
+      },
+    );
 
     firestoreLiveMeetingService.updateMeetingPresence(
-      event: eventProvider.event,
+      event: event,
       isPresent: true,
     );
 
-    _onUnloadSubscription = html.window.onBeforeUnload.listen((event) {
+    _onUnloadSubscription = html.window.onBeforeUnload.listen((_) {
+      final current = eventProvider.eventOrNull;
+      if (current == null) return;
       firestoreLiveMeetingService.updateMeetingPresence(
-        event: eventProvider.event,
+        event: current,
         isPresent: false,
       );
     });
 
     _updateTimersBeforeStart();
-    canAutoplayLookupFuture = _checkIfCanAutoplay();
 
     // Update presence every 5 seconds to ensure accurate participant counts
     // This is required for the UpdateLiveStreamParticipantCount Cloud Function
     // which looks for participants updated in the last ~19 seconds
     _presenceUpdater = Timer.periodic(Duration(seconds: 5), (_) {
-      // Use the current breakout room ID from the participant data, not the internal state
-      // This prevents flashing caused by inconsistent state updates
-      final currentBreakoutRoomId =
-          eventProvider.selfParticipant?.currentBreakoutRoomId;
+      String? currentBreakoutRoomId;
 
+      if (_pendingPresenceRollback) {
+        // A failed Agora join is rolling back an optimistic presence write.
+        // Force null so the heartbeat does not re-write the stale roomId
+        // before the Firestore stream reflects the rollback — closing the
+        // timer-race window described in rollbackBreakoutRoomPresence().
+        currentBreakoutRoomId = null;
+        // Clear the flag only once the Firestore stream has loaded AND
+        // confirmed the rollback. selfParticipant itself can be null on
+        // first load or during a network hiccup — treating that null as
+        // "rollback confirmed" would prematurely remove the race guard.
+        final participant = eventProvider.selfParticipant;
+        if (participant != null &&
+            (participant.currentBreakoutRoomId == null ||
+                participant.currentBreakoutRoomId!.isEmpty)) {
+          _pendingPresenceRollback = false;
+        }
+      } else {
+        // Use the current breakout room ID from the participant data, not the
+        // internal state — this prevents flashing caused by inconsistent state
+        // updates during normal room transitions.
+        currentBreakoutRoomId =
+            eventProvider.selfParticipant?.currentBreakoutRoomId;
+      }
+
+      final current = eventProvider.eventOrNull;
+      if (current == null) return;
       firestoreLiveMeetingService.updateMeetingPresence(
-        event: eventProvider.event,
+        event: current,
         currentBreakoutRoomId: currentBreakoutRoomId,
         isPresent: true,
       );
@@ -397,10 +487,12 @@ class LiveMeetingProvider with ChangeNotifier {
     // Check every 10 seconds if the event has ended
     // If so, automatically end the meeting for this participant
     _eventEndChecker = Timer.periodic(Duration(seconds: 10), (_) async {
-      final event = eventProvider.event;
-      if (event.hasEnded(clockService.now()) && !_leftMeeting) {
+      final current = eventProvider.eventOrNull;
+      if (current == null) return;
+      if ((current.hasEnded(clockService.now()) || current.isEnded) &&
+          !_leftMeeting) {
         loggingService.log(
-          'Event has ended (time is up). Automatically ending meeting and showing post-event flow.',
+          'Event has ended (time is up or host ended). Automatically ending meeting and showing post-event flow.',
         );
         await leaveMeeting();
       }
@@ -436,6 +528,60 @@ class LiveMeetingProvider with ChangeNotifier {
       getCurrentBreakoutSessionId: () =>
           liveMeeting?.currentBreakoutSession?.breakoutRoomSessionId,
     );
+
+    unawaited(_checkAndAutoRejoinBreakoutRoom());
+    // initialize() is called from MeetingDialog.initState, which runs during
+    // this provider's first build. A sync notify marks the InheritedProvider
+    // dirty mid-mount (debug `!_dirty`).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_leftMeeting) return;
+      notifyListeners();
+    });
+  }
+
+  Future<void> _checkAndAutoRejoinBreakoutRoom() async {
+    final storedEventId = sharedPreferencesService.getActiveBreakoutEventId();
+    final storedRoomId = sharedPreferencesService.getActiveBreakoutRoomId();
+    final storedSessionId =
+        sharedPreferencesService.getActiveBreakoutSessionId();
+
+    if (storedEventId == null ||
+        storedRoomId == null ||
+        storedSessionId == null) {
+      return;
+    }
+
+    // Unawaited from initialize() — the event stream may not have emitted
+    // yet, and reading eventProvider.event before then throws.
+    Event event;
+    try {
+      event = await eventProvider.eventStream.first;
+    } catch (e) {
+      loggingService.log('Error awaiting event for breakout rejoin', error: e);
+      return;
+    }
+    if (storedEventId != event.id) {
+      return;
+    }
+
+    final liveMeetingStream = _liveMeetingStream;
+    if (liveMeetingStream == null) return;
+    await liveMeetingStream.stream.first;
+    final currentBreakoutSession = liveMeeting?.currentBreakoutSession;
+
+    if (currentBreakoutSession == null ||
+        currentBreakoutSession.breakoutRoomSessionId != storedSessionId ||
+        currentBreakoutSession.breakoutRoomStatus !=
+            BreakoutRoomStatus.active) {
+      await sharedPreferencesService.clearActiveBreakoutRoomInfo();
+      return;
+    }
+
+    _breakoutRoomOverride = storedRoomId;
+    loggingService.log(
+      'Auto-rejoining breakout room: $storedRoomId from session: $storedSessionId',
+    );
+    notifyListeners();
   }
 
   /// Set the context for breakout room help notifications
@@ -445,7 +591,7 @@ class LiveMeetingProvider with ChangeNotifier {
   }
 
   Future<bool> _checkIfCanAutoplay() async {
-    final canAutoplay = await promiseToFuture(checkCanAutoplay()) as bool;
+    final canAutoplay = await checkCanAutoplayFuture();
     if (canAutoplay) {
       clickedEnterMeeting = true;
     }
@@ -505,10 +651,11 @@ class LiveMeetingProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _liveMeetingSubscription.cancel();
+    _eventStreamInitSubscription?.cancel();
+    _liveMeetingSubscription?.cancel();
     _selfParticipantSubscription?.cancel();
     _breakoutLiveMeetingSubscription?.cancel();
-    _onUnloadSubscription.cancel();
+    _onUnloadSubscription?.cancel();
     _assignedBreakoutRoomsStreamSubscription?.cancel();
 
     _presenceUpdater?.cancel();
@@ -524,13 +671,16 @@ class LiveMeetingProvider with ChangeNotifier {
     _waitingRoomNotificationService?.stopMonitoring();
     _breakoutRoomHelpNotificationService?.stopMonitoring();
 
-    firestoreLiveMeetingService.updateMeetingPresence(
-      event: eventProvider.event,
-      isPresent: false,
-    );
+    final event = eventProvider.eventOrNull;
+    if (event != null) {
+      firestoreLiveMeetingService.updateMeetingPresence(
+        event: event,
+        isPresent: false,
+      );
+    }
 
     Future.microtask(() => navBarProvider.resetHideNav());
-    _liveMeetingStream.dispose();
+    _liveMeetingStream?.dispose();
     _breakoutLiveMeetingStream?.dispose();
     _assignedBreakoutRoomStream?.dispose();
 
@@ -543,7 +693,7 @@ class LiveMeetingProvider with ChangeNotifier {
     _checkLoadBreakoutsStream(liveMeeting);
 
     if (!breakoutsActive && !isNullOrEmpty(_activeBreakoutRoomId)) {
-      leaveBreakoutRoom();
+      unawaited(leaveBreakoutRoom());
       _userLeftBreakouts = false;
     }
 
@@ -580,6 +730,11 @@ class LiveMeetingProvider with ChangeNotifier {
       ConfirmDialog.confirmDialogDismisser.dismiss();
     }
 
+    if (liveMeeting.currentBreakoutSession == null &&
+        _previousLiveMeeting?.currentBreakoutSession != null) {
+      unawaited(sharedPreferencesService.clearActiveBreakoutRoomInfo());
+    }
+
     if (liveMeeting.currentBreakoutSession?.breakoutRoomStatus ==
             BreakoutRoomStatus.active &&
         liveMeeting.currentBreakoutSession?.breakoutRoomSessionId !=
@@ -597,10 +752,19 @@ class LiveMeetingProvider with ChangeNotifier {
       );
       _assignedBreakoutRoomsStreamSubscription?.cancel();
       _assignedBreakoutRoomsStreamSubscription =
-          _assignedBreakoutRoomStream?.stream.listen((assignedBreakoutRooms) {
-        loggingService.log('Assigned breakout room: $assignedBreakoutRooms');
-        notifyListeners();
-      });
+          _assignedBreakoutRoomStream?.stream.listen(
+        (assignedBreakoutRooms) {
+          loggingService.log('Assigned breakout room: $assignedBreakoutRooms');
+          notifyListeners();
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          logStreamErrorUnlessPermissionDenied(
+            'LiveMeetingProvider assigned breakout rooms stream error',
+            error,
+            stackTrace,
+          );
+        },
+      );
 
       // Restart waiting room notification monitoring now that breakouts are active
       _waitingRoomNotificationService?.restartMonitoring();
@@ -742,6 +906,28 @@ class LiveMeetingProvider with ChangeNotifier {
     );
   }
 
+  /// Fresh join info (and therefore a fresh Agora token) for the room the
+  /// user is currently in. Used for token renewal mid-meeting: bypasses
+  /// [_activeRoomJoinInfoFuture] and — unlike [getMeetingJoinInfo] /
+  /// [getBreakoutRoomFuture] — mutates no join state.
+  Future<GetMeetingJoinInfoResponse> fetchFreshJoinInfoForCurrentRoom() {
+    final breakoutRoomId = _activeBreakoutRoomId;
+    if (breakoutRoomId != null) {
+      return cloudFunctionsLiveMeetingService.getBreakoutRoomJoinInfo(
+        GetBreakoutRoomJoinInfoRequest(
+          eventId: eventProvider.event.id,
+          eventPath: eventProvider.event.fullPath,
+          breakoutRoomId: breakoutRoomId,
+          enableAudio: shouldStartLocalAudioOn,
+          enableVideo: shouldStartLocalVideoOn,
+        ),
+      );
+    }
+    return cloudFunctionsLiveMeetingService.getMeetingJoinInfo(
+      GetMeetingJoinInfoRequest(eventPath: eventPath),
+    );
+  }
+
   Future<BreakoutRoom> reassignBreakoutRoom({
     required String userId,
     String? newRoomNumber,
@@ -758,45 +944,72 @@ class LiveMeetingProvider with ChangeNotifier {
     );
   }
 
+  /// Shows the post-event CTA dialog (including its survey questions) if
+  /// configured, and triggers the post-event email when applicable.
+  Future<void> _showPostEventCard() async {
+    // Ousted participants must not be prompted with the post-event survey.
+    if (eventProvider.isBanned) return;
+
+    final prePostEnabled = await communityProvider.prePostEnabled();
+    final postEventCardData = eventProvider.event.postEventCardData;
+    if (!prePostEnabled || postEventCardData == null) return;
+
+    final timeNow = clockService.now();
+    final event = eventProvider.event;
+    if (timeNow.difference(event.scheduledTime ?? timeNow).inMinutes >
+        _postEventEmailThresholdInMinutes) {
+      unawaited(
+        cloudFunctionsEventService.eventEnded(
+          EventEndedRequest(eventPath: eventPath),
+        ),
+      );
+    }
+
+    if (postEventCardData.hasData) {
+      await PrePostEventDialogPage.show(
+        prePostCardData: postEventCardData,
+        event: eventProvider.event,
+      );
+    }
+  }
+
+  /// Shows the 5-star rating dialog unless the participant was ousted or the
+  /// meeting never actually started.
+  Future<void> _showMeetingRatingDialog() async {
+    // Ousted participants must not see the rating screen.
+    if (eventProvider.isBanned) return;
+    if (!isMeetingStarted && !eventProvider.isLiveStream) return;
+
+    await MeetingRating().showInDialog(
+      eventProvider: eventProvider,
+      liveMeetingProvider: this,
+      communityProvider: communityProvider,
+    );
+  }
+
   Future<void> leaveMeeting() async {
     if (_leftMeeting) return;
 
     _leftMeeting = true;
+    await sharedPreferencesService.clearActiveBreakoutRoomInfo();
     notifyListeners();
 
     final localOnLeave = onLeave;
     if (localOnLeave != null) {
+      // The event page flow provides [onLeave] to return to the event page.
+      // Show the post-event CTA and rating prompt before handing control
+      // back, otherwise they would never be shown for meetings entered
+      // through the event page. Each is error-swallowed independently so a
+      // failure in one doesn't suppress the other or block leaving.
+      await swallowErrors(() => _showPostEventCard());
+      await swallowErrors(() => _showMeetingRatingDialog());
       localOnLeave();
     } else {
       final community = communityProvider.community;
 
-      final donationsEnabledFuture = communityProvider.donationsEnabled();
-      final prePostEnabledFuture = communityProvider.prePostEnabled();
-      final donationsEnabled = await donationsEnabledFuture;
-      final prePostEnabled = await prePostEnabledFuture;
+      final donationsEnabled = await communityProvider.donationsEnabled();
 
-      final postEventCardData = eventProvider.event.postEventCardData;
-
-      final timeNow = clockService.now();
-      final event = eventProvider.event;
-
-      if (prePostEnabled && postEventCardData != null) {
-        if (timeNow.difference(event.scheduledTime ?? timeNow).inMinutes >
-            _postEventEmailThresholdInMinutes) {
-          unawaited(
-            cloudFunctionsEventService.eventEnded(
-              EventEndedRequest(eventPath: eventPath),
-            ),
-          );
-        }
-
-        if (postEventCardData.hasData) {
-          await PrePostEventDialogPage.show(
-            prePostCardData: postEventCardData,
-            event: eventProvider.event,
-          );
-        }
-      }
+      await _showPostEventCard();
 
       if (donationsEnabled &&
           (isMeetingStarted ||
@@ -809,13 +1022,7 @@ class LiveMeetingProvider with ChangeNotifier {
         ).show();
       }
 
-      if (isMeetingStarted || eventProvider.isLiveStream) {
-        await MeetingRating().showInDialog(
-          eventProvider: eventProvider,
-          liveMeetingProvider: this,
-          communityProvider: communityProvider,
-        );
-      }
+      await _showMeetingRatingDialog();
 
       // We want to share community home page instead of event page.
       final pathToPage = '/space/${communityProvider.communityId}';
@@ -834,8 +1041,9 @@ class LiveMeetingProvider with ChangeNotifier {
       );
 
       // Build event page URL with CTAs tab parameter
+      final eventSlug = eventTitleToSlug(eventProvider.event.title);
       final eventPagePath =
-          '/space/${communityProvider.displayId}/discuss/${eventProvider.event.templateId}/${eventProvider.event.id}';
+          '/space/${communityProvider.displayId}/discuss/$eventSlug/${eventProvider.event.templateId}/${eventProvider.event.id}';
       final hasPostEventData =
           eventProvider.event.postEventCardData?.hasData ?? false;
       final urlWithTab =
@@ -849,6 +1057,7 @@ class LiveMeetingProvider with ChangeNotifier {
   void enterBreakoutRoom({String? roomId}) {
     _userLeftBreakouts = false;
     if (roomId != null) {
+      _resetAudioVideoOn();
       _breakoutRoomOverride = roomId;
       _activeRoomJoinInfoFuture = null;
       _loadBreakoutLiveMeetingStream(roomId);
@@ -857,24 +1066,75 @@ class LiveMeetingProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void leaveBreakoutRoom() {
+  Future<void> leaveBreakoutRoom() async {
     _userLeftBreakouts = true;
 
     _activeBreakoutRoomId = null;
     _breakoutRoomOverride = null;
     _activeRoomJoinInfoFuture = null;
 
-    _breakoutLiveMeetingStream?.dispose();
+    // Clear any pending rollback — this method issues its own authoritative
+    // null presence write below, so the rollback guard is no longer needed.
+    // Without this, if the host ends breakouts immediately after a failed
+    // join, the flag would linger until the stream confirms null.
+    _pendingPresenceRollback = false;
+
+    unawaited(_breakoutLiveMeetingStream?.dispose() ?? Future.value());
     _breakoutLiveMeetingStream = null;
 
-    firestoreLiveMeetingService.updateMeetingPresence(
+    // Awaited so the null-currentBreakoutRoomId write settles before any
+    // subsequent write (e.g. joining the waiting room) can overwrite it,
+    // preventing a race where the null arrives after the waiting-room entry.
+    await firestoreLiveMeetingService.updateMeetingPresence(
       event: eventProvider.event,
       isPresent: true,
     );
 
+    unawaited(sharedPreferencesService.clearActiveBreakoutRoomInfo());
+
     _resetAudioVideoOn();
 
     notifyListeners();
+  }
+
+  /// Called when an Agora channel join succeeds. Clears any pending presence
+  /// rollback flag that a stale errJoinChannelRejected (fired asynchronously
+  /// by the SDK for a prior failed attempt to the same channel) may have set
+  /// after getBreakoutRoomFuture() already reset it. Without this, the
+  /// heartbeat would perpetually write null for currentBreakoutRoomId and make
+  /// the user permanently invisible in breakoutRoomParticipantsStream despite
+  /// a successful connection.
+  void clearPresenceRollback() {
+    _pendingPresenceRollback = false;
+  }
+
+  /// Called when an Agora channel join fails after getBreakoutRoomFuture has
+  /// already written an optimistic presence record (isPresent:true,
+  /// currentBreakoutRoomId:roomId). Clears both the in-memory flag that guards
+  /// the heartbeat timer AND fires an immediate Firestore write so the user
+  /// disappears from breakoutRoomParticipantsStream.
+  ///
+  /// Why isPresent:true is correct: initialize() unconditionally writes
+  /// isPresent:true on every page load before any breakout join is possible,
+  /// so we only need to clear currentBreakoutRoomId, not change isPresent.
+  ///
+  /// The _pendingPresenceRollback flag prevents a timer race: without it, the
+  /// 5-second heartbeat could read the stale roomId from the Firestore stream
+  /// (before the rollback write is reflected) and re-write the ghost state.
+  void rollbackBreakoutRoomPresence() {
+    _pendingPresenceRollback = true;
+    unawaited(
+      firestoreLiveMeetingService
+          .updateMeetingPresence(
+        event: eventProvider.event,
+        isPresent: true,
+        // null currentBreakoutRoomId clears the field
+      )
+          .catchError((Object e) {
+        loggingService
+            .log('Presence rollback failed after Agora join error: $e');
+      }),
+    );
   }
 
   void setMeetingProviderParticipants(
@@ -917,8 +1177,16 @@ class LiveMeetingProvider with ChangeNotifier {
       parentDoc: parentPath,
       id: roomId,
     );
-    _breakoutLiveMeetingSubscription =
-        _breakoutLiveMeetingStream?.listen((_) => notifyListeners());
+    _breakoutLiveMeetingSubscription = _breakoutLiveMeetingStream?.listen(
+      (_) => notifyListeners(),
+      onError: (Object error, StackTrace stackTrace) {
+        logStreamErrorUnlessPermissionDenied(
+          'LiveMeetingProvider breakout live meeting stream error',
+          error,
+          stackTrace,
+        );
+      },
+    );
   }
 
   Future<GetMeetingJoinInfoResponse> getBreakoutRoomFuture({
@@ -926,6 +1194,19 @@ class LiveMeetingProvider with ChangeNotifier {
   }) async {
     _activeBreakoutRoomId = roomId;
     _activeRoomJoinInfoFuture = null;
+
+    // Clear any pending rollback from a prior failed join attempt so the
+    // heartbeat resumes normal stream-based presence writes for this new
+    // attempt. Without this, a successful retry after a failure would leave
+    // _pendingPresenceRollback=true indefinitely: the stream would reflect
+    // the new roomId (never null), so the heartbeat's clearing condition
+    // never fires, and it would write null on every tick — making the user
+    // permanently invisible in breakoutRoomParticipantsStream.
+    _pendingPresenceRollback = false;
+
+    // Reset A/V state consistently with leaveBreakoutRoom and initialize:
+    // hostless events always start muted; hosted events preserve user prefs.
+    _resetAudioVideoOn();
 
     _loadBreakoutLiveMeetingStream(roomId);
 
@@ -946,6 +1227,16 @@ class LiveMeetingProvider with ChangeNotifier {
       isPresent: true,
       currentBreakoutRoomId: _activeBreakoutRoomId,
     );
+
+    final breakoutSessionId =
+        liveMeeting?.currentBreakoutSession?.breakoutRoomSessionId;
+    if (breakoutSessionId != null) {
+      await sharedPreferencesService.setActiveBreakoutRoomInfo(
+        eventId: eventId,
+        breakoutRoomId: roomId,
+        breakoutSessionId: breakoutSessionId,
+      );
+    }
 
     return breakoutRoomJoinInfo;
   }
@@ -1042,8 +1333,16 @@ class LiveMeetingProvider with ChangeNotifier {
     );
   }
 
+  /// Bumped by [refreshMeeting]. RefreshKeyWidget keys its subtree off this,
+  /// so a refresh remounts the video wherever it is triggered from -- the
+  /// affordance used to own that key itself, which meant refreshing from a
+  /// menu cleared the join info but never rebuilt anything.
+  int get refreshToken => _refreshToken;
+  int _refreshToken = 0;
+
   void refreshMeeting() {
     _activeRoomJoinInfoFuture = null;
+    _refreshToken++;
     notifyListeners();
   }
 

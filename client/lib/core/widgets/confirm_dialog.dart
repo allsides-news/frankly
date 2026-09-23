@@ -95,6 +95,7 @@ class _ConfirmDialogState extends State<ConfirmDialog> {
         child: GestureDetector(
           onTap: () {},
           child: Container(
+            margin: const EdgeInsets.all(AppSize.kDialogEdgeInset),
             constraints: BoxConstraints(maxWidth: 600),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),

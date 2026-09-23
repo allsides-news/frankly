@@ -1,6 +1,5 @@
 import 'package:client/core/utils/navigation_utils.dart';
 import 'package:client/core/widgets/custom_loading_indicator.dart';
-import 'package:client/features/community/utils/community_theme_utils.dart.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
@@ -114,10 +113,11 @@ class MessageDisplayState extends State<MessageDisplay> {
                                 snapshot.data?.displayName ?? '...',
                                 style:
                                     context.theme.textTheme.bodyLarge!.copyWith(
-                                  color: Theme.of(context).isDark
-                                      ? context
-                                          .theme.colorScheme.onPrimaryContainer
-                                      : context.theme.colorScheme.primary,
+                                  // Chat sits on the page surface, so the
+                                  // surface pair is the right one -- it already
+                                  // flips by theme, which is why no isDark
+                                  // branch is needed.
+                                  color: context.theme.colorScheme.onSurface,
                                 ),
                               ),
                               SelectableText(
@@ -125,10 +125,8 @@ class MessageDisplayState extends State<MessageDisplay> {
                                 ' $messageDate, $messageTime$messageTimeZone',
                                 style:
                                     context.theme.textTheme.bodyMedium!.copyWith(
-                                  color: Theme.of(context).isDark
-                                      ? context
-                                          .theme.colorScheme.onPrimaryContainer
-                                      : context.theme.colorScheme.primary,
+                                  color:
+                                      context.theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
                               if (isMod)
@@ -136,7 +134,7 @@ class MessageDisplayState extends State<MessageDisplay> {
                                   // NEW: Teal background for global admin messages
                                   color: isGlobalAdminMessage 
                                       ? globalAdminTeal
-                                      : Theme.of(context).primaryColor,
+                                      : Theme.of(context).colorScheme.primary,
                                   margin: const EdgeInsets.symmetric(
                                     horizontal: 4,
                                   ),
@@ -154,7 +152,8 @@ class MessageDisplayState extends State<MessageDisplay> {
                                           child: Icon(
                                             Icons.notifications_active,
                                             size: 12,
-                                            color: Colors.white,
+                                            color: context
+                                                .theme.colorScheme.onPrimary,
                                           ),
                                         ),
                                       HeightConstrainedText(
@@ -182,9 +181,8 @@ class MessageDisplayState extends State<MessageDisplay> {
                             HeightConstrainedText(
                               'This message was removed.',
                               style: context.theme.textTheme.bodyMedium!.copyWith(
-                                color: Theme.of(context).isDark
-                                    ? context.theme.colorScheme.onPrimaryContainer
-                                    : context.theme.colorScheme.secondary,
+                                color:
+                                    context.theme.colorScheme.onSurfaceVariant,
                                 fontStyle: FontStyle.italic,
                               ),
                             )
@@ -198,9 +196,7 @@ class MessageDisplayState extends State<MessageDisplay> {
                                 text: widget.message.message ?? '',
                                 style:
                                     context.theme.textTheme.bodyLarge!.copyWith(
-                                  color: Theme.of(context).isDark
-                                      ? context.theme.colorScheme.onPrimary
-                                      : context.theme.colorScheme.primary,
+                                  color: context.theme.colorScheme.onSurface,
                                 ),
                                 options: LinkifyOptions(looseUrl: true),
                                 onOpen: (link) async {
@@ -223,9 +219,8 @@ class MessageDisplayState extends State<MessageDisplay> {
                           padding: const EdgeInsets.all(6),
                           child: Icon(
                             Icons.close,
-                            color: Theme.of(context).isDark
-                                ? context.theme.colorScheme.surface
-                                : context.theme.colorScheme.primary,
+                            color:
+                                context.theme.colorScheme.onSurfaceVariant,
                             size: 20,
                           ),
                         ),

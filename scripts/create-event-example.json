@@ -1,0 +1,165 @@
+{
+  "ownerUserId": "GP1IFvzLnKa1b81zDiNcH0u9EER2",
+  "communityId": "MXYDZSN1DdRZi3Y0er1m",
+  "templateId": "misc",
+  "isPublic": true,
+  "scheduledDate": "2026-09-24",
+  "scheduledTime": "18:00",
+  "scheduledTimeZone": "America/Los_Angeles",
+  "ownerRsvp": "yes",
+  "eventType": "hosted",
+  "title": "Common Ground Roundtable: The American Dream in 2026",
+  "description": "A structured, respectful conversation about what the American Dream means today. We'll hear from every corner of the political spectrum, break into small groups, and finish with a word cloud of shared hopes.",
+  "durationInMinutes": 90,
+  "maxParticipants": 24,
+  "image": "https://picsum.photos/seed/common-ground-roundtable/600",
+  "platform": {
+    "platformKey": "community",
+    "url": ""
+  },
+  "eventSettings": {
+    "chat": true,
+    "floatingChat": true,
+    "record": true,
+    "transcribe": true,
+    "screenShare": false,
+    "odometer": true,
+    "agendaPreview": true
+  },
+  "agendaItems": [
+    {
+      "type": "text",
+      "title": "Welcome & Ground Rules",
+      "content": "_Welcome to the Common Ground Lounge!_\n\n* Speak from your own experience\n* Listen with curiosity, not to rebut\n* One voice at a time - the odometer keeps us honest",
+      "timebox": { "minutes": 5, "seconds": 0 }
+    },
+    {
+      "type": "video",
+      "title": "Setting the Stage: A Short History of the American Dream",
+      "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "timebox": { "minutes": 4, "seconds": 30 }
+    },
+    {
+      "type": "image",
+      "title": "One Dream, Many Front Doors",
+      "imageUrl": "https://picsum.photos/seed/american-dream-doors/1200/800",
+      "timebox": { "minutes": 2, "seconds": 0 }
+    },
+    {
+      "type": "poll",
+      "question": "Is the American Dream more attainable today than it was for your parents' generation?",
+      "answers": [
+        "Much more attainable",
+        "Somewhat more attainable",
+        "About the same",
+        "Less attainable",
+        "Not sure"
+      ],
+      "timebox": { "minutes": 5, "seconds": 0 }
+    },
+    {
+      "type": "wordCloud",
+      "prompt": "In one or two words, what does the American Dream mean to you?",
+      "timebox": { "minutes": 5, "seconds": 0 }
+    },
+    {
+      "type": "userSuggestions",
+      "headline": "What should our next roundtable topic be?",
+      "timebox": { "minutes": 8, "seconds": 30 }
+    }
+  ],
+  "waitingRoom": {
+    "introText": "Grab a coffee and settle in - we'll open the floor shortly. Tonight's conversation: the American Dream in 2026.",
+    "waitingMediaUrl": "https://storage.googleapis.com/allsides-media/waiting-room-loop.mp4",
+    "waitingMediaType": "video",
+    "loopWaitingVideo": true,
+    "bufferTime": { "minutes": 2, "seconds": 0 },
+    "introMediaUrl": "https://storage.googleapis.com/allsides-media/host-intro.mp4",
+    "introMediaType": "video",
+    "introLength": { "minutes": 1, "seconds": 30 }
+  },
+  "breakouts": {
+    "assignmentMethod": "smartMatch",
+    "targetParticipants": 4,
+    "matchingQuestions": [
+      {
+        "question": "How would you describe your political leanings?",
+        "answers": ["Left", "Lean left", "Center", "Lean right", "Right"]
+      },
+      {
+        "question": "How often do you talk politics with people who disagree with you?",
+        "answers": ["Weekly or more", "A few times a year", "Almost never"]
+      }
+    ]
+  },
+  "preEventCta": {
+    "headline": "Before we meet: 2 quick questions",
+    "message": "Your answers help us seat balanced breakout tables. It takes less than a minute.",
+    "surveyQuestions": [
+      {
+        "type": "multipleChoice",
+        "question": "What draws you to this event?",
+        "options": [
+          "I want to understand the other side better",
+          "I want to make my own case",
+          "I'm just curious",
+          "A friend invited me"
+        ]
+      },
+      {
+        "type": "agreeDisagree",
+        "statements": [
+          "The American Dream is still achievable for most people.",
+          "Where you are born matters more than how hard you work.",
+          "The media makes political disagreements seem worse than they are."
+        ]
+      },
+      {
+        "type": "residence"
+      }
+    ],
+    "actionLinks": [
+      {
+        "buttonText": "Take the full pre-event survey",
+        "url": "https://example.com/pre-event-survey",
+        "urlParams": [
+          { "name": "pid", "value": "ParticipantID" },
+          { "name": "event", "value": "EventID" }
+        ]
+      }
+    ]
+  },
+  "postEventCta": {
+    "headline": "Thanks for joining us!",
+    "message": "Tell us how it went and grab your seat for next week's roundtable.",
+    "surveyQuestions": [
+      {
+        "type": "multipleChoice",
+        "question": "How likely are you to join another Common Ground event?",
+        "options": [
+          "Definitely",
+          "Probably",
+          "Not sure",
+          "Probably not"
+        ]
+      },
+      {
+        "type": "agreeDisagree",
+        "statements": [
+          "I heard a perspective tonight that I hadn't seriously considered before.",
+          "I felt comfortable sharing my honest opinion."
+        ]
+      }
+    ],
+    "actionLinks": [
+      {
+        "buttonText": "Share your feedback",
+        "url": "https://example.com/post-event-feedback",
+        "urlParams": [
+          { "name": "email", "value": "Email" },
+          { "name": "event", "value": "EventID" }
+        ]
+      }
+    ]
+  }
+}

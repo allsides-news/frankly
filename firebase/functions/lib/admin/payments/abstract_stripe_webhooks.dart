@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -69,11 +70,14 @@ abstract class AbstractStripeWebhooks extends OnRequestMethod<JsonMap> {
         ),
       );
 
-      analyticsUtil.logEvent(
-        userId: authUid,
-        event: AnalyticsDonateEvent(
-          communityId: communityId,
-          amount: amountInCents / 100.0,
+      // Pre-existing fire-and-forget behavior, now explicit.
+      unawaited(
+        analyticsUtil.logEvent(
+          userId: authUid,
+          event: AnalyticsDonateEvent(
+            communityId: communityId,
+            amount: amountInCents / 100.0,
+          ),
         ),
       );
     } else {
@@ -241,13 +245,16 @@ abstract class AbstractStripeWebhooks extends OnRequestMethod<JsonMap> {
       SetOptions(merge: true),
     );
 
-    analyticsUtil.logEvent(
-      userId: userId,
-      event: AnalyticsUpdateCommunitySubscriptionEvent(
-        communityId: appliedCommunityId,
-        planType: type,
-        subscriptionId: stripeSubscriptionId,
-        isCanceled: cancelTime != null,
+    // Pre-existing fire-and-forget behavior, now explicit.
+    unawaited(
+      analyticsUtil.logEvent(
+        userId: userId,
+        event: AnalyticsUpdateCommunitySubscriptionEvent(
+          communityId: appliedCommunityId,
+          planType: type,
+          subscriptionId: stripeSubscriptionId,
+          isCanceled: cancelTime != null,
+        ),
       ),
     );
   }

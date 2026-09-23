@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
+import 'package:client/core/utils/date_utils.dart';
+import 'package:client/core/utils/web_utils.dart';
 
 /// A widget to detail the month, day, weekday, and time of a particular DateTime
 ///
@@ -20,12 +22,17 @@ class VerticalTimeAndDateIndicator extends StatelessWidget {
     Key? key,
   }) : super(key: key);
 
-  String get _timeString {
-    final timeString = DateFormat('h:mma').format(time);
-    final correctlyFormattedTimeString =
-        timeString.substring(0, timeString.length - 1).toLowerCase();
+  String get _timeString => eventTimeFormat(time);
 
-    return correctlyFormattedTimeString;
+  String get _timeSemanticsLabel {
+    final formattedTime = DateFormat('h:mm a').format(time);
+    final timezone = getTimezoneAbbreviation(time);
+
+    if (timezone == null || timezone.isEmpty) {
+      return formattedTime;
+    }
+
+    return '$formattedTime $timezone';
   }
 
   @override
@@ -61,6 +68,10 @@ class VerticalTimeAndDateIndicator extends StatelessWidget {
           ),
           HeightConstrainedText(
             _timeString,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            semanticsLabel: _timeSemanticsLabel,
+            softWrap: false,
             style: context.theme.textTheme.bodyMedium!.copyWith(
               fontSize: 14,
               color: isDisabled

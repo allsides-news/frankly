@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:client/app.dart';
+import 'package:client/core/utils/js_interop_bridge.dart';
 import 'package:client/core/utils/platform_utils.dart';
 import 'package:universal_html/html.dart' as html;
-import 'package:universal_html/js.dart' as js;
 import 'package:universal_html/js.dart' as universal_js;
 
 class CanvasKitUrlVideoWidget extends StatefulWidget {
@@ -72,9 +72,9 @@ class CanvasKitUrlVideoWidgetState extends State<CanvasKitUrlVideoWidget> {
             widget.autoplay,
             widget.showControls,
             widget.posterUrl,
-            js.allowInterop(widget.onEnded ?? () {}),
-            js.allowInterop(widget.onError ?? () {}),
-            js.allowInterop(widget.onReady ?? () {}),
+            legacyJsAllowInteropVoid(widget.onEnded ?? () {}),
+            legacyJsAllowInteropVoid(widget.onError ?? () {}),
+            legacyJsAllowInteropVoid(widget.onReady ?? () {}),
           ],
         ),
       ),

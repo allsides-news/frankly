@@ -1,4 +1,4 @@
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Service for accessing localizations without requiring a BuildContext
 class AppLocalizationService {

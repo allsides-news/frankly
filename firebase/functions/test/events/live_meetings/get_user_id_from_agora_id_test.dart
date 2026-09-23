@@ -61,6 +61,28 @@ void main() {
     );
   });
 
+  // Regression test: HttpsError with null details crashes the JS interop's
+  // _toJsHttpsError (jsify(null) throws), so callAction must normalize the
+  // details to be non-null before rethrowing.
+  test('callAction rethrows not-found with non-null details', () async {
+    final getUserIdFromAgoraId = GetUserIdFromAgoraId();
+
+    expect(
+      () => getUserIdFromAgoraId.callAction(
+        {'agoraId': 999},
+        CallableContext(userId, null, 'fakeInstanceId'),
+      ),
+      throwsA(
+        predicate(
+          (e) =>
+              e is HttpsError &&
+              e.code == HttpsError.notFound &&
+              e.details != null,
+        ),
+      ),
+    );
+  });
+
   test('Throws unauthorized error when auth uid is null', () async {
     final req = GetUserIdFromAgoraIdRequest(
       agoraId: agoraId,

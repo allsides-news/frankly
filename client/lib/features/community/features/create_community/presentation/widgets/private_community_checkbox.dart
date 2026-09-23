@@ -29,7 +29,7 @@ class PrivateCommunityCheckbox extends StatelessWidget {
             name: 'is_private',
             title: HeightConstrainedText(
               context.l10n.makeThisSpacePrivate,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 16, color: AppNeutralColors.of(context).neutral500),
             ),
             contentPadding: EdgeInsets.zero,
             onChanged: onUpdate,

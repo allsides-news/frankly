@@ -33,8 +33,10 @@ class _EventPageMeetingAgendaState extends State<EventPageMeetingAgenda>
   late final EventPagePresenter _presenter;
 
   Widget _buildBreakoutsSection() {
-    final eventProvider = EventProvider.watch(context);
-    final event = eventProvider.event;
+    final event = EventProvider.watch(context).eventOrNull;
+    if (event == null) {
+      return const SizedBox.shrink();
+    }
     if (event.eventType == EventType.hostless ||
         event.breakoutRoomDefinition != null) {
       return Container(
@@ -61,7 +63,8 @@ class _EventPageMeetingAgendaState extends State<EventPageMeetingAgenda>
         label: context.l10n.defineBreakoutsOptional,
         onPressed: () => alertOnError(context, () async {
           final updatedEvent = event.copyWith(
-            breakoutRoomDefinition: eventProvider.defaultBreakoutRoomDefinition,
+            breakoutRoomDefinition:
+                EventProvider.read(context).defaultBreakoutRoomDefinition,
           );
 
           await firestoreEventService.updateEvent(
@@ -82,7 +85,10 @@ class _EventPageMeetingAgendaState extends State<EventPageMeetingAgenda>
   @override
   Widget build(BuildContext context) {
     final eventProvider = EventProvider.watch(context);
-    final event = eventProvider.event;
+    final event = eventProvider.eventOrNull;
+    if (event == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final agendaItems = event.agendaItems;
 
     final templateProvider = Provider.of<TemplateProvider>(context);
@@ -90,14 +96,13 @@ class _EventPageMeetingAgendaState extends State<EventPageMeetingAgenda>
     final canEdit = context.watch<EventPermissionsProvider>().canEditEvent;
 
     final allowBreakoutsDefinition =
-        !EventProvider.watch(context).event.isHosted ||
-            eventProvider.allowPredefineBreakoutsOnHosted;
+        !event.isHosted || eventProvider.allowPredefineBreakoutsOnHosted;
 
     return MeetingAgendaWrapper(
       allowButtonForUserSubmittedAgenda:
           context.watch<EventPermissionsProvider>().canParticipate,
       communityId: context.watch<CommunityProvider>().communityId,
-      template: templateProvider.template,
+      template: templateProvider.templateOrNull,
       event: event,
       isLivestream: event.isLiveStream,
       agendaStartsCollapsed: true,

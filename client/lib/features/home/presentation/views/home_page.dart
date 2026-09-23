@@ -1,5 +1,7 @@
 import 'package:client/core/widgets/constrained_body.dart';
 import 'package:flutter/material.dart';
+import 'package:client/features/home/presentation/widgets/about_section.dart';
+import 'package:client/features/home/presentation/widgets/featured_spaces_section.dart';
 import 'package:client/features/home/presentation/widgets/my_communities_section.dart';
 import 'package:client/features/home/presentation/widgets/upcoming_events_section.dart';
 import 'package:client/features/home/presentation/widgets/sign_in_section.dart';
@@ -16,7 +18,7 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
@@ -56,25 +58,46 @@ class _HomePageState extends State<HomePage> {
   List<Widget> _buildMobileLayout() {
     return [
       RepaintBoundary(
+        child: FeaturedSpacesSection(),
+      ),
+      SizedBox(height: 48),
+      RepaintBoundary(
         child: MyCommunitiesSection(),
       ),
-      SizedBox(height: 30),
+      SizedBox(height: 48),
       ConstrainedBody(
         maxWidth: AppSize.kHomeContentMaxWidthMobile,
         child: UpcomingEventsSection.create(),
       ),
-      SizedBox(height: 20),
+      ConstrainedBody(
+        maxWidth: AppSize.kHomeContentMaxWidthMobile,
+        child: AboutSection(),
+      ),
+      SizedBox(height: 60),
     ];
   }
 
   List<Widget> _buildDesktopLayout() {
     return [
+      // Featured hugs its cards and the Spaces you follow take the rest of the
+      // row. FeaturedSpacesSection carries the gap between them, so a row with
+      // nothing featured leaves Following flush to the left margin.
       ConstrainedBody(
-        child: RepaintBoundary(
-          child: MyCommunitiesSection(),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            RepaintBoundary(
+              child: FeaturedSpacesSection(),
+            ),
+            Expanded(
+              child: RepaintBoundary(
+                child: MyCommunitiesSection(),
+              ),
+            ),
+          ],
         ),
       ),
-      SizedBox(height: 30),
+      SizedBox(height: 48),
       ConstrainedBody(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,7 +114,23 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      SizedBox(height: 20),
+      ConstrainedBody(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Expanded(
+              flex: 1,
+              child: AboutSection(),
+            ),
+            Expanded(
+              flex: 1,
+              child: SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+      SizedBox(height: 60),
     ];
   }
 }

@@ -107,6 +107,12 @@ void main() {
         roomId: breakoutRoom.roomId,
       ),
     ).thenReturn('fakeToken');
+    when(
+      () => agoraUtils.createToken(
+        uid: liveMeetingUtils.uidToInt('333') | (1 << 30),
+        roomId: breakoutRoom.roomId,
+      ),
+    ).thenReturn('fakeScreenShareToken');
 
     final req = GetBreakoutRoomJoinInfoRequest(
       eventId: event.id,
@@ -128,6 +134,7 @@ void main() {
       'identity': '333',
       'meetingToken': 'fakeToken',
       'meetingId': breakoutRoom.roomId,
+      'screenShareToken': 'fakeScreenShareToken',
     };
     expect(result, equals(expectedResult));
   });

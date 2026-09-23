@@ -28,6 +28,9 @@ _$_LiveMeeting _$$_LiveMeetingFromJson(Map<String, dynamic> json) =>
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      screenSharingUserId: json['screenSharingUserId'] as String?,
+      screenShareAgoraUid: json['screenShareAgoraUid'] as int?,
+      screenSharePath: json['screenSharePath'] as String?,
     );
 
 Map<String, dynamic> _$$_LiveMeetingToJson(_$_LiveMeeting instance) =>
@@ -39,6 +42,9 @@ Map<String, dynamic> _$$_LiveMeetingToJson(_$_LiveMeeting instance) =>
       'record': instance.record,
       'isMeetingCardMinimized': instance.isMeetingCardMinimized,
       'pinnedUserIds': instance.pinnedUserIds,
+      'screenSharingUserId': instance.screenSharingUserId,
+      'screenShareAgoraUid': instance.screenShareAgoraUid,
+      'screenSharePath': instance.screenSharePath,
     };
 
 _$_LiveMeetingParticipant _$$_LiveMeetingParticipantFromJson(

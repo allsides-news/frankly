@@ -31,6 +31,7 @@ Future<T?> guardCommunityMember<T>(
       userId: userService.currentUserId!,
       communityId: communityId,
       newStatus: MembershipStatus.member,
+      communityName: community.name,
       allowMemberDowngrade: false,
     );
     return action();

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:async/async.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:enum_to_string/enum_to_string.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -29,12 +28,27 @@ class FirestoreDatabase {
   static const String communityCollectionName = 'community';
   static const String templatesCollectionName = 'templates';
 
+  /// Prefer server for membership-driven community resolution so a stale local
+  /// "missing" cache cannot blank "My spaces" after client updates.
+  static const GetOptions _serverCommunityRead =
+      GetOptions(source: Source.server);
+
   static bool usingEmulator = false;
 
   final FirebaseFirestore firestore = _getFirestoreInstance();
 
   static FirebaseFirestore _getFirestoreInstance() {
-    final databaseId = Environment.firebaseDatabaseId;
+    // Must match production/staging `secrets.FIREBASE_DATABASE_ID` / Functions
+    // `app.firebase_database_id` when using a named Firestore database; otherwise
+    // local dev uses `(default)` while deployed builds hit another DB → missing
+    // `community/*` docs with memberships still listing in the wrong place.
+    final databaseId = Environment.firebaseDatabaseId.trim();
+    if (kDebugMode) {
+      debugPrint(
+        'FirestoreDatabase: '
+        'FIREBASE_DATABASE_ID=${databaseId.isEmpty ? '(empty → default database)' : '"$databaseId"'}',
+      );
+    }
     if (databaseId.isNotEmpty) {
       return FirebaseFirestore.instanceFor(
         app: Firebase.app(),
@@ -75,25 +89,62 @@ class FirestoreDatabase {
   }
 
   Future<Community?> getCommunity(String id) async {
-    final snapshot = await _communityCollection.doc(id).get();
-    final data = snapshot.data();
-    if (!snapshot.exists || data == null || data.isEmpty) {
+    return _resolveCommunityForMembershipKey(id);
+  }
+
+  /// Resolves a [communityId] from membership docs: try `community/{id}` first,
+  /// then a query on [Community.kFieldDisplayIds] (same as [communityStream]).
+  Future<Community?> _resolveCommunityForMembershipKey(String communityKey) async {
+    try {
+      final directSnap =
+          await communityRef(communityKey).get(_serverCommunityRead);
+      if (directSnap.exists) {
+        final data = directSnap.data();
+        if (data != null && data.isNotEmpty) {
+          return _convertCommunityAsync(directSnap);
+        }
+      }
+
+      final displayQuery = await _communityCollection
+          .where(Community.kFieldDisplayIds, arrayContains: communityKey)
+          .limit(1)
+          .get(_serverCommunityRead);
+      if (displayQuery.docs.isNotEmpty) {
+        return _convertCommunityAsync(displayQuery.docs.first);
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          'FirestoreDatabase: no community document for membership key="$communityKey" '
+          '(direct exists=${directSnap.exists}, '
+          'fromCache=${directSnap.metadata.isFromCache})',
+        );
+      }
+      return null;
+    } catch (e, stack) {
+      debugPrint(
+        'resolveCommunityForMembershipKey failed for $communityKey: $e\n$stack',
+      );
       return null;
     }
-    return _convertCommunity(snapshot.data()!);
   }
 
   Future<List<Community?>> getCommunityDocuments(
     List<String> communityIds,
   ) async {
-    final communityFutures = <Future<Community?>>[];
-    for (final id in communityIds) {
-      final communityDoc = await communityRef(id).snapshots().firstOrNull;
-      if (communityDoc != null) {
-        communityFutures.add(_convertCommunityAsync(communityDoc));
-      }
+    if (communityIds.isEmpty) {
+      return [];
     }
-    return Future.wait(communityFutures);
+    // Use one-shot .get() — not snapshots().firstOrNull. The async package's
+    // firstOrNull listens with a null onData handler first, then assigns onData
+    // on the next line; a synchronously-delivered first snapshot can be dropped
+    // on some platforms, yielding null and empty "My spaces" for all users.
+    //
+    // Membership [communityId] may be the Firestore document id OR a value only
+    // present in [Community.displayIds] (URL slug); mirror [communityStream].
+    return Future.wait(
+      communityIds.map(_resolveCommunityForMembershipKey),
+    );
   }
 
   Stream<List<Community>> communitiesUserIsOwnerOf(String userId) {
@@ -122,10 +173,9 @@ class FirestoreDatabase {
             return community;
           }
           // Fallback: try to get by document ID
-          final doc = await firestore
-          .collection(communityCollectionName)
-          .doc(displayId)
-          .get();
+          final doc = await getDocumentRetryingUnavailable(
+            firestore.collection(communityCollectionName).doc(displayId),
+          );
           if (!doc.exists || doc.data() == null) {
             throw FirestoreNotFoundException();
           }

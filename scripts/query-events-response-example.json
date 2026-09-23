@@ -1,0 +1,831 @@
+{
+  "_comment": [
+    "Example response from POST /queryEventsApi (production data, trimmed for readability).",
+    "Request was: {\"title\": \"American Dream\", \"upcomingOnly\": false} - a userId query",
+    "returns the same shape, plus a per-event \"userRelationship\": {\"isOwner\", \"isRegistered\"}.",
+    "Results are paged: \"limit\" (default 100, max 500) and \"offset\" (default 0) in the request;",
+    "\"totalMatches\" counts all matches, \"eventCount\" the events returned in this page, and",
+    "\"hasMore\" signals another page exists (use hasMore, not eventCount == limit, as the end signal). events[] is sorted by scheduledTimeUtc ascending;",
+    "long arrays are truncated here with \"...\" markers."
+  ],
+  "query": {
+    "title": "American Dream",
+    "upcomingOnly": false,
+    "limit": 100,
+    "offset": 0
+  },
+  "totalMatches": 22,
+  "eventCount": 22,
+  "hasMore": false,
+  "events": [
+    {
+      "eventId": "WdaLKW3uGPXG2187tAJl",
+      "communityId": "qXIP0FcTFBQbrYdmgeeI",
+      "templateId": "bH8n5powaFs1J8Z95SWl",
+      "eventPath": "community/qXIP0FcTFBQbrYdmgeeI/templates/bH8n5powaFs1J8Z95SWl/events/WdaLKW3uGPXG2187tAJl",
+      "eventUrl": "https://roundtables.allsides.com/space/allsides-roundtables/discuss/bH8n5powaFs1J8Z95SWl/WdaLKW3uGPXG2187tAJl",
+      "enterMeetingUrl": "https://roundtables.allsides.com/space/allsides-roundtables/discuss/bH8n5powaFs1J8Z95SWl/WdaLKW3uGPXG2187tAJl",
+      "shareLinks": {
+        "facebook": "http://www.facebook.com/share.php?u=https%3A%2F%2Froundtables.allsides.com%2Fspace%2Fallsides-roundtables%2Fdiscuss%2FbH8n5powaFs1J8Z95SWl%2FWdaLKW3uGPXG2187tAJl",
+        "twitter": "https://twitter.com/intent/tweet?url=https%3A%2F%2Froundtables.allsides.com%2Fspace%2Fallsides-roundtables%2Fdiscuss%2FbH8n5powaFs1J8Z95SWl%2FWdaLKW3uGPXG2187tAJl&text=Join+me+in+a+conversation+about+%22National+Roundtable+on+the+American+Dream%22+on+AllSides+Roundtables%21",
+        "linkedin": "https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Froundtables.allsides.com%2Fspace%2Fallsides-roundtables%2Fdiscuss%2FbH8n5powaFs1J8Z95SWl%2FWdaLKW3uGPXG2187tAJl",
+        "email": "mailto:?subject=Join%20my%20event%20on%20AllSides%20Roundtables%21&body=Join%20me%20in%20a%20conversation%20about%20%22National%20Roundtable%20on%20the%20American%20Dream%22%20on%20AllSides%20Roundtables%21%20https%3A%2F%2Froundtables.allsides.com%2Fspace%2Fallsides-roundtables%2Fdiscuss%2FbH8n5powaFs1J8Z95SWl%2FWdaLKW3uGPXG2187tAJl"
+      },
+      "calendarLinks": {
+        "google": "https://calendar.google.com/calendar/render?action=TEMPLATE&dates=20260824T150000Z%2F20260824T163000Z&details=https%3A%2F%2Froundtables.allsides.com%2Fspace%2FqXIP0FcTFBQbrYdmgeeI%2Fdiscuss%2FbH8n5powaFs1J8Z95SWl%2FWdaLKW3uGPXG2187tAJl&text=National%20Roundtable%20on%20the%20American%20Dream%20-%20AllSides%20Roundtables",
+        "office365": "https://outlook.office.com/calendar/0/action/compose?allday=false&body=https%3A%2F%2Froundtables.allsides.com%2Fspace%2FqXIP0FcTFBQbrYdmgeeI%2Fdiscuss%2FbH8n5powaFs1J8Z95SWl%2FWdaLKW3uGPXG2187tAJl&enddt=2026-08-24T16%3A30%3A00&path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-08-24T15%3A00%3A00&subject=National%20Roundtable%20on%20the%20American%20Dream%20-%20AllSides%20Roundtables",
+        "outlook": "https://outlook.live.com/calendar/0/action/compose?allday=false&body=https%3A%2F%2Froundtables.allsides.com%2Fspace%2FqXIP0FcTFBQbrYdmgeeI%2Fdiscuss%2FbH8n5powaFs1J8Z95SWl%2FWdaLKW3uGPXG2187tAJl&enddt=2026-08-24T16%3A30%3A00&path=%2Fcalendar%2Faction%2Fcompose&rru=addevent&startdt=2026-08-24T15%3A00%3A00&subject=National%20Roundtable%20on%20the%20American%20Dream%20-%20AllSides%20Roundtables"
+      },
+      "status": "active",
+      "hasEnded": true,
+      "scheduledTimeUtc": "2026-08-24T15:00:00.000Z",
+      "scheduledEndTimeUtc": "2026-08-24T16:30:00.000Z",
+      "rsvps": {
+        "count": 14,
+        "userIds": [
+          "AyHifzxLw3N6dlQtDvmEPib8dJD2",
+          "NWjIuHOQKOalLFGF0OsKOYalHeh2",
+          "OvPMY9I0oaTKDkfar7WxeXlGC4q1",
+          "...(one entry per affirmative RSVP)"
+        ]
+      },
+      "event": {
+        "id": "WdaLKW3uGPXG2187tAJl",
+        "status": "active",
+        "eventType": "hostless",
+        "collectionPath": "community/qXIP0FcTFBQbrYdmgeeI/templates/bH8n5powaFs1J8Z95SWl/events",
+        "communityId": "qXIP0FcTFBQbrYdmgeeI",
+        "templateId": "bH8n5powaFs1J8Z95SWl",
+        "creatorId": "TTr2mqVslJScJaGNZFxJX7pG1Rj1",
+        "prerequisiteTemplateId": null,
+        "creatorDisplayName": null,
+        "scheduledTime": "2026-08-24T15:00:00.000Z",
+        "scheduledTimeZone": "America/New_York",
+        "title": "National Roundtable on the American Dream",
+        "description": "Join a candid discussion about how Americans are thinking about opportunity, security, success, retirement, and the future they hope to build. In small groups of 4-6 people, you\u2019ll talk directly with people from different backgrounds hearing how they are pursuing their goals, navigating challenges, and making important decisions.\n\nYour conversations will help build a report on this topic; see recent Roundtable Reports at  <a href=\"https://www.allsides.com/dialogue#research-reports\">allsides.com/dialogue</a> \n\nHave questions? Send them to <a href=\"mailto:feedback@allsides.com?subject=Roundtables%20Feedback\">feedback@allsides.com</a>. We'd love to hear from you.\n\nRead our full Privacy Notice at <a href=\"https://www.allsides.com/privacy\">allsides.com/privacy</a>.\n\n<i>This event's conversation guide was developed by AllSides, adapted from Living Room Conversations' model with input from Nationwide Insurance.</i>",
+        "image": "http://res.cloudinary.com/dhqdlbq26/image/upload/v1773415891/fe27zpipusdlyy7djkmd.png",
+        "isPublic": true,
+        "minParticipants": 0,
+        "maxParticipants": 50,
+        "agendaItems": [
+          {
+            "id": "default-intro-0",
+            "priority": null,
+            "creatorId": null,
+            "title": "Agreements",
+            "content": "Welcome! Please take turns reading these conversation agreements out loud. These set the tone for the conversation and introduce you to the skills you'll be practicing.\n\n* Be curious and listen to understand. Conversation is as much about listening as it is about talking. You might enjoy exploring how others\u2019 experiences have shaped their values and perspectives. Truly listen without interrupting or making comments.\n* Show respect and suspend judgment. People tend to judge one another. Setting judgment aside opens you up to learning from others and makes them feel respected and appreciated.\n* Note any common ground as well as any differences. Look for areas of agreement or shared values that may arise. Take an interest in the differing beliefs and opinions of others.\n* Be authentic and welcome that from others. Share what\u2019s important to you. Speak from your experience. Be considerate of others who are doing the same.\n* Be purposeful and to the point. Do your best to keep your comments concise and relevant to the question you are answering. Be conscious of sharing speaking time with other participants.\n* Own and guide the conversation. Take responsibility for the quality of your participation and the conversation. Be proactive in getting yourself and others back on track if needed. Use an agreed-upon signal (like the \u201ctime out\u201d sign) if you feel the agreements are not being honored.\n\nThe style of this dialogue guide has been adapted from Living Room Conversations. As you make your way through the sections, it\u2019s recommended to rotate around the room and have someone read each prompt out loud.\n\n*Click \u201cNext\u201d to advance to the next section once complete.*",
+            "videoType": "url",
+            "type": null,
+            "videoUrl": "",
+            "imageUrl": "",
+            "pollAnswers": [],
+            "timeInSeconds": 240,
+            "suggestionsButtonText": ""
+          },
+          {
+            "id": "1786381229550",
+            "priority": null,
+            "creatorId": null,
+            "title": "Getting to Know Each Other",
+            "content": "Next, go around and have each member of your group take one minute to answer ONE of these questions:\n\n1. What is ONE thing your friends would say about who you are?\n2. What is ONE hope you have for your family, community or country?",
+            "videoType": "url",
+            "type": "text",
+            "videoUrl": "",
+            "imageUrl": "",
+            "pollAnswers": [],
+            "timeInSeconds": 360,
+            "suggestionsButtonText": ""
+          },
+          {
+            "...": "8 more agenda items"
+          }
+        ],
+        "waitingRoomInfo": {
+          "durationSeconds": 106,
+          "waitingMediaBufferSeconds": 300,
+          "content": null,
+          "waitingMediaItem": {
+            "url": "http://res.cloudinary.com/dhqdlbq26/video/upload/v1786372686/epgnghrh5sn3nygjr7rt.mp4",
+            "type": "video"
+          },
+          "introMediaItem": {
+            "url": "http://res.cloudinary.com/dhqdlbq26/video/upload/v1786373099/bzzb5myx0j0fmowc2jqv.mp4",
+            "type": "video"
+          },
+          "enableChat": false,
+          "loopWaitingVideo": true
+        },
+        "breakoutRoomDefinition": {
+          "creatorId": "TTr2mqVslJScJaGNZFxJX7pG1Rj1",
+          "targetParticipants": 6,
+          "questions": [],
+          "breakoutQuestions": [
+            {
+              "id": "0b17092a-af35-4e23-ac83-20c3f6addcaa",
+              "title": "What is your political bias?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "9f3cd837-7186-41c4-bfb5-feab04d19b5d",
+                  "options": [
+                    {
+                      "id": "1d7872df-2a19-422e-b029-5f3713db17fb",
+                      "title": "Left"
+                    },
+                    {
+                      "id": "63809ea2-7b0e-4095-aa01-54e8fc075751",
+                      "title": "Lean Left"
+                    },
+                    {
+                      "id": "aed45c2a-71b5-4a23-b9b8-f45d9bbafee8",
+                      "title": "Center"
+                    }
+                  ]
+                },
+                {
+                  "id": "fcf990c3-1350-4dc2-98f4-7cfa6f2bc18b",
+                  "options": [
+                    {
+                      "id": "606b6541-d75d-4f49-a407-777619cd13b4",
+                      "title": "Lean Right"
+                    },
+                    {
+                      "id": "2eb4bc46-ca1b-40ec-a498-b95722fa1f5a",
+                      "title": "Right"
+                    },
+                    {
+                      "id": "d0629878-2474-47ee-a927-e6e8a3ce912c",
+                      "title": "Prefer not to answer"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "55c3b58c-5258-45c9-9db8-e44d4c8075bc",
+              "title": "Who did you vote for in the last election?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "2c8a62c5-6094-495b-8eee-9cbdfaf4abe4",
+                  "options": [
+                    {
+                      "id": "aae88204-309a-4307-b9fa-67efd2ec2171",
+                      "title": "Kamala Harris"
+                    }
+                  ]
+                },
+                {
+                  "id": "e6acc710-c302-485d-9a6d-771a80410dfd",
+                  "options": [
+                    {
+                      "id": "3fde8fc2-c186-47a4-b3c2-3e182a77c4de",
+                      "title": "Donald Trump"
+                    },
+                    {
+                      "id": "a3d66f5c-4d87-47f9-a761-81d0c1bf0f34",
+                      "title": "Third party"
+                    },
+                    {
+                      "id": "b84411e2-70b7-4aff-9f05-462d911e6e77",
+                      "title": "Did not vote or prefer not to say"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "18c85d8a-d600-4325-85ac-c55dc2d1f717",
+              "title": "What is your gender?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "466bd006-a34f-4a0c-b050-98def489ddd4",
+                  "options": [
+                    {
+                      "id": "293f374b-b8ad-4398-b790-3fa1f0fbdad0",
+                      "title": "Male"
+                    }
+                  ]
+                },
+                {
+                  "id": "63ef365d-cb9a-41f6-947f-1c14c0b1893d",
+                  "options": [
+                    {
+                      "id": "906e3b61-6219-4a75-a952-f3a8638d6405",
+                      "title": "Female"
+                    },
+                    {
+                      "id": "1cf6f3c3-0ec7-4ede-8aa2-d477953d7bce",
+                      "title": "Other or prefer not to say"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "892cfd7b-c48b-4bef-960b-ee689845004d",
+              "title": "What is your race?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "279b69b8-bad6-430d-81b2-3bb611cf796f",
+                  "options": [
+                    {
+                      "id": "f338c140-7994-4314-b54e-d58d45c56edb",
+                      "title": "White"
+                    }
+                  ]
+                },
+                {
+                  "id": "c70f57a8-730f-4f83-ac9a-9a357c83e76f",
+                  "options": [
+                    {
+                      "id": "34d63440-c11c-44ee-b0fa-7496d593ad8d",
+                      "title": "Black or African American"
+                    },
+                    {
+                      "id": "03179b1f-6e92-4a1e-8ce7-05b5b742036c",
+                      "title": "Asian"
+                    },
+                    {
+                      "id": "6edf3a7f-6a5e-4692-b7f1-8b6f7993c921",
+                      "title": "Hispanic or Latino"
+                    },
+                    {
+                      "id": "f7e4b073-0267-4762-b04b-fb06f168a019",
+                      "title": "Mixed or other"
+                    },
+                    {
+                      "id": "372982b1-aba4-4bfe-bb3c-5a0abb7e7269",
+                      "title": "Prefer not to say"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "3dc7959b-b94f-4875-a8ff-320e5cb89e46",
+              "title": "How old are you?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "a0553bfe-8dd8-43a1-9bf8-9290b8141753",
+                  "options": [
+                    {
+                      "id": "64b180ec-4ba0-497e-b900-13763db0cb14",
+                      "title": "Younger than 20"
+                    },
+                    {
+                      "id": "effcb04e-4988-40f8-8d61-0ad35da4b78d",
+                      "title": "20s"
+                    },
+                    {
+                      "id": "da50a455-bb7e-482f-8709-1ab626a99a15",
+                      "title": "30s"
+                    },
+                    {
+                      "id": "fc99f321-168e-4cb5-8499-2b565ea34aed",
+                      "title": "40s"
+                    }
+                  ]
+                },
+                {
+                  "id": "e3c75bc8-d83d-4560-9d97-11274b517b60",
+                  "options": [
+                    {
+                      "id": "906f1370-d397-4346-a666-f75a554c0548",
+                      "title": "50s"
+                    },
+                    {
+                      "id": "731dc4a6-3946-49cf-8eb7-d6415b9dc244",
+                      "title": "60s"
+                    },
+                    {
+                      "id": "15cef1b9-5cea-40c4-8820-0e0e60665dfa",
+                      "title": "70s and older"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "238be718-77e0-4d04-b25a-e2928a99f854",
+              "title": "What type of area do you live in?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "a3343310-4e21-4853-b7d4-769f6c88b455",
+                  "options": [
+                    {
+                      "id": "e6b8b722-2bd8-4ec2-80b7-3301db8d2850",
+                      "title": "Urban"
+                    },
+                    {
+                      "id": "bc616221-38af-4ae7-9930-3e68c42c8de2",
+                      "title": "Suburban"
+                    }
+                  ]
+                },
+                {
+                  "id": "3f01c12e-7c7e-45a1-a317-607b58622fb6",
+                  "options": [
+                    {
+                      "id": "2c980529-b960-4486-b73c-2779574af5b8",
+                      "title": "Rural"
+                    },
+                    {
+                      "id": "3fe25482-0e3b-4086-ac76-7ee91ee754f5",
+                      "title": "Other"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "56f1efbd-1668-4c6f-a455-7720c1d1798f",
+              "title": "What level of education do you have?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "a0ed9a7f-58a0-46c4-aefe-d3dbb6be9973",
+                  "options": [
+                    {
+                      "id": "f72cb413-7122-41de-bc9f-a4aaaf4be7a2",
+                      "title": "Less than high school"
+                    },
+                    {
+                      "id": "a5131603-64e6-489b-8151-8a5907066bba",
+                      "title": "Highschool or GED"
+                    },
+                    {
+                      "id": "1a6b29dc-b302-4d7b-8dd6-369a5de606cc",
+                      "title": "Some college but no degree"
+                    },
+                    {
+                      "id": "7bee1af9-d60e-419a-acbb-2178b2cf52f4",
+                      "title": "Associate's degree"
+                    }
+                  ]
+                },
+                {
+                  "id": "4dc0c953-9d77-4942-b935-e0f1bfd27051",
+                  "options": [
+                    {
+                      "id": "ef853746-18b6-4409-a755-b8b71b7239a0",
+                      "title": "Bachelor\u2019s degree"
+                    },
+                    {
+                      "id": "09d13812-ed19-435d-b462-5b4d29adc575",
+                      "title": "Post-graduate degree"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "b2ceccce-53c2-49a3-b3d0-b03248333d2b",
+              "title": "Do you rent or own your home?",
+              "answerOptionId": "",
+              "answers": [
+                {
+                  "id": "1207caa1-f3c3-4580-9ad4-6e943ebc0fb3",
+                  "options": [
+                    {
+                      "id": "e9a5f511-a899-4332-a599-65732af74c92",
+                      "title": "I rent"
+                    }
+                  ]
+                },
+                {
+                  "id": "e936d493-56af-40ad-9110-87f1ff930245",
+                  "options": [
+                    {
+                      "id": "3122a2b0-e1d7-447a-906b-8a516ac320c3",
+                      "title": "I own"
+                    },
+                    {
+                      "id": "b97597fc-aeac-423e-9928-4ed141896870",
+                      "title": "Other"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "categories": [
+            {
+              "id": "b76494c0-92e2-4133-912c-1121ebda9c73",
+              "category": ""
+            },
+            {
+              "id": "25125277-d9d5-4af7-81fd-abffdf296c89",
+              "category": ""
+            }
+          ],
+          "assignmentMethod": "smartMatch"
+        },
+        "isEnded": false,
+        "liveStreamInfo": null,
+        "preEventCardData": {
+          "headline": "Thanks for Registering!",
+          "message": "<strong>Please remember to fill out our pre-event sentiment survey at the time you enter the event</strong>.  This helps us see how the conversations impact participants' attitudes towards each other.",
+          "type": "preEvent",
+          "surveyQuestions": [
+            {
+              "id": "38183c33-06f2-4b45-b808-3c060d6e1fbc",
+              "type": "multipleChoice",
+              "title": "For you and your family, is the American Dream more about\u2026",
+              "options": [
+                {
+                  "id": "fe2657f2-dc91-453d-9f9b-ffc8f103bf99",
+                  "text": "Being able to support your family with a job and safe place to live"
+                },
+                {
+                  "id": "edaf1cc1-013e-412c-9c69-a87382d6384e",
+                  "text": "Being able to improve the quality of life for you and your family through education, better job opportunities and other resources"
+                },
+                {
+                  "id": "80c2c6f5-e120-4a76-9aa6-084004295f59",
+                  "text": "Unsure"
+                }
+              ],
+              "statements": []
+            },
+            {
+              "id": "8c269848-b9c5-4c40-98ea-61321af426b6",
+              "type": "multipleChoice",
+              "title": "Thinking about your own life, do you believe\u2026",
+              "options": [
+                {
+                  "id": "019dee2f-7c53-478c-9673-cfc2390bcef5",
+                  "text": "I\u2019ve achieved the American Dream."
+                },
+                {
+                  "id": "edcb725f-12f9-44ce-9fb5-045c7bd33c04",
+                  "text": "I\u2019m on my way to achieving the American Dream."
+                },
+                {
+                  "id": "8e91a967-0b03-4b17-88b4-dc56a8fbdca5",
+                  "text": "The American Dream is out of reach for me."
+                },
+                {
+                  "id": "d7506adf-7bed-453f-9e96-dbf4dc098cfb",
+                  "text": "Unsure"
+                }
+              ],
+              "statements": []
+            },
+            {
+              "id": "c97c1dc3-d269-4a8e-8484-d55d94129da6",
+              "type": "agreeDisagree",
+              "title": "",
+              "options": [],
+              "statements": [
+                {
+                  "id": "b4bf41a7-2bc3-4486-8d98-70b9f0fc380c",
+                  "text": "The American Dream can be achieved by people like me."
+                },
+                {
+                  "id": "df058b3a-a8a3-4178-be74-612d2d98492b",
+                  "text": "There's a point in modern American life where building financial security matters more than taking risks to get ahead."
+                },
+                {
+                  "id": "03c43cbc-eecc-4248-b9e4-ec8aa34162ba",
+                  "text": "I can achieve a better life than my parents\u2019 generation."
+                },
+                {
+                  "id": "c5e8b052-24c7-489a-b8be-1e9bf6976f6e",
+                  "text": "Financial security is determined more by financial habits and decisions than by income level."
+                },
+                {
+                  "id": "354d6866-4d67-4e27-8929-83135193948e",
+                  "text": "It is important that people strive for the American Dream."
+                },
+                {
+                  "id": "b2d5f51a-6b7a-4492-afc5-1a612d3ac898",
+                  "text": "Financial risk is necessary to achieve the American Dream."
+                },
+                {
+                  "id": "4a9cb440-7dc1-4c0a-84ee-1995d4e19dc9",
+                  "text": "I respect others' opinions even when I do not agree."
+                },
+                {
+                  "id": "08d7b003-3261-45b8-a6fc-3e3d5d98756e",
+                  "text": "I accept that my beliefs may be wrong."
+                }
+              ]
+            },
+            {
+              "id": "9685456d-7e42-446f-b136-25d7e5196ea8",
+              "type": "multipleChoice",
+              "title": "What is your household income?",
+              "options": [
+                {
+                  "id": "dfdfa265-045d-4ec9-ae85-bb531ff25708",
+                  "text": "Less than $50,000"
+                },
+                {
+                  "id": "cb5fd9ed-5276-45b5-942a-07ea8f5eea3f",
+                  "text": "$50,000-$99,000"
+                },
+                {
+                  "id": "04b3a0a6-a1e5-4a44-a20c-0a20c35356ca",
+                  "text": "$100,000-$199,000"
+                },
+                {
+                  "id": "e7db7e3f-b04e-410a-aac7-f7d9b3c0f2a6",
+                  "text": "$200,000-$299,000"
+                },
+                {
+                  "id": "a7990cd5-c316-42ed-b578-392c0d91995c",
+                  "text": "$300,000 or more"
+                },
+                {
+                  "id": "fc176073-4c51-4b1e-8a48-5ba9d61f7911",
+                  "text": "Unsure"
+                }
+              ],
+              "statements": []
+            },
+            {
+              "id": "e261623e-afeb-4a9c-b301-4f231ac4485e",
+              "type": "multipleChoice",
+              "title": "Generally speaking, do you usually think of yourself as a Republican, a Democrat, an Independent, or something else?",
+              "options": [
+                {
+                  "id": "f36396a0-674d-462f-a1ac-c3924e841c96",
+                  "text": "Republican"
+                },
+                {
+                  "id": "72722bb0-a08c-4251-8107-2968845f0ec6",
+                  "text": "Democrat"
+                },
+                {
+                  "id": "51fb17ce-7e77-4d00-ba00-5a89588c71c8",
+                  "text": "Independent"
+                },
+                {
+                  "id": "28f711b6-b3d5-4564-a36d-bd52589b1f90",
+                  "text": "Something else"
+                }
+              ],
+              "statements": []
+            },
+            {
+              "id": "2c7cb26c-1998-45ad-a608-8faa4bd55ceb",
+              "type": "residence",
+              "title": "",
+              "options": [],
+              "statements": []
+            }
+          ],
+          "prePostUrls": []
+        },
+        "postEventCardData": {
+          "headline": "We hope you enjoyed the event!",
+          "message": "Please fill out our <strong>post-event sentiment survey below</strong> to let us know how your perspective may have changed.\n\nAs a thank you, we would like to offer you an AllSides Sustaining Membership FREE for six months. New members can use the code AMERICANDREAM26 at checkout.\n\nIf you are already a paying AllSides Sustaining Member, your discount will be automatically applied. Monthly members will receive the next six months free. Yearly members will get 50% off the next year. Billing will resume automatically. You can view and update your membership at any time at <a href=\"http://allsides.com/user/account\">allsides.com/user/account</a>. Email <a href=\"admin@allsides.com\">admin@allsides.com</a> with any questions.",
+          "type": "postEvent",
+          "surveyQuestions": [
+            {
+              "id": "f718cf5b-30bd-4cb4-aa23-24dc5a2d1050",
+              "type": "multipleChoice",
+              "title": "Thinking about your own life, do you believe\u2026",
+              "options": [
+                {
+                  "id": "2513325e-0967-4b28-b8b1-bf5ca77f5859",
+                  "text": "I\u2019ve achieved the American Dream."
+                },
+                {
+                  "id": "56f8f700-f782-48d3-a27a-c5ffb9385cb0",
+                  "text": "I\u2019m on my way to achieving the American Dream."
+                },
+                {
+                  "id": "5822f7e0-9c4c-4227-ac10-af0a31c0f174",
+                  "text": "The American Dream is out of reach for me."
+                },
+                {
+                  "id": "b5c92135-c5c7-4220-b830-2146e314d20e",
+                  "text": "Unsure"
+                }
+              ],
+              "statements": []
+            },
+            {
+              "id": "f8d10a38-0f31-41fd-8e63-07cae0277734",
+              "type": "multipleChoice",
+              "title": "For you and your family, is the American Dream more about\u2026",
+              "options": [
+                {
+                  "id": "5207844b-b998-4406-b88a-0ff077a52d86",
+                  "text": "Being able to support your family with a job and safe place to live"
+                },
+                {
+                  "id": "2a0c3556-de0d-4693-a8c7-e31fb5653a9c",
+                  "text": "Being able to improve the quality of life for you and your family through education, better job opportunities and other resources"
+                },
+                {
+                  "id": "3ffc103f-9db1-4791-b44f-29338e38c753",
+                  "text": "Unsure"
+                }
+              ],
+              "statements": []
+            },
+            {
+              "id": "fe03c8e3-6547-402a-a2a1-2147eaf8c2eb",
+              "type": "agreeDisagree",
+              "title": "",
+              "options": [],
+              "statements": [
+                {
+                  "id": "aec12633-dc82-4afc-861e-e1f990920f8c",
+                  "text": "I accept that my beliefs may be wrong."
+                },
+                {
+                  "id": "c3082345-588d-48a3-8d60-10b86ad68cb8",
+                  "text": "I respect others' opinions even when I do not agree."
+                },
+                {
+                  "id": "227b61ba-3718-4c69-9c90-9f40c62667bb",
+                  "text": "I felt I could express my views openly in this conversation."
+                },
+                {
+                  "id": "c42bd9cf-0c6e-4e1b-b946-6b2918b99026",
+                  "text": "There was a moment in this conversation where I questioned something I previously believed about finances or the American Dream."
+                },
+                {
+                  "id": "96fd39fc-c426-45e2-8023-9516cfae0aa3",
+                  "text": "After hearing others' stories, I better understand why people with different financial backgrounds see the American Dream differently."
+                },
+                {
+                  "id": "1266789e-5568-4224-80c2-0f9530ea26fc",
+                  "text": "I met people or perspectives I would not normally encounter."
+                },
+                {
+                  "id": "cdb7f036-0aad-4ab6-8a46-768539928155",
+                  "text": "I felt respected by others in the group."
+                },
+                {
+                  "id": "3de62401-2aed-40d9-ab51-cbb9470f7e7d",
+                  "text": "Right now, protecting what I have matters more to me than growing my wealth."
+                },
+                {
+                  "id": "8b2b7c6e-e464-49d7-8c8d-7832bc47f4c3",
+                  "text": "I know what steps to take to build financial security."
+                },
+                {
+                  "id": "62dd9f83-5092-4ed3-858b-e4001aeeda05",
+                  "text": "I wish I had more guidance from a financial advisor to help me build financial security."
+                },
+                {
+                  "id": "b240e9f8-569d-480e-ad5e-8fc0a3210087",
+                  "text": "The American Dream can be achieved by people like me."
+                },
+                {
+                  "id": "41c21c03-1c50-486f-8741-eb6bb91ffced",
+                  "text": "There's a point in modern American life where building financial security matters more than taking risks to get ahead."
+                },
+                {
+                  "id": "b71ee192-14cd-48bd-a4b8-f7d694f70adf",
+                  "text": "I can achieve a better life than my parents\u2019 generation."
+                },
+                {
+                  "id": "209c4224-6de1-41d1-a8fb-68be042b4f22",
+                  "text": "Financial security is determined more by financial habits and decisions than by income level."
+                },
+                {
+                  "id": "60805d43-d325-43dc-ab5e-56a935385412",
+                  "text": "It is important that people strive for the American Dream"
+                },
+                {
+                  "id": "9804d485-6ef1-4f56-88c6-f8bc7236df2e",
+                  "text": "Financial risk is necessary to achieve the American Dream."
+                }
+              ]
+            },
+            {
+              "id": "66b55ff6-4ab5-4fe2-ac77-f8b0b34edb04",
+              "type": "multipleChoice",
+              "title": "Overall, how would you rate today\u2019s event out of 5 stars?",
+              "options": [
+                {
+                  "id": "1bbb1a8c-ddab-42e5-b7c5-1ea92b14d2b4",
+                  "text": "1"
+                },
+                {
+                  "id": "b81d30ca-6593-40f3-8fbc-c58cfd6fc60e",
+                  "text": "2"
+                },
+                {
+                  "id": "5065a179-f0b5-409a-9bfd-73e9d0ef7249",
+                  "text": "3"
+                },
+                {
+                  "id": "7ee671fd-ac67-4dc2-ad8f-25040cbc656b",
+                  "text": "4"
+                },
+                {
+                  "id": "a62b6cc4-7d39-4391-9785-ee9e4caaaed0",
+                  "text": "5"
+                }
+              ],
+              "statements": []
+            }
+          ],
+          "prePostUrls": []
+        },
+        "externalPlatform": null,
+        "externalCommunityId": null,
+        "externalCommunityStatus": null,
+        "breakoutMatchIdsToRecord": [],
+        "createdDate": "2026-08-18T19:18:58.039Z",
+        "durationInMinutes": 90,
+        "eventSettings": {
+          "reminderEmails": true,
+          "chat": true,
+          "showChatMessagesInRealTime": true,
+          "talkingTimer": true,
+          "allowScreenshare": null,
+          "allowPredefineBreakoutsOnHosted": false,
+          "defaultStageView": false,
+          "enableBreakoutsByCategory": false,
+          "allowMultiplePeopleOnStage": false,
+          "showSmartMatchingForBreakouts": false,
+          "alwaysRecord": true,
+          "alwaysTranscribe": true,
+          "enablePrerequisites": false,
+          "agendaPreview": true
+        },
+        "participantCountEstimate": 13,
+        "presentParticipantCountEstimate": 1,
+        "isLocked": true
+      },
+      "space": {
+        "id": "qXIP0FcTFBQbrYdmgeeI",
+        "contactEmail": null,
+        "creatorId": "TTr2mqVslJScJaGNZFxJX7pG1Rj1",
+        "isPublic": true,
+        "enabledFeatureFlags": [],
+        "donationDialogText": null,
+        "ratingSurveyUrl": null,
+        "isOnboardingOverviewEnabled": true,
+        "createdDate": "2025-10-14T17:16:35.650Z",
+        "themeLightColor": "FFFFFF",
+        "onboardingSteps": [
+          "brandSpace",
+          "createGuide",
+          "inviteSomeone",
+          "hostEvent"
+        ],
+        "name": "AllSides Roundtables",
+        "displayIds": [
+          "allsides-roundtables",
+          "allsides-roundtables",
+          "newsweek-and-allsides-national-roundtables",
+          "qXIP0FcTFBQbrYdmgeeI",
+          "qxip0fctfbqbrydmgeei"
+        ],
+        "themeDarkColor": "262626",
+        "description": "AllSides Roundtables breaks people into small-group, guided video discussions of 4-6 participants, inviting people with differing political views to engage respectfully on meaningful topics.\n\nLearn more at <a href=\"http://allsides.com/dialogue\">allsides.com/dialogue</a>\nRead about our data privacy practices at <a href=\"http://allsides.com/privacy\">allsides.com/privacy</a>",
+        "profileImageUrl": "http://res.cloudinary.com/dhqdlbq26/image/upload/v1784671677/skhvgcablosuczggg85x.png",
+        "communitySettings": {
+          "allowDonations": true,
+          "allowUnofficialTemplates": false,
+          "disableEmailDigests": false,
+          "dontAllowMembersToCreateMeetings": true,
+          "enableDiscussionThreads": true,
+          "enableHostless": true,
+          "featuredOrder": null,
+          "multiplePeopleOnStage": false,
+          "multipleVideoTypes": false,
+          "requireApprovalToJoin": false,
+          "enablePlatformSelection": true,
+          "enableUpdatedLiveMeetingMobile": false,
+          "enableAVCheck": true
+        },
+        "eventSettings": {
+          "reminderEmails": true,
+          "chat": true,
+          "showChatMessagesInRealTime": true,
+          "talkingTimer": true,
+          "allowScreenshare": null,
+          "allowPredefineBreakoutsOnHosted": true,
+          "defaultStageView": false,
+          "enableBreakoutsByCategory": false,
+          "allowMultiplePeopleOnStage": false,
+          "showSmartMatchingForBreakouts": false,
+          "alwaysRecord": true,
+          "alwaysTranscribe": true,
+          "enablePrerequisites": false,
+          "agendaPreview": true
+        },
+        "bannerImageUrl": null,
+        "tagLine": "",
+        "spaceUrl": "https://roundtables.allsides.com/space/allsides-roundtables"
+      }
+    },
+    {
+      "...": "21 more events with the same structure"
+    }
+  ]
+}

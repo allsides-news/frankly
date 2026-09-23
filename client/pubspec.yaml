@@ -31,7 +31,7 @@ dependencies:
       url: https://github.com/berkmancenter/Agora-Flutter-SDK.git
   firebase_auth: ^4.17.7
   firebase_core: ^2.26.0
-  firebase_database: ^10.4.8
+  firebase_database: ^10.5.5 # FlutterFire #12706 (RTDB web stream / hot restart)
   cloud_firestore: ^4.15.7
   cloud_functions_web: ^4.7.1
   cloud_functions: ^4.6.7
@@ -47,13 +47,13 @@ dependencies:
   datetime_picker_formfield: ^2.0.1
   flutter_form_builder: ^9.2.1
   flutter_markdown: ^0.6.15
-  flutter_html: ^3.0.0-beta.2
+  flutter_html: ^3.0.0
   ntp: ^2.0.0
   transparent_image: ^2.0.1
   timezone: ^0.9.2
   pedantic: ^1.11.1
-  sentry: ^8.7.0
-  google_fonts: ^4.0.4
+  sentry: ^8.14.2
+  google_fonts: ^8.1.0
   universal_html: ^2.2.2
   js: ^0.6.5
   font_awesome_flutter: ^10.4.0
@@ -109,6 +109,12 @@ dev_dependencies:
 dependency_overrides:
   collection: ^1.19.0
   http_parser: ^4.1.0
+  intl: ^0.19.0
+  # Patched versions for Flutter 3.41.4 compatibility
+  youtube_player_iframe_web:
+    path: patches/youtube_player_iframe_web-2.0.2
+  agora_rtc_engine:
+    path: patches/agora_rtc_engine
   #flutter_reorderable_list:
   #  path: ../../flutter_reorderable_list
 

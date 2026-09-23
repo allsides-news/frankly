@@ -81,14 +81,20 @@ class GetBreakoutRoomJoinInfo
     // Construct the breakout room path for recording state storage
     final breakoutRoomPath = '$liveMeetingPath/breakout-room-sessions/${liveMeeting.currentBreakoutSession?.breakoutRoomSessionId}/breakout-rooms/${request.breakoutRoomId}';
     
+    // Breakout rooms start fresh — do not inherit main-room screen-share state.
+    // A non-null screenShareAgoraUid would set maxResolutionUid to a UID that
+    // never joins the breakout channel (black large slot for the whole recording).
     final joinInfo = await liveMeetingUtils.getBreakoutRoomJoinInfo(
       communityId: event.communityId,
       meetingId: breakoutRoom.roomId,
       userId: context.authUid!,
       record: breakoutRoom.record,
+      transcribe: event.eventSettings?.alwaysTranscribe ?? false,
       eventId: event.id,
       breakoutRoomId: request.breakoutRoomId,
       breakoutRoomPath: breakoutRoomPath,
+      screenSharerUserId: null,
+      screenShareAgoraUid: null,
     );
 
     return joinInfo.toJson();

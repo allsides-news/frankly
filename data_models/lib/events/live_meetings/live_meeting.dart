@@ -26,6 +26,16 @@ class LiveMeeting with _$LiveMeeting implements SerializeableRequest {
   static const String kFieldRecord = 'record';
   static const String kFieldMeetingId = 'meetingId';
   static const String kFieldIsMeetingCardMinimized = 'isMeetingCardMinimized';
+  static const String kFieldScreenSharingUserId = 'screenSharingUserId';
+  static const String kFieldScreenShareAgoraUid = 'screenShareAgoraUid';
+  static const String kFieldScreenSharePath = 'screenSharePath';
+
+  /// Web canvas compositor (composite on camera track).
+  static const String screenSharePathCanvas = 'canvas';
+  /// Native dual-engine (dedicated screen UID).
+  static const String screenSharePathDual = 'dual';
+  /// Native single-engine fallback (screen-source slot).
+  static const String screenSharePathSingle = 'single';
 
   factory LiveMeeting({
     // TODO(null-safety): There are places that we set various fields on the live meeting possibly
@@ -43,6 +53,16 @@ class LiveMeeting with _$LiveMeeting implements SerializeableRequest {
     @Default(false) bool record,
     @Default(false) bool isMeetingCardMinimized,
     @Default([]) List<String> pinnedUserIds,
+
+    /// The userId of the participant currently sharing their screen, or null if no one is sharing.
+    String? screenSharingUserId,
+
+    /// Native dual-engine: Agora UID for the secondary screen connection; null for web / legacy.
+    @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+    int? screenShareAgoraUid,
+
+    /// How the sharer publishes: [screenSharePathCanvas], [screenSharePathDual], or [screenSharePathSingle].
+    String? screenSharePath,
   }) = _LiveMeeting;
 
   factory LiveMeeting.fromJson(Map<String, dynamic> json) =>

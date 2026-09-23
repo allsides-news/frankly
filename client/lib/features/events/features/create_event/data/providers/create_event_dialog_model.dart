@@ -244,6 +244,7 @@ class CreateEventDialogModel with ChangeNotifier {
         eventId: _event.id,
         templateId: _event.templateId,
       ),
+      eventTitle: _event.title,
     );
 
     final time = _event.scheduledTime;
@@ -258,6 +259,7 @@ class CreateEventDialogModel with ChangeNotifier {
           daysFromNow: today.difference(scheduledDay).inDays,
           templateId: _event.templateId,
         ),
+        eventTitle: _event.title,
       );
     }
 
@@ -321,6 +323,7 @@ class CreateEventDialogModel with ChangeNotifier {
         eventId: _event.id,
         templateId: _event.templateId,
       ),
+      eventTitle: _event.title,
     );
   }
 

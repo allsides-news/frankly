@@ -23,8 +23,18 @@ class TalkingOdometerPresenter {
   final TalkingOdometerView _view;
   final TalkingOdometerModel _model;
   final TalkingOdometerPresenterHelper _helper;
-  final ConferenceRoom _conferenceRoom;
+  final ConferenceRoom? _injectedConferenceRoom;
+  final LiveMeetingProvider? _liveMeetingProvider;
   final EventPermissionsProvider eventPermissions;
+
+  /// The conference room can be null while the meeting is still connecting
+  /// (on slow networks the mobile app bar — and this odometer — mounts before
+  /// the room is registered on [LiveMeetingProvider]) and during breakout-room
+  /// transitions when the old room is disposed. Resolve it lazily on every use
+  /// so the odometer shows a neutral state instead of crashing, then picks the
+  /// room up automatically on a later tick.
+  ConferenceRoom? get _conferenceRoom =>
+      _injectedConferenceRoom ?? _liveMeetingProvider?.conferenceRoom;
 
   Duration get totalTalkingTimeInMeeting {
     if (_model.userSpeakingDurations.isEmpty) return Duration.zero;
@@ -32,8 +42,11 @@ class TalkingOdometerPresenter {
     return Duration(seconds: seconds);
   }
 
+  String? get localParticipantUserId =>
+      _conferenceRoom?.room?.localParticipant?.userId;
+
   Duration get userTotalTalkingTime {
-    final id = _conferenceRoom.room?.localParticipant?.userId;
+    final id = localParticipantUserId;
     if (id == null) return Duration.zero;
     return Duration(seconds: _model.userSpeakingDurations[id] ?? 0);
   }
@@ -51,9 +64,11 @@ class TalkingOdometerPresenter {
     EventPermissionsProvider? eventPermissions,
   })  : _helper =
             talkingOdometerPresenterHelper ?? TalkingOdometerPresenterHelper(),
-        _conferenceRoom =
-            conferenceRoom ?? LiveMeetingProvider.read(context).conferenceRoom!,
-        eventPermissions = context.read<EventPermissionsProvider>();
+        _injectedConferenceRoom = conferenceRoom,
+        _liveMeetingProvider =
+            conferenceRoom == null ? LiveMeetingProvider.read(context) : null,
+        eventPermissions =
+            eventPermissions ?? context.read<EventPermissionsProvider>();
 
   void init() {
     _helper.updateTalkingState(
@@ -62,7 +77,7 @@ class TalkingOdometerPresenter {
       onHideTooltip: () => hideTooltip(),
     );
     _model.updateTimer = Timer.periodic(_kUpdateFrequency, (timer) {
-      final numParticipants = _conferenceRoom.participants.length;
+      final numParticipants = _conferenceRoom?.participants.length ?? 0;
       if (numParticipants > 1) {
         _checkDominantSpeakerUpdates();
       } else {
@@ -81,7 +96,7 @@ class TalkingOdometerPresenter {
   }
 
   void _checkDominantSpeakerUpdates() {
-    final String? dominantSpeakerSid = _conferenceRoom.dominantSpeakerSid;
+    final String? dominantSpeakerSid = _conferenceRoom?.dominantSpeakerSid;
 
     _model.currentDominantSpeakerSid = dominantSpeakerSid;
     if (dominantSpeakerSid != null) {
@@ -89,7 +104,7 @@ class TalkingOdometerPresenter {
     }
 
     final isLocalParticipantSpeaking = _model.currentDominantSpeakerSid ==
-        _conferenceRoom.room?.localParticipant?.userId;
+        _conferenceRoom?.room?.localParticipant?.userId;
     TalkingState newTalkingState = _model.talkingState;
 
     // If the current speaker is no one, keep the state of the last speaker
@@ -120,7 +135,7 @@ class TalkingOdometerPresenter {
     final threshold = _helper.getDurationThreshold(
       newTalkingState,
       _conferenceRoom,
-      _conferenceRoom.participants.length,
+      _conferenceRoom?.participants.length ?? 0,
     );
 
     bool hasntSpokenInAWhile =
@@ -169,12 +184,16 @@ class TalkingOdometerPresenter {
         return 1;
       case DialState.value:
         if (totalTalkingTimeInMeeting.inMilliseconds == 0) return 0;
-        final expectedProportion = 1 / _conferenceRoom.participants.length;
+        // Use only participants who have spoken so that silent participants don't
+        // artificially shrink everyone else's fair share, pushing active talkers into yellow.
+        // activeSpeakerCount is always > 0 here: totalTalkingTimeInMeeting > 0
+        // (guarded above) iff userSpeakingDurations is non-empty.
+        final effectiveN = _model.userSpeakingDurations.length;
+        final expectedProportion = 1 / effectiveN;
         final userSpeakingProportion = (userTotalTalkingTime.inMilliseconds +
                 startingSpeakingDuration.inMilliseconds) /
             (totalTalkingTimeInMeeting.inMilliseconds +
-                (_conferenceRoom.participants.length *
-                    startingSpeakingDuration.inMilliseconds));
+                (effectiveN * startingSpeakingDuration.inMilliseconds));
 
         // Returns the probability of this speaking time assuming a normal distribution of times and
         // standard deviation equal to the average proportion / 2
@@ -192,7 +211,7 @@ class TalkingOdometerPresenter {
     final Duration durationThreshold = _helper.getDurationThreshold(
       _model.talkingState,
       _conferenceRoom,
-      _conferenceRoom.participants.length,
+      _conferenceRoom?.participants.length ?? 0,
     );
     final String message;
 
@@ -241,9 +260,6 @@ class TalkingOdometerPresenterHelper {
 
   static Duration _idleThreshold(int participants) =>
       Duration(minutes: 2 * participants);
-
-  static const Duration _deliberationsTalkingThreshold = Duration(minutes: 3);
-  static const Duration _deliberationsIdleThreshold = Duration(minutes: 7);
 
   void updateTalkingState({
     required TalkingState talkingState,

@@ -168,6 +168,13 @@ class HtmlContent extends StatelessWidget {
             );
           },
         ),
+        TagWrapExtension(
+          tagsToWrap: {'a'},
+          builder: (child) => MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: child,
+          ),
+        ),
       ],
       onLinkTap: (url, attributes, element) {
         if (url != null) {

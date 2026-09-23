@@ -67,6 +67,29 @@ extension DurationExtension on Duration {
 }
 
 extension AgendaItemTypeUIExtension on AgendaItemType {
+  /// The type's glyph, as an icon rather than artwork.
+  ///
+  /// The PNG and SVG below have their colour baked in -- a navy that reads as
+  /// near-black on a dark panel. An icon takes whatever colour it is given, so
+  /// it works in both themes. Prefer this; the assets remain for the places
+  /// that still want a picture.
+  IconData get icon {
+    switch (this) {
+      case AgendaItemType.text:
+        return Icons.text_fields;
+      case AgendaItemType.video:
+        return Icons.play_circle_outline;
+      case AgendaItemType.image:
+        return Icons.image_outlined;
+      case AgendaItemType.poll:
+        return Icons.poll_outlined;
+      case AgendaItemType.wordCloud:
+        return Icons.cloud_outlined;
+      case AgendaItemType.userSuggestions:
+        return Icons.thumb_up_outlined;
+    }
+  }
+
   AppAsset get svgIconPath {
     switch (this) {
       case AgendaItemType.text:
@@ -140,6 +163,31 @@ extension EmotionTypeExtension on EmotionType {
         return '😍';
     }
   }
+
+  /// What assistive technology announces for this reaction.
+  ///
+  /// The controls that send these are images with no text, so without a name
+  /// a screen reader has nothing to tell one reaction from another. Covers
+  /// every value, not just the three currently offered, so a fourth can't be
+  /// added silently unnamed.
+  String get accessibilityLabel {
+    switch (this) {
+      case EmotionType.thumbsUp:
+        return 'Send thumbs up reaction';
+      case EmotionType.heart:
+        return 'Send heart reaction';
+      case EmotionType.hundred:
+        return 'Send hundred reaction';
+      case EmotionType.exclamation:
+        return 'Send exclamation reaction';
+      case EmotionType.plusOne:
+        return 'Send plus one reaction';
+      case EmotionType.laughWithTears:
+        return 'Send laughing reaction';
+      case EmotionType.heartEyes:
+        return 'Send heart eyes reaction';
+    }
+  }
 }
 
 extension MembershipStatusUIExtension on MembershipStatus {
@@ -186,13 +234,13 @@ extension MembershipStatusUIExtension on MembershipStatus {
   List<String> get permissions {
     switch (this) {
       case MembershipStatus.attendee:
-        return ['Has attended an event, but has not become a community member'];
+        return ['Has attended an event, but has not become a space member'];
       case MembershipStatus.member:
-        return ['Participates as the community allows'];
+        return ['Participates as the space allows'];
       case MembershipStatus.admin:
         return [
           'All mod capabilities',
-          'Access all community settings',
+          'Access all space settings',
           'Manages data (including billing & memberships)',
         ];
       case MembershipStatus.facilitator:
@@ -203,7 +251,7 @@ extension MembershipStatusUIExtension on MembershipStatus {
         ];
       case MembershipStatus.mod:
         return [
-          'Moderates community',
+          'Moderates space',
           'Manages content (guides, resources)',
           'Acts as admin within events',
         ];
@@ -296,7 +344,6 @@ extension BuildContextExtension on BuildContext {
     try {
       return watch<T>();
     } on ProviderNotFoundException catch (_) {
-      loggingService.log('watchOrNull: ${T.runtimeType} provider is null');
       return null;
     }
   }
@@ -305,7 +352,6 @@ extension BuildContextExtension on BuildContext {
     try {
       return read<T>();
     } on ProviderNotFoundException catch (_) {
-      loggingService.log('readOrNull: ${T.runtimeType} provider is null');
       return null;
     }
   }
@@ -321,12 +367,14 @@ extension IterableExtension<T> on Iterable<T?> {
 }
 
 extension NonNullIterableExtension<T> on Iterable<T> {
-  Iterable<T> intersperse(value) {
-    return [
-      for (final i in this) ...[
-        if (i != first) value,
-        i,
-      ],
-    ];
+  Iterable<T> intersperse(T value) {
+    return () sync* {
+      var isFirst = true;
+      for (final i in this) {
+        if (!isFirst) yield value;
+        yield i;
+        isFirst = false;
+      }
+    }();
   }
 }

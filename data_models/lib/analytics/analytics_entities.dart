@@ -777,6 +777,68 @@ class AnalyticsDonateEvent implements AnalyticsEvent {
 }
 
 @JsonSerializable()
+class AnalyticsTapRsvpButtonEvent implements AnalyticsEvent {
+  @override
+  String getEventType() => 'Tap Register Now Button';
+
+  final String communityId;
+  final String eventId;
+  final String? templateId;
+
+  AnalyticsTapRsvpButtonEvent({
+    required this.communityId,
+    required this.eventId,
+    this.templateId,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => _$AnalyticsTapRsvpButtonEventToJson(this);
+
+  @override
+  String getEventCategory() => AnalyticsEvent.eventCategory;
+
+  @override
+  String? getEventName() => eventId;
+
+  @override
+  num? getMetricValue() => null;
+}
+
+@JsonSerializable()
+class AnalyticsTapEnterEventButtonEvent implements AnalyticsEvent {
+  @override
+  String getEventType() => 'Tap Enter Event Button';
+
+  final String communityId;
+  final String eventId;
+  final String? templateId;
+
+  /// The label shown on the button at the time of the tap
+  /// e.g. "Enter Event", "Starts in 2 Days", "Starts Tomorrow"
+  final String buttonText;
+
+  AnalyticsTapEnterEventButtonEvent({
+    required this.communityId,
+    required this.eventId,
+    this.templateId,
+    required this.buttonText,
+  });
+
+  @override
+  Map<String, dynamic> toJson() =>
+      _$AnalyticsTapEnterEventButtonEventToJson(this);
+
+  @override
+  String getEventCategory() => AnalyticsEvent.eventCategory;
+
+  @override
+  String? getEventName() => eventId;
+
+  @override
+  num? getMetricValue() => null;
+}
+
+@JsonSerializable()
 class AnalyticsUpdateCommunitySubscriptionEvent implements AnalyticsEvent {
   @override
   String getEventType() {

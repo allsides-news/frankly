@@ -3,13 +3,19 @@ import 'package:client/styles/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-final appTheme = ThemeData(
-  textTheme: textTheme,
-  colorScheme: MaterialTheme.lightScheme().toColorScheme(),
-  pageTransitionsTheme: NoTransitionsOnWeb(),
-);
+/// Built through [MaterialTheme]'s own builders rather than assembling a
+/// ThemeData by hand, so light and dark stay derived from one definition --
+/// the builders also bind the text theme's colours to `onSurface`, which a
+/// hand-rolled ThemeData was skipping.
+final appTheme = MaterialTheme(textTheme)
+    .light()
+    .copyWith(pageTransitionsTheme: NoTransitionsOnWeb());
 
-final textTheme = GoogleFonts.interTextTheme(
+final appDarkTheme = MaterialTheme(textTheme)
+    .dark()
+    .copyWith(pageTransitionsTheme: NoTransitionsOnWeb());
+
+final textTheme = GoogleFonts.geistTextTheme(
   TextTheme(
     /// displayColor is used for all display styles
     displayLarge: TextStyle(

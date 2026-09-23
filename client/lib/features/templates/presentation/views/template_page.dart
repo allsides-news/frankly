@@ -445,7 +445,7 @@ class _TemplatePageState extends State<TemplatePage>
             Spacer(),
             if (templatePageProvider.hasUpcomingEvents)
               CustomInkWell(
-                onTap: () => tabController.currentTab = 3,
+                onTap: () => tabController.currentTab = 2,
                 child: HeightConstrainedText(
                   'See all',
                   style: AppTextStyle.bodyMedium,

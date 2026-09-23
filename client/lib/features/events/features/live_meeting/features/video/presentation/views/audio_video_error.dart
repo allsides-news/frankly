@@ -1,4 +1,6 @@
+import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/utils/navigation_utils.dart';
+import 'package:client/features/events/features/live_meeting/features/video/data/providers/video_capture_confirm.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:client/core/widgets/buttons/action_button.dart';
@@ -6,14 +8,18 @@ import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/services.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
+import 'package:client/l10n/app_localizations.dart';
 import 'package:universal_html/html.dart' as html;
-import 'package:client/core/localization/localization_helper.dart';
 
 class AudioVideoErrorDialog extends StatelessWidget {
   final String error;
+  final bool inMeeting;
 
-  const AudioVideoErrorDialog({Key? key, required this.error})
-      : super(key: key);
+  const AudioVideoErrorDialog({
+    Key? key,
+    required this.error,
+    this.inMeeting = false,
+  }) : super(key: key);
 
   static Future<T?> showOnError<T>(
     BuildContext context,
@@ -37,17 +43,27 @@ class AudioVideoErrorDialog extends StatelessWidget {
     }
   }
 
-  static Future<void> show<T>(BuildContext context, String error) async {
+  static Future<void> show<T>(
+    BuildContext context,
+    String error, {
+    bool inMeeting = false,
+  }) async {
     await showCustomDialog(
       context: context,
-      builder: (_) => AudioVideoErrorDialog(error: error),
+      builder: (_) => AudioVideoErrorDialog(
+        error: error,
+        inMeeting: inMeeting,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: context.theme.colorScheme.primary,
+      // surfaceContainerLowest like the other in-meeting dialogs: the default
+      // text below is onSurface, which is unreadable on `primary` (that pair
+      // inverts with the theme).
+      backgroundColor: context.theme.colorScheme.surfaceContainerLowest,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(6),
       ),
@@ -55,7 +71,10 @@ class AudioVideoErrorDialog extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: 700),
         child: Stack(
           children: [
-            AudioVideoErrorDisplay(error: error),
+            AudioVideoErrorDisplay(
+              error: error,
+              inMeeting: inMeeting,
+            ),
             Positioned.fill(
               child: Align(
                 alignment: Alignment.topRight,
@@ -78,13 +97,33 @@ class AudioVideoErrorDisplay extends StatelessWidget {
     Key? key,
     required this.error,
     this.textColor,
+    this.onJoinWithoutDevices,
+    this.inMeeting = false,
   }) : super(key: key);
 
   final String error;
   final Color? textColor;
+  final bool inMeeting;
 
-  String _buildErrorText() {
-    final l10n = appLocalizationService.getLocalization();
+  /// When set, permission/device errors are not a join wall: the user can
+  /// continue listen-only instead of only Refresh (which re-hits the block).
+  final VoidCallback? onJoinWithoutDevices;
+
+  bool get _isDeviceError => isGetUserMediaError(error);
+
+  bool get _canJoinWithoutDevices =>
+      onJoinWithoutDevices != null && _isDeviceError;
+
+  /// In-meeting device errors: stay in the call. Refresh reloads the page.
+  bool get _showRefresh => audioVideoErrorShowsRefresh(
+        inMeeting: inMeeting,
+        isDeviceError: _isDeviceError,
+      );
+
+  String _buildErrorText(BuildContext context) {
+    // AppLocalizations.of, not context.l10n: that helper writes GetIt and
+    // throws if AppLocalizationService is not registered yet.
+    final l10n = AppLocalizations.of(context)!;
     String errorText = error;
     if (errorText.contains('NotReadableError')) {
       errorText = l10n.avErrorNotReadable;
@@ -94,7 +133,12 @@ class AudioVideoErrorDisplay extends StatelessWidget {
         .any((error) => errorText.contains(error))) {
       errorText = l10n.avErrorMediaAccess;
     } else if (errorText.contains('NotAllowedError')) {
-      errorText = l10n.avErrorPermissionRequired;
+      errorText = audioVideoErrorUsesListenOnlyCopy(
+        inMeeting: inMeeting,
+        canJoinWithoutDevices: _canJoinWithoutDevices,
+      )
+          ? l10n.avErrorListenOnly
+          : l10n.avErrorPermissionRequired;
     } else if (errorText.contains('TwilioError')) {
       errorText = l10n.avErrorDisconnected;
     } else if (errorText
@@ -116,6 +160,7 @@ class AudioVideoErrorDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -128,7 +173,7 @@ class AudioVideoErrorDisplay extends StatelessWidget {
               humanize: false,
               removeWww: false,
             ),
-            text: _buildErrorText(),
+            text: _buildErrorText(context),
             textAlign: TextAlign.center,
             style: TextStyle(
               color: textColor ?? context.theme.colorScheme.onSurface,
@@ -136,10 +181,23 @@ class AudioVideoErrorDisplay extends StatelessWidget {
             ),
           ),
           SizedBox(height: 16),
-          ActionButton(
-            text: context.l10n.refresh,
-            onPressed: () => html.window.location.reload(),
-          ),
+          if (_canJoinWithoutDevices) ...[
+            ActionButton(
+              text: l10n.avErrorJoinWithoutDevices,
+              onPressed: onJoinWithoutDevices,
+            ),
+            SizedBox(height: 12),
+          ],
+          if (_showRefresh)
+            ActionButton(
+              text: l10n.refresh,
+              onPressed: () => html.window.location.reload(),
+            )
+          else
+            ActionButton(
+              text: l10n.close,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
         ],
       ),
     );

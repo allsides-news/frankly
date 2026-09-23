@@ -33,28 +33,25 @@ class CurrentCommunityIconOrLogo extends StatelessWidget {
     final isMobile = responsiveLayoutService.isMobile(context);
 
     if (currentCommunity != null && withNav && showOrganizationIcon) {
-      return IconButton(
-        onPressed: () => routerDelegate.beamTo(
-          CommunityPageRoutes(
-            communityDisplayId: currentCommunity.displayId,
-          ).communityHome,
-        ),
-        icon: CommunityCircleIcon(
-          currentCommunity,
-          withBorder: isMobile,
-          isTooltipShown: false,
-        ),
+      // Display-only: this is not a link back to "My Spaces", just the
+      // Space's logo shown for context. No hover/cursor/tap affordances.
+      return CommunityCircleIcon(
+        currentCommunity,
+        withBorder: isMobile,
+        isTooltipShown: false,
+        backgroundColor: Colors.transparent,
       );
     } else if (withNav) {
-      return IconButton(
-        onPressed: () => routerDelegate.beamTo(HomeLocation()),
-        icon: _buildLogo(context: context, isMobile: isMobile),
+      return _HoverableLogoButton(
+        onTap: () => routerDelegate.beamTo(HomeLocation()),
+        child: _buildLogo(context: context, isMobile: isMobile),
       );
     } else if (currentCommunity != null) {
       return CommunityCircleIcon(
         currentCommunity,
         withBorder: isMobile,
         isTooltipShown: false,
+        backgroundColor: Colors.transparent,
       );
     } else {
       return _buildLogo(context: context, isMobile: isMobile);
@@ -62,77 +59,79 @@ class CurrentCommunityIconOrLogo extends StatelessWidget {
   }
 
   Widget _buildLogo({required BuildContext context, required bool isMobile}) {
-    return Padding(
-      padding: EdgeInsets.only(left: isMobile ? 1 : 8),
-      child: SizedBox(
-        height: isMobile ? 25 : 34,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            // App logo - centered vertically
-            Center(
-              child: Semantics(
-                label: context.l10n.franklyLogo,
-                child: Image.asset(
-                  AppAsset.kLogoPng.path,
-                  width: isMobile ? 113 : 153,
-                  height: isMobile ? 25 : 34,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            SizedBox(width: 5),
-            //  TODO: I would prefer to use an SVG asset, but for some reason it looks terrible on web when loaded
-            // Fix the SVG logo issue?
-            /*    
-            SvgPicture.asset(
-              AppAsset.kLogoSvg.path, 
-              semanticsLabel: context.l10n.franklyLogo,
-              width: 100,
-              height: isMobile ? 40 : 80,         
-              fit: BoxFit.contain,
-              placeholderBuilder: (BuildContext context) => Container(
-                  padding: const EdgeInsets.all(30.0),
-                  child: const CircularProgressIndicator(),),
-            ), 
-            */
-            SizedBox(width: 5),
-            // Badge - aligned to baseline/bottom with 2px lift desktop
-            Padding(
-              padding: EdgeInsets.only(bottom: isMobile ? 0 : 2),
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Color(0xFFE5E0D6),
-                  borderRadius: BorderRadius.circular(64),
-                ),
-                child: Text(
-                  'ROUNDTABLES',
-                  style: AppTextStyle.bodySmall.copyWith(
-                    color: context.theme.colorScheme.primary,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    // Aspect ratio (361:51) preserved from the source wordmark asset.
+    final height = isMobile ? 25.0 : 34.0;
+    final width = height * 361 / 51;
+
+    return Semantics(
+      label: context.l10n.franklyLogo,
+      child: Image.asset(
+        AppAsset.kLogoRoundtablesPng.path,
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
+
+/// A plain-rectangle, no-padding tap target that overlays [child] with flat
+/// white at 50% opacity on hover. Used instead of [IconButton], whose ink
+/// region is sized around square icon content and doesn't track a much
+/// wider custom child like a wordmark image.
+class _HoverableLogoButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _HoverableLogoButton({required this.onTap, required this.child});
+
+  @override
+  State<_HoverableLogoButton> createState() => _HoverableLogoButtonState();
+}
+
+class _HoverableLogoButtonState extends State<_HoverableLogoButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          color: _isHovered ? Colors.white.withOpacity(0.5) : Colors.transparent,
+          child: widget.child,
         ),
       ),
     );
   }
 }
 
+/// A Space's logo.
+///
+/// Always a rounded square -- circles are reserved for user profile images, so
+/// the two are never confusable at a glance.
 class CommunityCircleIcon extends StatelessWidget {
   final bool withBorder;
   final Community community;
   final double imageHeight;
   final bool isTooltipShown;
+  final Color? backgroundColor;
+
+  /// Corner radius in logical pixels. Defaults to a share of [imageHeight] so
+  /// the logo reads as a rounded square at any size -- note that a radius of
+  /// half [imageHeight] would render a circle, so keep this well under that.
+  final double? borderRadius;
 
   const CommunityCircleIcon(
     this.community, {
     this.withBorder = false,
     this.imageHeight = 42,
     this.isTooltipShown = true,
+    this.backgroundColor,
+    this.borderRadius,
     Key? key,
   }) : super(key: key);
 
@@ -144,6 +143,9 @@ class CommunityCircleIcon extends StatelessWidget {
           generateRandomImageUrl(seed: community.id.hashCode, resolution: 160);
     }
 
+    final radius =
+        BorderRadius.circular(borderRadius ?? imageHeight * AppSize.kSpaceLogoRadiusRatio);
+
     final child = Container(
       decoration: BoxDecoration(
         border: withBorder
@@ -152,10 +154,11 @@ class CommunityCircleIcon extends StatelessWidget {
                 width: 1,
               )
             : null,
-        shape: BoxShape.circle,
-        color: context.theme.colorScheme.onPrimaryContainer,
+        borderRadius: radius,
+        color: backgroundColor ?? context.theme.colorScheme.onPrimaryContainer,
       ),
-      child: ClipOval(
+      child: ClipRRect(
+        borderRadius: radius,
         child: ProxiedImage(
           profileImageUrl,
           height: imageHeight,

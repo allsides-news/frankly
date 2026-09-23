@@ -1,6 +1,5 @@
 import 'package:client/styles/styles.dart';
 import 'package:collection/collection.dart';
-import 'package:firebase_ui_firestore/firebase_ui_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_permissions_provider.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
@@ -15,9 +14,7 @@ import 'package:client/features/user/data/services/user_service.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/events/event.dart';
-import 'package:client/core/localization/localization_helper.dart';
 import 'package:provider/provider.dart';
-import 'package:client/core/utils/firestore_utils.dart';
 
 class ParticipantsDialog extends StatelessWidget {
   final EventProvider eventProvider;
@@ -68,6 +65,11 @@ class ParticipantsDialog extends StatelessWidget {
   }
 
   Widget _buildLivestreamEventLayout(BuildContext context) {
+    // Ensure the participant stream is initialized for hostless/livestream
+    // events that normally use participant count estimates.
+    final _ = eventProvider.actualParticipantCount;
+    final participantStream = eventProvider.eventParticipantsStream;
+
     return Container(
       constraints: BoxConstraints(maxWidth: 400),
       decoration: BoxDecoration(
@@ -76,15 +78,28 @@ class ParticipantsDialog extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildCloseDialogIcon(context),
-            _buildDialogTitle(context),
-            Flexible(
-              child: _buildLiveStreamEventParticipants(context),
-            ),
-          ],
+        child: StreamBuilder<List<Participant>>(
+          stream: participantStream,
+          initialData: eventProvider.eventParticipants,
+          builder: (context, snapshot) {
+            final participants =
+                snapshot.data ?? eventProvider.eventParticipants;
+            final l10n = appLocalizationService.getLocalization();
+
+            return CustomListView(
+              shrinkWrap: true,
+              children: [
+                _buildCloseDialogIcon(context),
+                _buildDialogTitle(context),
+                if (snapshot.hasError)
+                  HeightConstrainedText(l10n.participantsLoadError)
+                else if (participants.isEmpty)
+                  HeightConstrainedText(l10n.noOneIsHereYet)
+                else
+                  ..._buildEventParticipants(context, participants),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -140,10 +155,13 @@ class ParticipantsDialog extends StatelessWidget {
 
   Widget _buildDialogTitle(BuildContext context) {
     final l10n = appLocalizationService.getLocalization();
+    // Use actualParticipantCount to get real count from stream
+    // even for hostless/livestream events that normally use estimates
+    final count = eventProvider.actualParticipantCount;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: HeightConstrainedText(
-        l10n.participantCount(eventProvider.participantCount),
+        l10n.participantCount(count),
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w400,
@@ -154,41 +172,31 @@ class ParticipantsDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildLiveStreamEventParticipants(BuildContext context) {
-    return FirestoreListView(
-      shrinkWrap: true,
-      itemBuilder: (context, documentSnapshot) {
-        final participant = Participant.fromJson(
-          fromFirestoreJson(documentSnapshot.data() as Map<String, dynamic>),
-        );
-        return _buildParticipant(participant, context);
-      },
-      query: firestoreEventService.eventParticipantsQuery(
-        event: eventProvider.event,
-      ),
-      pageSize: 40,
-      emptyBuilder: (context) =>
-          HeightConstrainedText(context.l10n.noOneIsHereYet),
-      errorBuilder: (context, __, ___) => HeightConstrainedText(
-        context.l10n.participantsLoadError,
-      ),
-    );
-  }
-
-  List<Widget> _buildEventParticipants(BuildContext context) {
-    final participantsList = eventProvider.eventParticipants.toList();
+  List<Widget> _buildEventParticipants(
+    BuildContext context, [
+    List<Participant>? participants,
+  ]) {
+    final participantsList =
+        (participants ?? eventProvider.eventParticipants).toList();
     final creator =
         participantsList.firstWhereOrNull((p) => p.id == event.creatorId);
     final self = participantsList.firstWhereOrNull(
       (p) => p.id == Provider.of<UserService>(context).currentUserId,
     );
 
-    // Check if creator and current user are the same and also removes from the list
-    // repeated elements and shows current user in the first position of the particpants list.
-    final newAdditions =
-        [creator, self].where((p) => p != null).map((p) => p!).toSet();
-    newAdditions.forEach(participantsList.remove);
-    participantsList.insertAll(0, newAdditions);
+    // Prioritize the current user, then creator, while avoiding duplicates.
+    final prioritizedParticipants = <Participant>[];
+    final prioritizedParticipantIds = <String>{};
+
+    for (final participant in [self, creator].whereType<Participant>()) {
+      if (prioritizedParticipantIds.add(participant.id)) {
+        prioritizedParticipants.add(participant);
+      }
+    }
+
+    participantsList
+        .removeWhere((p) => prioritizedParticipantIds.contains(p.id));
+    participantsList.insertAll(0, prioritizedParticipants);
 
     return [
       for (final p in participantsList) _buildParticipant(p, context),

@@ -138,8 +138,8 @@ class AudioVideoSettingsDialog extends HookWidget {
 
   Future<List<VideoDeviceInfo>> _getVideoDevices() async {
     try {
-      return await conferenceRoom.room?.engine
-              .getVideoDeviceManager()
+      return await conferenceRoom.room?.engineIfReady
+              ?.getVideoDeviceManager()
               .enumerateVideoDevices() ??
           [];
     } catch (e) {
@@ -151,8 +151,8 @@ class AudioVideoSettingsDialog extends HookWidget {
 
   Future<List<AudioDeviceInfo>> _getAudioDevices() async {
     try {
-      return await conferenceRoom.room?.engine
-              .getAudioDeviceManager()
+      return await conferenceRoom.room?.engineIfReady
+              ?.getAudioDeviceManager()
               .enumerateRecordingDevices() ??
           [];
     } catch (e) {

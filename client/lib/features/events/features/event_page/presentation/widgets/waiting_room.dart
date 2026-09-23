@@ -150,9 +150,9 @@ class _WaitingRoom extends StatelessWidget {
             final canViewCounts = EventPermissionsProvider.read(context)
                     ?.canViewParticipantCounts ??
                 false;
-            
+
             if (!canViewCounts) return SizedBox.shrink();
-            
+
             return Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
@@ -307,6 +307,16 @@ class RowParticipants extends StatelessWidget {
         .eventParticipants
         .where((p) => p.isPresent)
         .toList();
+    final currentUserId = userService.currentUserId;
+
+    if (currentUserId != null) {
+      final currentUserIndex =
+          participants.indexWhere((p) => p.id == currentUserId);
+      if (currentUserIndex > 0) {
+        final currentUser = participants.removeAt(currentUserIndex);
+        participants.insert(0, currentUser);
+      }
+    }
 
     final participantCount = min(participants.length, 8);
     final double width = _getWidth(kSize, kOffset, participantCount);

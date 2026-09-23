@@ -3,7 +3,8 @@ import 'dart:math' as math;
 
 import 'package:client/core/utils/toast_utils.dart';
 import 'package:client/core/widgets/custom_loading_indicator.dart';
-import 'package:client/features/community/utils/community_theme_utils.dart.dart';
+import 'package:flutter/foundation.dart';
+import 'package:client/features/events/features/live_meeting/features/video/presentation/widgets/recording_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -32,17 +33,7 @@ import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
 
 import '../../data/providers/agora_room.dart';
-
-class CommunityGlobalKey extends LabeledGlobalKey {
-  static final Map<String, CommunityGlobalKey> _participantKeys = {};
-
-  final String distinctLabel;
-
-  CommunityGlobalKey._(this.distinctLabel) : super(distinctLabel);
-
-  factory CommunityGlobalKey.fromLabel(String label) =>
-      _participantKeys[label] ??= CommunityGlobalKey._(label);
-}
+import 'networking_status.dart';
 
 /// Show the twilio meeting on desktop
 class VideoFlutterMeeting extends StatefulHookWidget {
@@ -57,6 +48,12 @@ class VideoFlutterMeeting extends StatefulHookWidget {
 class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
   static const spacerSize = 5.0;
 
+  /// Narrow rail for non-sharer cameras during screen share (marquee takes the rest).
+  static const screenShareSidebarWidth = 220.0;
+
+  /// Bottom strip height for two-person screen share (matches stage side panel).
+  static const screenShareBottomBarHeight = 160.0;
+
   StreamSubscription? _onConferenceRoomException;
   late StreamSubscription _onUnloadSubscription;
 
@@ -64,9 +61,7 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
   /// themselves as they switch dominant speaker.
   List<String> _currentStageOrdering = [];
 
-  ConferenceRoom get _conferenceRoom => Provider.of<ConferenceRoom>(context);
-  ConferenceRoom get _conferenceRoomRead =>
-      Provider.of<ConferenceRoom>(context, listen: false);
+  ConferenceRoom? get _conferenceRoom => ConferenceRoom.watchOrNull(context);
 
   LiveMeetingProvider get liveMeetingProvider =>
       Provider.of<LiveMeetingProvider>(context);
@@ -76,25 +71,39 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
   void initState() {
     super.initState();
 
-    if (ConferenceRoom.read(context)?.hasStartedConnecting == false) {
-      _connectToRoom();
-    }
-
     _onUnloadSubscription = html.window.onBeforeUnload.listen((event) {
-      _conferenceRoomRead.room?.dispose();
+      ConferenceRoom.read(context)?.room?.dispose();
     });
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ConferenceRoom is provided only after join info loads and can be
+    // replaced on room switch; this State may survive both via GlobalKey.
+    _checkConnectToRoom();
+  }
+
+  void _checkConnectToRoom() {
+    if (ConferenceRoom.read(context)?.hasStartedConnecting == false) {
+      _connectToRoom();
+    }
+  }
+
   Future<void> _connectToRoom() async {
-    _onConferenceRoomException =
-        _conferenceRoomRead.onException.listen((err) async {
+    final conferenceRoom = ConferenceRoom.read(context);
+    if (conferenceRoom == null || conferenceRoom.hasStartedConnecting) return;
+    // Set before the first await so a same-frame rebuild cannot double-connect.
+    conferenceRoom.hasStartedConnecting = true;
+    await _onConferenceRoomException?.cancel();
+    _onConferenceRoomException = conferenceRoom.onException.listen((err) async {
       loggingService.log('showing alert in listener');
       await showAlert(
         context,
         err is PlatformException ? err.details : err.toString(),
       );
     });
-    await _conferenceRoomRead.connect();
+    await conferenceRoom.connect();
   }
 
   @override
@@ -107,13 +116,15 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
     super.dispose();
   }
 
-  CommunityGlobalKey _getGlobalKey(String label) {
-    return CommunityGlobalKey.fromLabel(label);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final error = _conferenceRoom.connectError;
+    final conferenceRoom = _conferenceRoom;
+    if (conferenceRoom == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    // watchOrNull can start succeeding on rebuild without didChangeDependencies.
+    _checkConnectToRoom();
+    final error = conferenceRoom.connectError;
     if (error != null && error.trim().isNotEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,7 +144,7 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
 
     return CustomStreamBuilder(
       entryFrom: '_VideoFlutterMeetingState.build',
-      stream: Stream.fromFuture(_conferenceRoom.connectionFuture),
+      stream: Stream.fromFuture(conferenceRoom.connectionFuture),
       errorMessage: 'Something went wrong loading room. Please refresh!',
       loadingMessage: 'Connecting to room...',
       textStyle: TextStyle(color: context.theme.colorScheme.onSurface),
@@ -142,83 +153,116 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
   }
 
   Widget _buildLayout() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Expanded(child: _buildVideoLayout()),
-      ],
+    return NetworkingStatus(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Expanded(child: _buildVideoLayout()),
+        ],
+      ),
     );
   }
 
   Widget _buildVideoLayout() {
-    const recordingPulseSize = 16.0;
-
     return Stack(
       children: [
-        _buildMainVideoContent(context, _conferenceRoom),
-        if (EventProvider.watch(context).event.eventSettings?.alwaysRecord ==
+        Selector<LiveMeetingProvider, String?>(
+          selector: (_, lmp) => lmp.liveMeeting?.screenSharingUserId,
+          builder: (context, _, __) {
+            final conferenceRoom = _conferenceRoom;
+            if (conferenceRoom == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            return _buildMainVideoContent(context, conferenceRoom);
+          },
+        ),
+        if (EventProvider.watch(context)
+                .eventOrNull
+                ?.eventSettings
+                ?.alwaysRecord ==
             true)
           Container(
             alignment: Alignment.topRight,
-            child: Container(
-              color: context.theme.colorScheme.scrim.withScrimOpacity,
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    height: recordingPulseSize,
-                    width: recordingPulseSize,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: context.theme.colorScheme.errorContainer,
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Recording',
-                    style:
-                        TextStyle(color: context.theme.colorScheme.onPrimary),
-                  ),
-                  SizedBox(width: 26),
-                ],
-              ),
-            ),
+            child: const RecordingIndicator(),
           ),
       ],
     );
+  }
+
+  Widget? _screenShareLayoutOrNull(ConferenceRoom conferenceRoom) {
+    final screenSharer = conferenceRoom.screenSharer;
+    if (screenSharer == null) return null;
+    return _buildScreenShareLayout(conferenceRoom, screenSharer);
   }
 
   Widget _buildMainVideoContent(
     BuildContext context,
     ConferenceRoom conferenceRoom,
   ) {
-    final screenSharer = conferenceRoom.screenSharer;
-    if (screenSharer != null) {
+    final screenShareLayout = _screenShareLayoutOrNull(conferenceRoom);
+    if (screenShareLayout != null) return screenShareLayout;
+    return _buildHostlessLayout();
+  }
+
+  /// Marquee screen share; non-sharers in a bottom strip (2 people) or right rail (3+).
+  Widget _buildScreenShareLayout(
+    ConferenceRoom conferenceRoom,
+    AgoraParticipant screenSharer,
+  ) {
+    final sidebarParticipants = conferenceRoom.participants.where((p) {
+      if (p.userId != screenSharer.userId) return true;
+      return p.screenAgoraUid != null;
+    }).toList();
+
+    final marquee = Padding(
+      padding: const EdgeInsets.all(spacerSize),
+      child: ParticipantWidget(
+        globalKey: ValueKey('${screenSharer.userId}-screen-share'),
+        participant: screenSharer,
+        isScreenShare: true,
+      ),
+    );
+
+    // Bottom rail when at most one non-sharer tile (dual-engine includes sharer's
+    // camera in sidebar; canvas excludes sharer — same threshold either way).
+    final nonSharerSidebarCount = sidebarParticipants
+        .where((p) => p.userId != screenSharer.userId)
+        .length;
+    final useBottomBar = nonSharerSidebarCount <= 1;
+    if (useBottomBar) {
       return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            flex: 3,
-            child: Padding(
-              padding: const EdgeInsets.all(spacerSize),
-              child: ParticipantWidget(
-                globalKey: _getGlobalKey('${screenSharer.userId}-screen-share'),
-                participant: screenSharer,
-                isScreenShare: true,
-              ),
-            ),
-          ),
-          Expanded(
+          Expanded(child: marquee),
+          SizedBox(
+            height: screenShareBottomBarHeight,
             child: _SidePanelParticipants(
-              remainingParticipants: conferenceRoom.participants,
+              remainingParticipants: sidebarParticipants,
             ),
           ),
         ],
       );
-    } else {
-      return _buildHostlessLayout();
     }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: marquee),
+        if (sidebarParticipants.isNotEmpty)
+          SizedBox(
+            width: screenShareSidebarWidth,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                0,
+                spacerSize,
+                spacerSize,
+                spacerSize,
+              ),
+              child: _ScreenShareSidebar(participants: sidebarParticipants),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildMeetingGuideCard() {
@@ -315,7 +359,26 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
   }
 
   Widget _buildHostlessDesktop() {
-    final participants = _conferenceRoom.participants;
+    final conferenceRoom = _conferenceRoom;
+    if (conferenceRoom == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final screenShareLayout = _screenShareLayoutOrNull(conferenceRoom);
+    if (screenShareLayout != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildLayoutViewButtons(),
+          Expanded(child: screenShareLayout),
+          Align(
+            alignment: Alignment.centerRight,
+            child: GetHelpButton(),
+          ),
+        ],
+      );
+    }
+
+    final participants = conferenceRoom.participants;
 
     final showGuideCard = liveMeetingProvider.showGuideCard;
 
@@ -325,7 +388,7 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
 
     return LayoutBuilder(
       builder: (_, constraints) {
-        var maxHighlighted = _conferenceRoom.maxHighlightedParticipants;
+        var maxHighlighted = conferenceRoom.maxHighlightedParticipants;
 
         if (guideCardTakeover) {
           maxHighlighted = 0;
@@ -366,7 +429,7 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
                       for (final p in highlightedParticipants)
                         ParticipantWidget(
                           borderRadius: BorderRadius.circular(20),
-                          globalKey: _getGlobalKey(p.userId),
+                          globalKey: ValueKey('${p.userId}-stage'),
                           participant: p,
                         ),
                     ];
@@ -414,12 +477,44 @@ class _VideoFlutterMeetingState extends State<VideoFlutterMeeting> {
   }
 
   Widget _buildHostlessLayout() {
+    final conferenceRoom = _conferenceRoom;
+    if (conferenceRoom == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final screenShareLayout = _screenShareLayoutOrNull(conferenceRoom);
+    if (screenShareLayout != null) return screenShareLayout;
     return liveMeetingProvider.liveMeetingViewType == LiveMeetingViewType.stage
         ? _buildHostlessDesktop()
         : _buildBradyBunchViewWidget();
   }
 
   Widget _buildBradyBunchViewWidget() {
+    final conferenceRoom = _conferenceRoom;
+    if (conferenceRoom == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final screenShareLayout = _screenShareLayoutOrNull(conferenceRoom);
+    if (screenShareLayout != null) {
+      return Stack(
+        children: [
+          screenShareLayout,
+          Align(
+            alignment: Alignment.centerRight,
+            child: Column(
+              children: [
+                _buildLayoutViewButtons(),
+                Spacer(),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: GetHelpButton(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     final showGuideCard = liveMeetingProvider.showGuideCard;
     final showGuideCardLayout =
         showGuideCard && !liveMeetingProvider.isMeetingCardMinimized;
@@ -477,6 +572,7 @@ class GetHelpButton extends StatefulWidget {
         asHost: liveMeetingProvider.isHost,
         templateId: eventProvider.templateId,
       ),
+      eventTitle: eventProvider.event.title,
     );
 
     final isHostless =
@@ -547,15 +643,38 @@ class _GetHelpButtonState extends State<GetHelpButton> {
                 'Need Help?',
                 style: TextStyle(
                   fontWeight: FontWeight.w300,
-                  color: Theme.of(context).isDark
-                      ? context.theme.colorScheme.onPrimary
-                      : context.theme.colorScheme.primary,
+                  color: context.theme.colorScheme.onSurface,
                 ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Vertical camera rail shown to the right of the marquee during screen share.
+class _ScreenShareSidebar extends StatelessWidget {
+  final List<AgoraParticipant> participants;
+
+  const _ScreenShareSidebar({required this.participants});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: [
+        for (final p in participants) ...[
+          AspectRatio(
+            aspectRatio: ParticipantWidget.aspectRatio,
+            child: ParticipantWidget(
+              globalKey: ValueKey(p.userId),
+              participant: p,
+            ),
+          ),
+          const SizedBox(height: _VideoFlutterMeetingState.spacerSize),
+        ],
+      ],
     );
   }
 }
@@ -604,7 +723,7 @@ class _SidePanelParticipantsState extends State<_SidePanelParticipants> {
               children: [
                 for (final p in widget.remainingParticipants)
                   ParticipantWidget(
-                    globalKey: CommunityGlobalKey.fromLabel(p.userId),
+                    globalKey: ValueKey(p.userId),
                     participant: p,
                   ),
               ],
@@ -634,7 +753,7 @@ class _SidePanelParticipantsState extends State<_SidePanelParticipants> {
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
                             colors: [
-                              context.theme.colorScheme.secondary,
+                              context.theme.colorScheme.primaryContainer,
                               Colors.transparent,
                             ],
                           ),
@@ -661,7 +780,7 @@ class _SidePanelParticipantsState extends State<_SidePanelParticipants> {
                             end: Alignment.centerRight,
                             colors: [
                               Colors.transparent,
-                              context.theme.colorScheme.secondary,
+                              context.theme.colorScheme.primaryContainer,
                             ],
                           ),
                         ),

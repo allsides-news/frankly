@@ -1,0 +1,27 @@
+# Exclude most patch files, only track essential modified files
+**/android/
+**/ios/
+**/macos/
+**/windows/
+**/linux/
+**/example/
+**/test/
+**/test_shard/
+**/.dart_tool/
+**/build/
+**/.idea/
+**/.gradle/
+
+# Include only the specific files we modified
+!**/lib/src/web_youtube_player_iframe_controller.dart
+!**/lib/src/impl/platform/web/global_video_view_controller_platform_web.dart
+!**/lib/src/impl/platform/web/iris_js_promise.dart
+!**/lib/src/impl/platform/web/iris_js_promise_stub.dart
+!**/lib/src/impl/platform/web/iris_js_promise_web.dart
+!**/lib/src/impl/platform/web/js_iris_api_engine_binding_delegate.dart
+
+# Include essential package files
+!**/pubspec.yaml
+!**/LICENSE
+!**/README.md
+!agora_rtc_engine/analysis_options.yaml

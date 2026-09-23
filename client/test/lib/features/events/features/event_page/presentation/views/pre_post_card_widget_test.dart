@@ -10,7 +10,7 @@ import 'package:data_models/events/pre_post_card.dart';
 import 'package:data_models/events/pre_post_url_params.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:client/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:client/core/localization/app_localization_service.dart';
 

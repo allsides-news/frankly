@@ -3,6 +3,7 @@ import 'package:firebase_functions_interop/firebase_functions_interop.dart';
 import 'package:functions/events/live_meetings/live_meeting_utils.dart';
 import 'package:get_it/get_it.dart';
 import 'package:functions/events/live_meetings/get_meeting_join_info.dart';
+import 'package:functions/utils/infra/firestore_utils.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/user/public_user_info.dart';
 import 'package:mocktail/mocktail.dart';
@@ -79,6 +80,12 @@ void main() {
         roomId: event.id,
       ),
     ).thenReturn('fakeToken');
+    when(
+      () => agoraUtils.createToken(
+        uid: liveMeetingTestUtils.uidToInt(userId) | (1 << 30),
+        roomId: event.id,
+      ),
+    ).thenReturn('fakeScreenShareToken');
 
     final getMeetingJoinInfo = GetMeetingJoinInfo(
       liveMeetingUtils: LiveMeetingUtils(agoraUtils: agoraUtils),
@@ -93,6 +100,15 @@ void main() {
     expect(result['identity'], equals(userId));
     expect(result['meetingToken'], equals('fakeToken'));
     expect(result['meetingId'], equals(event.id));
+
+    // Joining must backfill the agoraId the tokens are issued under (the doc
+    // was seeded with a stale value of 123), so that other participants'
+    // GetUserIdFromAgoraId lookups can find this user.
+    final userDoc = await firestore.document('publicUser/$userId').get();
+    expect(
+      userDoc.data.toMap()['agoraId'],
+      equals(liveMeetingTestUtils.uidToInt(userId)),
+    );
   });
 
   test('Throws unauthorized error for inactive participant', () async {

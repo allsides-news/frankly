@@ -13,8 +13,16 @@ import 'package:data_models/templates/template.dart';
 class AboutCommunityCarouselTab extends StatelessWidget {
   final Community community;
 
+  /// The carousel's current rendered size (see [_CommunityCarouselState._carouselSize]),
+  /// which scales continuously with the viewport. The tagline font size is
+  /// scaled against this same value -- rather than the isMobile() breakpoint
+  /// -- so its wrapping stays proportional to the image at every width
+  /// instead of jumping between two fixed sizes.
+  final double carouselSize;
+
   const AboutCommunityCarouselTab({
     required this.community,
+    required this.carouselSize,
     Key? key,
   }) : super(key: key);
 
@@ -60,8 +68,7 @@ class AboutCommunityCarouselTab extends StatelessWidget {
                 child: HeightConstrainedText(
                   community.tagLine!,
                   style: AppTextStyle.headline3.copyWith(
-                    fontSize:
-                        responsiveLayoutService.getDynamicSize(context, 40),
+                    fontSize: 40 * (carouselSize / AppSize.kMaxCarouselSize),
                     color: context.theme.colorScheme.onPrimary,
                   ),
                   textAlign: TextAlign.center,

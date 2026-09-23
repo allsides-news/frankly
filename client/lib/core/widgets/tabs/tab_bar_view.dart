@@ -15,20 +15,20 @@ class CustomTabBarView extends StatelessWidget {
     final controller = Provider.of<CustomTabControllerState>(context);
     final currentTab = controller.currentTab;
     final tabContents = controller.tabContents;
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: IndexedStack(
-        index: currentTab,
-        sizing: StackFit.loose,
-        children: [
-          for (final content in tabContents)
-            Visibility(
-              maintainState: keepAlive,
-              visible: currentTab == tabContents.indexOf(content),
-              child: content(context),
-            ),
-        ],
-      ),
+    // Do not wrap this in a GestureDetector that unfocuses on tap. That
+    // recognizer shares the arena with TextField selection on web and leaves
+    // RenderEditable._lastTapDownPosition null (Sentry JA/JC/JH).
+    return IndexedStack(
+      index: currentTab,
+      sizing: StackFit.loose,
+      children: [
+        for (final content in tabContents)
+          Visibility(
+            maintainState: keepAlive,
+            visible: currentTab == tabContents.indexOf(content),
+            child: content(context),
+          ),
+      ],
     );
   }
 }

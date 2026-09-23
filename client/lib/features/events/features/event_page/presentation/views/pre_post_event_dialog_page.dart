@@ -4,6 +4,7 @@ import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
 import 'package:client/features/community/data/providers/user_admin_details_builder.dart';
+import 'package:client/features/events/features/event_page/presentation/views/pre_post_survey_questions_view.dart';
 import 'package:client/services.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
@@ -19,18 +20,40 @@ import '../pre_post_event_dialog_presenter.dart';
 class PrePostEventDialogPage extends StatefulWidget {
   final PrePostCard prePostCard;
   final Event event;
+  final bool showSurveyQuestions;
 
   const PrePostEventDialogPage._({
     Key? key,
     required this.prePostCard,
     required this.event,
+    required this.showSurveyQuestions,
   }) : super(key: key);
 
   static Future<void> show({
     required PrePostCard prePostCardData,
     required Event event,
   }) async {
+    // Only prompt for the survey if this user hasn't already submitted
+    // answers for this card (e.g. they answered when they registered and are
+    // now re-opening the event). If the lookup fails, prompt again - an extra
+    // prompt is better than silently losing required answers.
+    bool hasExistingResponse = false;
+    if (prePostCardData.hasSurveyQuestions) {
+      hasExistingResponse = await swallowErrors(
+            () => firestoreEventService.hasPrePostSurveyResponse(
+              event: event,
+              prePostCardType: prePostCardData.type,
+            ),
+          ) ??
+          false;
+    }
+    final showSurveyQuestions =
+        prePostCardData.hasSurveyQuestions && !hasExistingResponse;
+
     await showCustomDialog(
+      // Answering configured survey questions is required, so don't allow
+      // dismissing the dialog by tapping the barrier.
+      isDismissible: !showSurveyQuestions,
       builder: (context) {
         return Dialog(
           shape:
@@ -38,6 +61,7 @@ class PrePostEventDialogPage extends StatefulWidget {
           child: PrePostEventDialogPage._(
             prePostCard: prePostCardData,
             event: event,
+            showSurveyQuestions: showSurveyQuestions,
           ),
         );
       },
@@ -56,12 +80,22 @@ class _PrePostEventDialogPageState extends State<PrePostEventDialogPage>
   @override
   void initState() {
     super.initState();
-    _model = PrePostEventDialogModel(widget.prePostCard, widget.event);
+    _model = PrePostEventDialogModel(
+      widget.prePostCard,
+      widget.event,
+      showSurveyQuestions: widget.showSurveyQuestions,
+    );
     _presenter = PrePostEventDialogPresenter(
+      this,
       _model,
       userAdminDetailsProvider:
           UserAdminDetailsProvider.forUser(userService.currentUserId!),
     )..initialize();
+  }
+
+  @override
+  void updateView() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -71,51 +105,92 @@ class _PrePostEventDialogPageState extends State<PrePostEventDialogPage>
     final iconPaddingSize = _presenter.getSize(context, 0);
     final iconSize = _presenter.getSize(context, 32);
     final maxWidth = _presenter.getSize(context, 700);
+    final surveyQuestions = _presenter.surveyQuestions;
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: Padding(
-        padding: EdgeInsets.all(overallPaddingSize),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+    return PopScope(
+      canPop: _presenter.canDismiss,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        // The dialog grows vertically with its content and stays centered. If
+        // the content exceeds the viewport height it becomes scrollable.
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.all(overallPaddingSize),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CustomInkWell(
-                  onTap: () => Navigator.pop(context),
-                  boxShape: BoxShape.circle,
-                  child: Padding(
-                    padding: EdgeInsets.all(iconPaddingSize),
-                    child: Icon(
-                      Icons.close,
-                      size: iconSize,
-                      color: context.theme.colorScheme.onSurface,
+                // Also shown after a failed survey save (canDismiss becomes
+                // true) so the participant always has a way out of the dialog.
+                if (_presenter.canDismiss)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      CustomInkWell(
+                        onTap: () => Navigator.pop(context),
+                        boxShape: BoxShape.circle,
+                        child: Padding(
+                          padding: EdgeInsets.all(iconPaddingSize),
+                          child: Icon(
+                            Icons.close,
+                            size: iconSize,
+                            color: context.theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                HeightConstrainedText(
+                  _model.prePostCard.headline,
+                  style: context.theme.textTheme.titleLarge,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 10),
+                HtmlContent(
+                  _model.prePostCard.message,
+                  style: context.theme.textTheme.titleSmall,
+                ),
+                SizedBox(height: 10),
+                if (surveyQuestions.isNotEmpty) ...[
+                  SizedBox(height: 10),
+                  PrePostSurveyQuestionsView(
+                    questions: surveyQuestions,
+                    selectedOptionIds: _model.selectedOptionIds,
+                    selectedAgreements: _model.selectedAgreements,
+                    onOptionSelected: (question, optionId) =>
+                        _presenter.selectSurveyOption(question, optionId),
+                    onAgreementSelected: (question, statement, answer) =>
+                        _presenter.selectSurveyAgreement(
+                      question,
+                      statement,
+                      answer,
                     ),
                   ),
-                ),
+                ],
+                _buildBottomSection(isMobile),
               ],
             ),
-            HeightConstrainedText(
-              _model.prePostCard.headline,
-              style: context.theme.textTheme.titleLarge,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            SizedBox(height: 10),
-            HtmlContent(
-              _model.prePostCard.message,
-              style: context.theme.textTheme.titleSmall,
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-            ),
-            SizedBox(height: 10),
-            _buildBottomSection(isMobile),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  bool get _isNextEnabled =>
+      !_model.isSubmittingSurvey &&
+      (!_presenter.isSurveyRequired || _presenter.isSurveyComplete);
+
+  /// Saves survey answers (when a survey is configured) before closing the
+  /// dialog so participants can move on.
+  Future<void> _onNextPressed() async {
+    if (_presenter.isSurveyRequired) {
+      await alertOnError(context, () => _presenter.submitSurvey());
+      // Stay open after a failed save so the participant can retry; a close
+      // icon and back navigation become available so they aren't trapped.
+      if (!_presenter.isSurveySubmitted) return;
+    }
+    if (mounted) Navigator.of(context).pop();
   }
 
   Widget _buildBottomSection(bool isMobile) {
@@ -147,13 +222,16 @@ class _PrePostEventDialogPageState extends State<PrePostEventDialogPage>
           if (hasUrls) ...[
             _buildNotNowWidget(),
             SizedBox(width: 30),
-            Wrap(
-              runSpacing: 8,
-              spacing: 8,
-              children: [
-                for (final url in _model.prePostCard.prePostUrls)
-                  _buildSurveyButtonWidget(url),
-              ],
+            Expanded(
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                runSpacing: 8,
+                spacing: 8,
+                children: [
+                  for (final url in _model.prePostCard.prePostUrls)
+                    _buildSurveyButtonWidget(url),
+                ],
+              ),
             ),
           ] else ...[
             SizedBox.shrink(),
@@ -168,7 +246,7 @@ class _PrePostEventDialogPageState extends State<PrePostEventDialogPage>
     return ActionButton(
       type: ActionButtonType.outline,
       text: 'Next',
-      onPressed: () => Navigator.of(context).pop(),
+      onPressed: _isNextEnabled ? () => _onNextPressed() : null,
     );
   }
 
@@ -186,7 +264,7 @@ class _PrePostEventDialogPageState extends State<PrePostEventDialogPage>
 
   Widget _buildNextButton() {
     return ActionButton(
-      onPressed: () => Navigator.pop(context),
+      onPressed: _isNextEnabled ? () => _onNextPressed() : null,
       text: 'Next',
     );
   }

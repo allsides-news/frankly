@@ -42,7 +42,6 @@ class _JumpToRoomDialogState extends State<JumpToRoomDialog> {
         ActionButton(
           onPressed: () => Navigator.of(context).pop(_textController.text),
           text: context.l10n.view,
-          textColor: Theme.of(context).primaryColor,
         ),
       ],
     );
@@ -56,7 +55,7 @@ class _JumpToRoomDialogState extends State<JumpToRoomDialog> {
           alignment: Alignment.topLeft,
           child: Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
+              color: Theme.of(context).colorScheme.primary,
               borderRadius: BorderRadius.only(
                 bottomRight: Radius.circular(4),
               ),

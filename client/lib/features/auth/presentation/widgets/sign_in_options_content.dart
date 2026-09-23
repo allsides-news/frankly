@@ -1,4 +1,5 @@
 import 'package:client/core/utils/navigation_utils.dart';
+import 'package:client/core/utils/validation_utils.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -48,12 +49,6 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
   final _displayNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  bool isEmailValid(String email) {
-    return RegExp(
-      r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
-    ).hasMatch(email);
-  }
 
   bool isPasswordValid(String password) {
     // Password must be at least 6 characters long, and contain one lowercase and one uppercase letter
@@ -158,8 +153,9 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
   }
 
   Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
     await authMessageOnError(
-      () => userService.resetPassword(email: _emailController.text),
+      () => userService.resetPassword(email: email),
       errorCallback: (error, msg) => {
         if (msg == 'Email must be entered to reset password.')
           setState(() {
@@ -174,8 +170,7 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
       },
       callback: () => {
         setState(() {
-          _formMessage =
-              context.l10n.passwordResetLinkSent(_emailController.text);
+          _formMessage = context.l10n.passwordResetLinkSent(email);
           _ignorePassword = false;
         }),
       },
@@ -249,10 +244,6 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
 
   List<Widget> _buildSignIn() {
     double screenWidth = MediaQuery.of(context).size.width;
-    double googleButtonWidth = double.infinity;
-    if (widget.inModal && screenWidth <= 375) {
-      googleButtonWidth = 80;
-    }
 
     // Determine if we're on mobile (width < 768) or desktop
     bool isMobile = screenWidth < 768;
@@ -415,44 +406,43 @@ class _SignInOptionsContentState extends State<SignInOptionsContent> {
                 ),
                 type: ActionButtonType.filled,
                 expand: true,
-                textColor: Colors.white,
-                color: Colors.black,
+                textColor: context.theme.colorScheme.onPrimary,
+                color: context.theme.colorScheme.primary,
                 text: !_showSignup ? context.l10n.signIn : context.l10n.signUp,
               ),
             ),
-          ],
-        ),
-      ),
-      SizedBox(height: 9),
-      Align(
-        alignment: Alignment.center,
-        child: Text(
-          context.l10n.or,
-          style: context.theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      SizedBox(height: 9),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: ActionButton(
-          key: SignInOptionsContent.buttonGoogleKey,
-          expand: true,
-          maxTextWidth: googleButtonWidth,
-          onPressed: () => context.read<UserService>().signInWithGoogle(),
-          type: ActionButtonType.outline,
-          icon: Padding(
-            padding: const EdgeInsets.only(right: 8, top: 6, bottom: 6),
-            child: Image.asset(
-              'media/googleLogo.png',
-              width: 22,
-              height: 22,
+            SizedBox(height: 9),
+            Align(
+              alignment: Alignment.center,
+              child: Text(
+                context.l10n.or,
+                style: context.theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
-          text: _showSignup
-              ? context.l10n.signUpWithGoogle
-              : context.l10n.signInWithGoogle,
+            SizedBox(height: 9),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: ActionButton(
+                key: SignInOptionsContent.buttonGoogleKey,
+                expand: true,
+                onPressed: () => context.read<UserService>().signInWithGoogle(),
+                type: ActionButtonType.outline,
+                icon: Padding(
+                  padding: const EdgeInsets.only(right: 2, top: 6, bottom: 6),
+                  child: Image.asset(
+                    'media/googleLogo.png',
+                    width: 22,
+                    height: 22,
+                  ),
+                ),
+                text: _showSignup
+                    ? context.l10n.signUpWithGoogle
+                    : context.l10n.signInWithGoogle,
+              ),
+            ),
+          ],
         ),
       ),
     ];

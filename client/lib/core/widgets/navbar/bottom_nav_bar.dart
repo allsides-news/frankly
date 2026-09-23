@@ -1,5 +1,6 @@
 import 'package:client/features/auth/utils/auth_utils.dart';
 import 'package:client/styles/styles.dart';
+import 'package:client/core/localization/localization_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/discussion_threads/presentation/views/manipulate_discussion_thread_page.dart';
 import 'package:client/features/events/features/create_event/presentation/views/create_event_dialog.dart';
@@ -64,6 +65,8 @@ class CommunityBottomNavBar extends StatelessWidget {
     return SelectableNavigationIcon(
       isSelected: false,
       iconData: Icons.today_rounded,
+      // Icon-only, so it needs a name for screen readers.
+      label: context.l10n.myEvents,
       onTap: () => guardSignedIn(() async {
         routerDelegate.beamTo(
           UserSettingsLocation(

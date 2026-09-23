@@ -1,8 +1,9 @@
+import 'package:flutter/material.dart';
+
+import 'package:client/core/utils/js_interop_bridge.dart';
+import 'package:client/core/utils/platform_utils.dart' as platform_utils;
 import 'package:universal_html/html.dart' as html;
 import 'package:universal_html/js.dart' as js;
-import 'package:client/core/utils/platform_utils.dart' as platform_utils;
-
-import 'package:flutter/material.dart';
 
 class VimeoVideoWidget extends StatefulWidget {
   final String? vimeoId;
@@ -39,7 +40,7 @@ class _VimeoVideoWidgetState extends State<VimeoVideoWidget> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       js.context.callMethod(
         'playVimeoVideo',
-        [_div, widget.vimeoId, js.allowInterop(widget.onEnded ?? () {})],
+        [_div, widget.vimeoId, legacyJsAllowInteropVoid(widget.onEnded ?? () {})],
       );
     });
   }

@@ -18,6 +18,34 @@ class ShareLink implements CloudFunction {
 
   String get _appName => functions.config.get('app.name') as String? ?? 'AllSides Roundtables';
 
+  /// Transforms a Cloudinary image URL to OG-optimal dimensions (1200×630).
+  ///
+  /// Inserts `w_1200,h_630,c_fill,q_auto,f_jpg` after `/upload/` so Cloudinary
+  /// returns a properly-sized image instead of the raw uploaded asset, which is
+  /// often too small for social sharing cards to display.
+  /// Returns the original URL unchanged for non-Cloudinary URLs or URLs that
+  /// already carry any transform parameters (detected by the `[a-z]_` prefix
+  /// pattern common to all Cloudinary transform segments).
+  String _toOgImageUrl(String url) {
+    const uploadSegment = '/upload/';
+    if (!url.contains('res.cloudinary.com') || !url.contains(uploadSegment)) {
+      return url;
+    }
+    const transform = 'w_1200,h_630,c_fill,q_auto,f_jpg';
+    final idx = url.indexOf(uploadSegment) + uploadSegment.length;
+    final remainder = url.substring(idx);
+    // Any Cloudinary transform segment starts with a single lowercase letter
+    // followed by an underscore (e.g. w_, h_, c_, f_, q_, b_, r_, e_, l_…).
+    // NOTE: Public IDs that happen to start with a single letter + underscore
+    // (e.g. `a_photo.jpg`, `e_event_banner.jpg`) will also match this heuristic
+    // and bypass the transform. This is an accepted trade-off; rename such
+    // assets if OG transforms need to be applied to them.
+    if (RegExp(r'^[a-z]_').hasMatch(remainder)) {
+      return url;
+    }
+    return '${url.substring(0, idx)}$transform/${url.substring(idx)}';
+  }
+
   /// Strips HTML tags from a string to make it safe for meta tag content
   /// Meta tags should only contain plain text, not HTML markup
   String _stripHtmlTags(String text) {
@@ -161,6 +189,11 @@ class ShareLink implements CloudFunction {
     if (image.startsWith('http://')) {
       image = image.replaceFirst('http://', 'https://');
     }
+
+    // Upscale Cloudinary images to 1200×630 for proper social card display
+    final transformedImage = _toOgImageUrl(image);
+    final imageWasTransformed = transformedImage != image;
+    image = transformedImage;
     
     // Sanitize description by stripping HTML tags for meta tag content
     final sanitizedDescription = _stripHtmlTags(description);
@@ -186,6 +219,7 @@ class ShareLink implements CloudFunction {
         <meta property="og:url" content="$urlEscaped"/>
         <meta property="og:image" content="$imageEscaped"/>
         <meta name="image" property="og:image" content="$imageEscaped">
+        ${imageWasTransformed ? '<meta property="og:image:width" content="1200"/>\n        <meta property="og:image:height" content="630"/>' : ''}
 
         <meta name="twitter:title" content="$titleEscaped">
         <meta name="twitter:description" content="$descriptionEscaped">

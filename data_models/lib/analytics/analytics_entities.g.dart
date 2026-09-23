@@ -336,6 +336,40 @@ Map<String, dynamic> _$AnalyticsDonateEventToJson(
       'amount': instance.amount,
     };
 
+AnalyticsTapRsvpButtonEvent _$AnalyticsTapRsvpButtonEventFromJson(
+        Map<String, dynamic> json) =>
+    AnalyticsTapRsvpButtonEvent(
+      communityId: json['communityId'] as String,
+      eventId: json['eventId'] as String,
+      templateId: json['templateId'] as String?,
+    );
+
+Map<String, dynamic> _$AnalyticsTapRsvpButtonEventToJson(
+        AnalyticsTapRsvpButtonEvent instance) =>
+    <String, dynamic>{
+      'communityId': instance.communityId,
+      'eventId': instance.eventId,
+      'templateId': instance.templateId,
+    };
+
+AnalyticsTapEnterEventButtonEvent _$AnalyticsTapEnterEventButtonEventFromJson(
+        Map<String, dynamic> json) =>
+    AnalyticsTapEnterEventButtonEvent(
+      communityId: json['communityId'] as String,
+      eventId: json['eventId'] as String,
+      templateId: json['templateId'] as String?,
+      buttonText: json['buttonText'] as String,
+    );
+
+Map<String, dynamic> _$AnalyticsTapEnterEventButtonEventToJson(
+        AnalyticsTapEnterEventButtonEvent instance) =>
+    <String, dynamic>{
+      'communityId': instance.communityId,
+      'eventId': instance.eventId,
+      'templateId': instance.templateId,
+      'buttonText': instance.buttonText,
+    };
+
 AnalyticsUpdateCommunitySubscriptionEvent
     _$AnalyticsUpdateCommunitySubscriptionEventFromJson(
             Map<String, dynamic> json) =>

@@ -12,6 +12,9 @@ class SharedPreferencesService {
   static const _kCameraOnByDefault = 'camera-on-by-default';
   static const _kMicOnByDefault = 'mic-on-by-default';
   static const _kIsEditTemplateTooltipShown = 'is-edit-template-tooltip-shown';
+  static const _kActiveBreakoutRoomId = 'active-breakout-room-id';
+  static const _kActiveBreakoutSessionId = 'active-breakout-session-id';
+  static const _kActiveBreakoutEventId = 'active-breakout-event-id';
 
   late SharedPreferences _preferences;
   Future<SharedPreferences>? _loadingPreferencesFuture;
@@ -95,4 +98,31 @@ class SharedPreferencesService {
       _preferences.getString(_defaultMicrophoneId);
   Future<bool> setDefaultMicrophoneId(String id) =>
       _preferences.setString(_defaultMicrophoneId, id);
+
+  String? getActiveBreakoutRoomId() =>
+      _preferences.getString(_kActiveBreakoutRoomId);
+  String? getActiveBreakoutSessionId() =>
+      _preferences.getString(_kActiveBreakoutSessionId);
+  String? getActiveBreakoutEventId() =>
+      _preferences.getString(_kActiveBreakoutEventId);
+
+  Future<void> setActiveBreakoutRoomInfo({
+    required String eventId,
+    required String breakoutRoomId,
+    required String breakoutSessionId,
+  }) async {
+    await Future.wait([
+      _preferences.setString(_kActiveBreakoutEventId, eventId),
+      _preferences.setString(_kActiveBreakoutRoomId, breakoutRoomId),
+      _preferences.setString(_kActiveBreakoutSessionId, breakoutSessionId),
+    ]);
+  }
+
+  Future<void> clearActiveBreakoutRoomInfo() async {
+    await Future.wait([
+      _preferences.remove(_kActiveBreakoutEventId),
+      _preferences.remove(_kActiveBreakoutRoomId),
+      _preferences.remove(_kActiveBreakoutSessionId),
+    ]);
+  }
 }

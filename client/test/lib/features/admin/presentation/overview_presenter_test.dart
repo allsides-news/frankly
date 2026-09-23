@@ -101,7 +101,7 @@ void main() {
                 'Follow along for upcoming events, resources, and more.';
             break;
           case OnboardingStep.createStripeAccount:
-            expectedResult = 'Enable donations for your community.';
+            expectedResult = 'Enable donations for your space.';
             break;
         }
 

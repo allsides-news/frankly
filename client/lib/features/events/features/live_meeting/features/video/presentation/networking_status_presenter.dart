@@ -18,6 +18,7 @@ class NetworkingStatusPresenter {
   final NetworkingStatusView _view;
   final NetworkingStatusModel _model;
   final ConferenceRoom _conferenceRoom;
+  bool _lastWasBad = false;
 
   NetworkingStatusPresenter(
     BuildContext context,
@@ -26,35 +27,52 @@ class NetworkingStatusPresenter {
     ConferenceRoom? conferenceRoom,
   }) : _conferenceRoom = conferenceRoom ?? context.read<ConferenceRoom>();
 
+  static const _badStates = [
+    QualityType.qualityPoor,
+    QualityType.qualityVbad,
+    QualityType.qualityBad,
+    QualityType.qualityDown,
+  ];
+
+  bool get _isUplinkBad => _badStates.contains(_model.uplinkQuality);
+  bool get _isDownlinkBad => _badStates.contains(_model.downlinkQuality);
+  bool get _isAnyLinkBad => _isUplinkBad || _isDownlinkBad;
+
+  /// True while the Agora connection dropped and the SDK is re-establishing
+  /// it (set from the client bridge's connection-state events).
+  bool get isReconnecting =>
+      _conferenceRoom.room?.state == AgoraRoomState.RECONNECTING;
+
   void updateNetworkQuality() {
     final AgoraRoom? room = _conferenceRoom.room;
-    final bool isVideoEnabled = _conferenceRoom.videoEnabled;
-    _model.networkQualityLevel = room?.localParticipant?.networkQualityLevel;
+    _model.uplinkQuality = room?.localParticipant?.uplinkQuality;
+    _model.downlinkQuality = room?.localParticipant?.downlinkQuality;
 
-    const badStates = [
-      QualityType.qualityPoor,
-      QualityType.qualityVbad,
-      QualityType.qualityBad,
-      QualityType.qualityDown,
-    ];
-    if (badStates.contains(_model.networkQualityLevel) && isVideoEnabled) {
+    if (_isAnyLinkBad) {
       final Timer? timer = _model.timer;
-      loggingService.log(
-        'NetworkingStatusPresenter.updateNetworkQuality: Bad network connection',
-      );
+      if (!_lastWasBad) {
+        loggingService.log(
+          'NetworkingStatusPresenter.updateNetworkQuality: Bad network detected',
+        );
+        _lastWasBad = true;
+      }
 
       // Only spawn new timer if it's not initialised (first time) or active already
       if (timer == null || !timer.isActive) {
-        loggingService.log(
-          'NetworkingStatusPresenter.updateNetworkQuality: Spawning new timer',
-        );
 
         _model.timer = Timer.periodic(_kPrimaryThresholdDuration, (timer) {
-          if (badStates.contains(_model.networkQualityLevel)) {
+          if (_isAnyLinkBad) {
             loggingService.log(
               'NetworkingStatusPresenter.updateNetworkQuality: Bad network for more than $_kPrimaryThresholdDuration',
             );
             _model.isLowNetworkQuality = true;
+
+            // Reset dismissed state if cooldown has expired
+            if (_model.isLowNetworkQualityMessageDismissed &&
+                _model.isCooldownExpired) {
+              _model.isLowNetworkQualityMessageDismissed = false;
+            }
+
             _view.updateView();
           } else {
             _model.isLowNetworkQuality = false;
@@ -68,8 +86,14 @@ class NetworkingStatusPresenter {
         });
       }
     }
-    // If network conditions change or not in video mode
+    // If network conditions improve
     else {
+      if (_lastWasBad) {
+        loggingService.log(
+          'NetworkingStatusPresenter.updateNetworkQuality: Network improved',
+        );
+        _lastWasBad = false;
+      }
       if (_model.isLowNetworkQuality) {
         _model.isLowNetworkQuality = false;
         _view.updateView();
@@ -81,7 +105,27 @@ class NetworkingStatusPresenter {
 
   void dismissLowNetworkQualityMessage() {
     _model.isLowNetworkQualityMessageDismissed = true;
+    _model.dismissedAt = clockService.now();
     _view.updateView();
+  }
+
+  /// Alert copy differentiated by which direction is bad, because the
+  /// useful user action differs: a bad uplink can be helped by turning the
+  /// camera off; a bad downlink cannot.
+  ///
+  /// The camera-off suggestion requires the downlink to be healthy: outgoing
+  /// bandwidth estimation depends on feedback arriving over the downlink, so
+  /// a starved downlink makes the SDK report the uplink as bad too (QA
+  /// measured tx "bad" with OUT limit=none at 100 Kbps down / 2 Mbps up).
+  /// When both read bad we cannot tell which direction is really broken, and
+  /// advising camera-off on a downlink problem sends the user the wrong way.
+  String getMessage() {
+    if (_isUplinkBad && !_isDownlinkBad) {
+      return 'Your upload connection is struggling — others may see and '
+          'hear you poorly. Turning off your camera can help.';
+    }
+    return 'Your connection is spotty — you may experience audio/video '
+        'issues';
   }
 
   void dispose() {
@@ -91,10 +135,14 @@ class NetworkingStatusPresenter {
   Widget getCorrectWidget({
     required Widget nothing,
     required Widget networkStatusAlert,
+    required Widget reconnectingAlert,
   }) {
-    final currentTime = clockService.now();
-
-    if (currentTime.isAfter(_model.messageShowTimeThreshold) &&
+    // Reconnecting outranks the quality warning: the connection is DOWN,
+    // and the banner is not dismissible (it clears itself on recovery).
+    if (isReconnecting) {
+      return reconnectingAlert;
+    }
+    if (_model.isLowNetworkQuality &&
         !_model.isLowNetworkQualityMessageDismissed) {
       return networkStatusAlert;
     } else {

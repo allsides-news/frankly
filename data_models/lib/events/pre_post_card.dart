@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/pre_post_card_attribute.dart';
+import 'package:data_models/events/pre_post_survey.dart';
 import 'package:data_models/events/pre_post_url_params.dart';
 
 part 'pre_post_card.freezed.dart';
@@ -20,6 +21,7 @@ class PrePostCard with _$PrePostCard implements SerializeableRequest {
     required String headline,
     required String message,
     required PrePostCardType type,
+    @Default([]) List<PrePostSurveyQuestion> surveyQuestions,
     @Default([]) List<PrePostUrlParams> prePostUrls,
   }) = _PrePostCard;
 
@@ -28,6 +30,7 @@ class PrePostCard with _$PrePostCard implements SerializeableRequest {
       headline: '',
       message: '',
       type: type,
+      surveyQuestions: [],
       prePostUrls: [],
     );
   }
@@ -77,6 +80,10 @@ class PrePostCard with _$PrePostCard implements SerializeableRequest {
     final hasUrl = prePostUrls.any((url) =>
         url.surveyUrl != null && (url.surveyUrl?.trim().isNotEmpty ?? false));
 
-    return hasHeadline || hasMessage || hasUrl;
+    return hasHeadline || hasMessage || hasUrl || hasSurveyQuestions;
+  }
+
+  bool get hasSurveyQuestions {
+    return surveyQuestions.any((question) => question.hasData);
   }
 }

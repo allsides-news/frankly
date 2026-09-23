@@ -1,6 +1,22 @@
 // Patch firebase-admin to support named databases
-// Database ID to use (configured for default database)
-const FIREBASE_DATABASE_ID = process.env.FIREBASE_DATABASE_ID || '(default)';
+const functions = require('firebase-functions');
+
+/** Same DB the Flutter client uses (see FIREBASE_DATABASE_ID / firestore_database.dart). */
+function resolveFirestoreDatabaseId() {
+  if (process.env.FIREBASE_DATABASE_ID) {
+    return process.env.FIREBASE_DATABASE_ID;
+  }
+  try {
+    const cfg = functions.config();
+    const id = cfg.app?.firebase_database_id || cfg.firestore?.database_id;
+    if (id) return id;
+  } catch (_) {
+    // functions.config() unavailable (local tools/tests)
+  }
+  return '(default)';
+}
+
+const FIREBASE_DATABASE_ID = resolveFirestoreDatabaseId();
 
 console.log(`[Named DB Config] Using Firestore database: ${FIREBASE_DATABASE_ID}`);
 

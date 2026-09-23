@@ -15,7 +15,7 @@ enum _VisibilityType {
 }
 
 final _visibilityTypeDescriptionLookup = <_VisibilityType, String>{
-  _VisibilityType.public: 'Allow the community to join',
+  _VisibilityType.public: 'Allow the public to join',
   _VisibilityType.private: 'I\'ll share this with a private group',
 };
 

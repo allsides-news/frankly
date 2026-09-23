@@ -59,7 +59,11 @@ class ProxiedImage extends StatelessWidget {
         return Container(
           height: height,
           width: width,
-          color: loadingColor ?? context.theme.colorScheme.onPrimaryContainer,
+          // A surface, not a foreground: onPrimaryContainer is neutral400
+          // under the dark theme, so every image still loading showed up as a
+          // light grey block on a dark card.
+          color:
+              loadingColor ?? context.theme.colorScheme.surfaceContainerHighest,
         );
       }
 
@@ -69,7 +73,7 @@ class ProxiedImage extends StatelessWidget {
     Widget errorBuilder(_, __, ___) => Container(
           height: height,
           width: width,
-          color: context.theme.colorScheme.onPrimaryContainer,
+          color: context.theme.colorScheme.surfaceContainerHighest,
           child: Icon(
             Icons.broken_image,
             size: 30,

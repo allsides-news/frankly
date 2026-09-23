@@ -40,7 +40,6 @@ class CreateEventDialog extends StatelessWidget {
     final isCreateTemplateEnabled = permissionsProvider.canCreateTemplate;
 
     bool communityHasTemplates = false;
-
     if (!isCreateTemplateEnabled) {
       communityHasTemplates = communityProvider.hasTemplates;
     }
@@ -94,6 +93,7 @@ class CreateEventDialog extends StatelessWidget {
         ).eventPage(
           templateId: event.templateId,
           eventId: event.id,
+          eventTitle: event.title,
         ),
       );
     }
@@ -127,16 +127,26 @@ class CreateEventDialog extends StatelessWidget {
         context.watch<CreateEventDialogModel>().currentPageIndex + 1;
     final lastIndex = context.watch<CreateEventDialogModel>().allPages.length;
 
+    final isSelectTemplatePage =
+        context.watch<CreateEventDialogModel>().currentPageInfo ==
+            CurrentPage.selectTemplate;
+
     return Padding(
       padding: const EdgeInsets.all(30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (currentIndex > 1 && lastIndex > 1)
+          if (isSelectTemplatePage)
+            HeightConstrainedText(
+              context.l10n.newEventForWhichCommunity,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          if (currentIndex > 1 && lastIndex > 1 && !isSelectTemplatePage)
             HeightConstrainedText(
               'STEP $currentIndex OF $lastIndex',
               style: AppTextStyle.eyebrow,
             ),
+          if (isSelectTemplatePage) SizedBox(height: 20),
           _buildCurrentPage(context),
         ],
       ),

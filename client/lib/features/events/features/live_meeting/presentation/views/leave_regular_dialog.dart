@@ -42,7 +42,9 @@ class _LeaveRegularDialogState extends State<LeaveRegularDialog> {
       padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: context.theme.colorScheme.surfaceContainerLowest,
+        // The panel this is shown inside is surfaceContainer, so a lowest
+        // fill made it a white card floating on grey rather than part of it.
+        color: context.theme.colorScheme.surfaceContainer,
       ),
       child: isMobileScale
           ? _buildMobileLayout(content)

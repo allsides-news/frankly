@@ -7,6 +7,11 @@ part 'meeting_guide.freezed.dart';
 part 'meeting_guide.g.dart';
 
 const startMeetingAgendaItemId = 'start';
+
+/// Participant-detail path segment for hand raises when no agenda item is current.
+/// Must not match `__.*__`: Firestore rejects those as reserved resource ids.
+const meetingWideAgendaItemId = 'meeting-wide';
+
 const startMeetingWaitingPeriod = Duration(minutes: 5);
 
 @Freezed(makeCollectionsUnmodifiable: false)

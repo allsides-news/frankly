@@ -3,10 +3,9 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:client/core/utils/date_utils.dart';
+import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/utils/provider_utils.dart';
-import 'package:collection/collection.dart';
 import 'package:csv/csv.dart';
-import 'package:enum_to_string/enum_to_string.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/widgets/confirm_dialog.dart';
@@ -16,7 +15,9 @@ import 'package:client/services.dart';
 import 'package:client/core/utils/extensions.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/chat/chat_suggestion_data.dart';
+import 'package:client/features/events/features/event_page/data/registration_data_csv.dart';
 import 'package:data_models/community/member_details.dart';
+import 'package:data_models/events/pre_post_survey.dart';
 import 'package:data_models/templates/template.dart';
 import 'package:provider/provider.dart';
 import 'package:rxdart/rxdart.dart';
@@ -68,19 +69,26 @@ class EventProvider with ChangeNotifier {
   BehaviorSubjectWrapper<Participant>? _selfParticipantStream;
   BehaviorSubjectWrapper<List<Participant>>? _eventParticipantsStream;
 
-  late StreamSubscription _templateStreamSubscription;
+  StreamSubscription? _templateStreamSubscription;
   late BehaviorSubject<Template?> _templateStream;
 
-  late StreamSubscription _eventStreamSubscription;
+  StreamSubscription? _eventStreamSubscription;
   StreamSubscription? _selfParticipantStreamSubscription;
   StreamSubscription? _eventParticipantsStreamSubscription;
-  late StreamSubscription _userServiceChangesSubscription;
+  StreamSubscription? _userServiceChangesSubscription;
+  String? _streamsUserId;
 
   Future<PrivateLiveStreamInfo?>? _privateLiveStreamInfo;
 
   late Future<bool> _hasParticipantAttendedPrerequisiteFuture;
 
   bool _hasAttendedPrerequisite = false;
+
+  /// Last event emitted by [_eventStream]. Kept across stream restarts so
+  /// widgets that read [event] during an auth-driven resubscribe do not throw
+  /// while Flutter's StreamBuilder still holds the previous snapshot.
+  Event? _latestEvent;
+  bool _eventStreamInitialized = false;
 
   BreakoutRoomDefinition get defaultBreakoutRoomDefinition =>
       BreakoutRoomDefinition(
@@ -95,8 +103,7 @@ class EventProvider with ChangeNotifier {
   Stream<List<Event>> get upcomingEventsStream => _upcomingEvents.stream;
 
   List<Event> get upcomingEvents => _upcomingEvents.stream.value
-      .where((d) => d.id != eventId)
-      .take(2)
+      .where((d) => d.id != eventId && d.templateId == templateId)
       .toList();
 
   Stream<List<Template>> get templatesStream => _templatesStream;
@@ -113,8 +120,13 @@ class EventProvider with ChangeNotifier {
       _privateLiveStreamInfo ??=
           firestoreEventService.liveStreamPrivateInfo(event: event);
 
+  Event? get eventOrNull {
+    if (!_eventStreamInitialized) return _latestEvent;
+    return _eventStream.stream.valueOrNull ?? _latestEvent;
+  }
+
   Event get event {
-    final eventValue = _eventStream.stream.valueOrNull;
+    final eventValue = eventOrNull;
     if (eventValue == null) {
       throw Exception('Event must be loaded before being accessed.');
     }
@@ -175,7 +187,14 @@ class EventProvider with ChangeNotifier {
       _settingsValue((settings) => settings.allowPredefineBreakoutsOnHosted);
 
   bool get enableScreenshare =>
-      false; //_settingsValue((settings) => settings.allowScreenshare);
+      const bool.fromEnvironment('ENABLE_SCREENSHARE', defaultValue: false) ||
+      _settingsValue((settings) => settings.allowScreenshare);
+
+  // Prepared for in-meeting transcription status UI (e.g. "Live Transcription" badge).
+  // Not yet referenced by meeting widgets — transcription is currently start/stopped
+  // server-side only.
+  bool get enableTranscription =>
+      _settingsValue((settings) => settings.alwaysTranscribe);
 
   bool get defaultStageView =>
       _settingsValue((settings) => settings.defaultStageView);
@@ -200,7 +219,8 @@ class EventProvider with ChangeNotifier {
   }
 
   Future<bool> _checkHasParticipantAttendedPrerequisite() async {
-    final event = await _eventStream.first;
+    final event = await firstEmittedOrNull(_eventStream);
+    if (event == null) return false;
     final prerequisiteTemplateId = event.prerequisiteTemplateId;
     if (prerequisiteTemplateId != null) {
       _hasAttendedPrerequisite =
@@ -220,11 +240,34 @@ class EventProvider with ChangeNotifier {
       ? max(1, event.participantCountEstimate ?? 0)
       : eventParticipants.length;
 
+  /// Returns the actual participant count from the stream, regardless of whether
+  /// the event uses estimates. Use this when displaying counts to users with permission.
+  /// Note: This will initialize the participant stream if not already initialized.
+  int get actualParticipantCount {
+    _ensureParticipantStreamInitialized();
+    return eventParticipants.length;
+  }
+
   int get presentParticipantCount => useParticipantCountEstimate
       ? max(1, event.presentParticipantCountEstimate ?? 0)
       : eventParticipants.where((p) => p.isPresent).length;
 
+  /// Ensures the participant stream is initialized, even for hostless/livestream events.
+  /// This is called when we need to access actual participant data (e.g., for users with permission).
+  void _ensureParticipantStreamInitialized() {
+    if (_eventParticipantsStream == null) {
+      _eventParticipantsStream = firestoreEventService.eventParticipantsStream(
+        communityId: communityId,
+        templateId: templateId,
+        eventId: eventId,
+      );
+      _listenToParticipantsStream();
+    }
+  }
+
   void initialize() {
+    if (_eventStreamInitialized) return;
+
     _upcomingEvents = firestoreEventService.futurePublicEventsForCommunity(
       communityId: communityId,
     );
@@ -253,26 +296,8 @@ class EventProvider with ChangeNotifier {
     ).stream;
 
     _userServiceChangesSubscription =
-        userService.currentUserChanges.listen((_) {
-      _selfParticipantStream?.dispose();
-      if (userService.currentUserId != null) {
-        _selfParticipantStream = wrapInBehaviorSubject(
-          firestoreEventService.eventParticipantStream(
-            communityId: communityId,
-            templateId: templateId,
-            eventId: eventId,
-            userId: userService.currentUserId!,
-          ),
-        );
-      } else {
-        _selfParticipantStream = null;
-      }
-
-      _selfParticipantStreamSubscription?.cancel();
-      _selfParticipantStreamSubscription =
-          _selfParticipantStream?.stream.listen((_) => notifyListeners());
-      notifyListeners();
-    });
+        userService.currentUserChanges.listen((_) => _handleUserChanged());
+    _streamsUserId ??= userService.currentUserId;
     _templateStream = wrapInBehaviorSubject(
       firestoreDatabase.templateStream(
         communityId: communityId,
@@ -283,25 +308,131 @@ class EventProvider with ChangeNotifier {
     _listenToStreams();
     _hasParticipantAttendedPrerequisiteFuture =
         _checkHasParticipantAttendedPrerequisite();
+    _eventStreamInitialized = true;
   }
 
-  void _listenToStreams() {
-    _templateStreamSubscription = _templateStream.stream.listen((value) {
-      notifyListeners();
-    });
-    _eventStreamSubscription = _eventStream.stream.listen((_) {
-      if (!useParticipantCountEstimate && _eventParticipantsStream == null) {
-        _eventParticipantsStream =
-            firestoreEventService.eventParticipantsStream(
+  void _handleUserChanged() {
+    _recreateSelfParticipantStream();
+
+    final userId = userService.currentUserId;
+    // Recreate the event listener when the signed-in account changes.
+    // A permission-denied snapshot listener does not recover after login;
+    // without this the page stays on "Something went wrong" until reload.
+    if (_streamsUserId != null && _streamsUserId != userId) {
+      _restartEventStream();
+    }
+    _streamsUserId = userId;
+    // currentUserChanges is a BehaviorSubject; listen() replays during
+    // initialize() which runs in ChangeNotifierProvider.create. A sync
+    // notify there trips debug `!_dirty`.
+    if (!_eventStreamInitialized) return;
+    notifyListeners();
+  }
+
+  void _recreateSelfParticipantStream() {
+    _selfParticipantStreamSubscription?.cancel();
+    _selfParticipantStream?.dispose();
+    if (userService.currentUserId != null) {
+      _selfParticipantStream = wrapInBehaviorSubject(
+        firestoreEventService.eventParticipantStream(
           communityId: communityId,
           templateId: templateId,
           eventId: eventId,
+          userId: userService.currentUserId!,
+        ),
+      );
+    } else {
+      _selfParticipantStream = null;
+    }
+
+    _selfParticipantStreamSubscription = _selfParticipantStream?.stream.listen(
+      (_) => notifyListeners(),
+      onError: (Object error, StackTrace stackTrace) {
+        logStreamErrorUnlessPermissionDenied(
+          'EventProvider self-participant stream error',
+          error,
+          stackTrace,
         );
-        _eventParticipantsStreamSubscription =
-            _eventParticipantsStream?.stream.listen((_) => notifyListeners());
-      }
-      notifyListeners();
-    });
+        notifyListeners();
+      },
+    );
+  }
+
+  void _restartEventStream() {
+    _eventStreamSubscription?.cancel();
+    _eventParticipantsStreamSubscription?.cancel();
+    _eventStream.dispose();
+    _eventParticipantsStream?.dispose();
+    _eventParticipantsStream = null;
+
+    _eventStream = firestoreEventService.eventStream(
+      communityId: communityId,
+      templateId: templateId,
+      eventId: eventId,
+    );
+    _listenToEventStream();
+    _hasParticipantAttendedPrerequisiteFuture =
+        _checkHasParticipantAttendedPrerequisite();
+  }
+
+  void _listenToStreams() {
+    _templateStreamSubscription = _templateStream.stream.listen(
+      (value) {
+        notifyListeners();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        logStreamErrorUnlessPermissionDenied(
+          'EventProvider template stream error',
+          error,
+          stackTrace,
+        );
+        notifyListeners();
+      },
+    );
+    _listenToEventStream();
+  }
+
+  void _listenToParticipantsStream() {
+    _eventParticipantsStreamSubscription =
+        _eventParticipantsStream?.stream.listen(
+      (_) => notifyListeners(),
+      onError: (Object error, StackTrace stackTrace) {
+        // Private-event roster reads are often denied for non-participants.
+        // Swallow those so they do not hit the zone / Sentry; log anything else.
+        logStreamErrorUnlessPermissionDenied(
+          'EventProvider participants stream error',
+          error,
+          stackTrace,
+        );
+        notifyListeners();
+      },
+    );
+  }
+
+  void _listenToEventStream() {
+    _eventStreamSubscription = _eventStream.stream.listen(
+      (event) {
+        _latestEvent = event;
+        if (!useParticipantCountEstimate && _eventParticipantsStream == null) {
+          _eventParticipantsStream =
+              firestoreEventService.eventParticipantsStream(
+            communityId: communityId,
+            templateId: templateId,
+            eventId: eventId,
+          );
+          _listenToParticipantsStream();
+        }
+        notifyListeners();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        logStreamErrorUnlessPermissionDenied(
+          'EventProvider event stream error',
+          error,
+          stackTrace,
+        );
+        notifyListeners();
+      },
+    );
   }
 
   Future<void> updateEventSettings(EventSettings newSettings) {
@@ -313,15 +444,19 @@ class EventProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _userServiceChangesSubscription.cancel();
-    _eventStreamSubscription.cancel();
+    _userServiceChangesSubscription?.cancel();
+    _eventStreamSubscription?.cancel();
     _selfParticipantStreamSubscription?.cancel();
     _eventParticipantsStreamSubscription?.cancel();
-    _templateStreamSubscription.cancel();
-    _templatesStream.close();
-    _templateStream.close();
-    _upcomingEvents.dispose();
-    _eventStream.dispose();
+    _templateStreamSubscription?.cancel();
+    // Safe if disposed before [initialize] (e.g. leave discuss before
+    // EventPage.initState, or a sibling provider throws during create).
+    if (_eventStreamInitialized) {
+      _templatesStream.close();
+      _templateStream.close();
+      _upcomingEvents.dispose();
+      _eventStream.dispose();
+    }
     _selfParticipantStream?.dispose();
     _eventParticipantsStream?.dispose();
     super.dispose();
@@ -368,74 +503,48 @@ class EventProvider with ChangeNotifier {
     required List<MemberDetails> registrationData,
     required String? eventId,
   }) async {
-    List<List<dynamic>> rows = [];
+    final event = _eventStream.value;
 
-    List<dynamic> firstRow = [];
-    firstRow.add('${Environment.appName} ID');
-    firstRow.add('Name');
-    firstRow.add('Email');
-    firstRow.add('Member status');
-    firstRow.add('RSVP Time');
-    firstRow.add('Opted In To Community');
-    firstRow.add('Opted In To Newsletters');
-    rows.add(firstRow);
+    var surveyResponses = const <String, PrePostSurveyResponse>{};
+    var attendedUserIds = const <String>{};
+    var hasRealBreakoutRooms = false;
+    var attendanceKnown = false;
 
-    final numberOfQuestions =
-        _eventStream.value?.breakoutRoomDefinition?.breakoutQuestions.length ??
-            0;
-
-    for (var i = 0; i < numberOfQuestions; i++) {
-      firstRow.add('Answer ${i + 1}');
-    }
-
-    for (var i = 0; i < registrationData.length; i++) {
-      List<dynamic> row = [];
-      row.add(registrationData[i].id);
-      row.add(registrationData[i].displayName ?? '');
-      row.add(registrationData[i].email ?? '');
-      row.add(
-        EnumToString.convertToString(registrationData[i].membership?.status),
-      );
-      row.add(
-        registrationData[i].memberEvent?.participant?.createdDate?.toUtc(),
-      );
-      row.add(
-        registrationData[i].memberEvent?.participant?.optInToCommunity ?? false,
-      );
-      row.add(
-        registrationData[i].memberEvent?.participant?.optInToNewsletters ?? false,
-      );
-
-      final event = registrationData[i].memberEvent;
-
-      if (event != null) {
-        final questionsData =
-            event.participant?.breakoutRoomSurveyQuestions ?? [];
-        if (questionsData.isEmpty && numberOfQuestions != 0) {
-          for (var q = 0; q < numberOfQuestions; q++) {
-            row.add('');
-          }
-        } else {
-          for (var i = 0; i < questionsData.length; i++) {
-            final questionsList = questionsData[i]
-                .answers
-                .map((e) => e.options)
-                .flattened
-                .toList();
-
-            final answerId = questionsData[i].answerOptionId;
-            if (answerId.isNotEmpty) {
-              final answer =
-                  questionsList.firstWhere((element) => element.id == answerId);
-              row.add(answer.title);
-            } else {
-              row.add('');
-            }
-          }
-        }
+    if (event != null) {
+      try {
+        surveyResponses =
+            await firestoreEventService.getPrePostSurveyResponses(event: event);
+      } catch (e) {
+        loggingService.log('Failed to load pre/post survey responses: $e');
       }
-      rows.add(row);
+
+      try {
+        final attendance =
+            await firestoreLiveMeetingService.getBreakoutAttendance(
+          event: event,
+        );
+        attendedUserIds = attendance.attendeeIds;
+        hasRealBreakoutRooms = attendance.hasRealBreakoutRooms;
+        final now = clockService.now();
+        final scheduledTime = event.scheduledTime;
+        attendanceKnown = attendance.liveMeetingExists ||
+            event.isEnded ||
+            event.hasEnded(now) ||
+            (scheduledTime != null && !scheduledTime.isAfter(now));
+      } catch (e) {
+        loggingService.log('Failed to load breakout attendance: $e');
+      }
     }
+
+    final rows = buildRegistrationDataCsvRows(
+      appName: Environment.appName,
+      registrationData: registrationData,
+      event: event,
+      surveyResponsesByUserId: surveyResponses,
+      attendedUserIds: attendedUserIds,
+      hasRealBreakoutRooms: hasRealBreakoutRooms,
+      attendanceKnown: attendanceKnown,
+    );
 
     String csv = const ListToCsvConverter().convert(rows);
 

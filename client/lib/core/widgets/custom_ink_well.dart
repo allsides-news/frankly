@@ -40,7 +40,7 @@ class _CustomInkWellState extends State<CustomInkWell> {
     final localOnHover = widget.onHover;
 
     Color hoverFillColor =
-        widget.hoverColor ?? Theme.of(context).primaryColor.withOpacity(0.2);
+        widget.hoverColor ?? Theme.of(context).colorScheme.primary.withOpacity(0.2);
     if (widget.onTap == null && !widget.forceHighlightOnHover) {
       hoverFillColor = Colors.transparent;
     }

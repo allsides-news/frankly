@@ -1,6 +1,7 @@
 {
    "files" : {
       "firebase/functions/js/download-recordings.js": ["downloadRecording"],
+      "firebase/functions/js/download-transcription.js": ["downloadTranscription"],
       "firebase/functions/js/image-proxy.js": ["imageProxy"],      
       "firebase/functions/lib/admin/partner_agreements/on_partner_agreements.dart": ["PartnerAgreementOnCreate","PartnerAgreementOnUpdate"],
       "firebase/functions/lib/admin/payments/cancel_stripe_subscription_plan.dart": ["CancelStripeSubscriptionPlan"],
@@ -89,7 +90,7 @@
    "groups" : {
       "event": ["EventOnUpdate","EventOnCreate","DiscussionThreadOnDelete", "DiscussionThreadCommentOnCreate","DiscussionThreadCommentOnDelete","DiscussionThreadCommentOnUpdate", "CommunityOnCreate","CommunityMembershipOnCreate","PartnerAgreementOnCreate","PartnerAgreementOnUpdate", "TemplateOnCreate"],
       "request" : ["CalendarFeedIcs","CalendarFeedRss","CheckAssignToBreakoutsServer","CheckHostlessGoToBreakoutsServer","EmailEventReminder","ExtendCloudTaskScheduler","MuxWebhooks","ShareLink"],
-      "helperdbpubsub": ["downloadRecording", "imageProxy","UpdatePresenceStatus","TriggerEmailDigests","UpdateLiveStreamParticipantCount"], 
+      "helperdbpubsub": ["downloadRecording", "downloadTranscription", "imageProxy","UpdatePresenceStatus","TriggerEmailDigests","UpdateLiveStreamParticipantCount"], 
       "oncall1": ["CheckAdvanceMeetingGuide","CheckAssignToBreakouts","CheckHostlessGoToBreakouts","sendAnnouncement","createEvent","createCommunity","CreateLiveStream","updateMembership","VoteToKick","eventEnded","getCommunityCalendarLink","InitiateBreakouts"],
       "oncall2": ["GetBreakoutRoomAssignment","GetBreakoutRoomJoinInfo","getCommunityCapabilities","GetCommunityDonationsEnabled","GetCommunityPrePostEnabled","GetMeetingChatSuggestionData","GetMeetingJoinInfo","GetMembersData","GetServerTimestamp","GetUserAdminDetails","GetUserIdFromAgoraId"],
       "oncall3": ["joinEvent","ReassignBreakoutRoom","ResetParticipantAgendaItems","resolveJoinRequest","sendEventMessage","serverTimestamp","toggleLikeDislikeOnMeetingUserSuggestion","KickParticipant","unsubscribeFromCommunityNotifications","UpdateBreakoutRoomFlagStatus","UpdateCommunity"],

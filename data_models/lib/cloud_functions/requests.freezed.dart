@@ -3081,7 +3081,10 @@ GetMeetingJoinInfoResponse _$GetMeetingJoinInfoResponseFromJson(
 mixin _$GetMeetingJoinInfoResponse {
   String get identity => throw _privateConstructorUsedError;
   String get meetingToken => throw _privateConstructorUsedError;
-  String get meetingId => throw _privateConstructorUsedError;
+  String get meetingId =>
+      throw _privateConstructorUsedError; // Token for the secondary Agora connection used for screen sharing.
+// The screen share UID is derived as uidToInt(userId) | (1 << 30).
+  String? get screenShareToken => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -3096,7 +3099,11 @@ abstract class $GetMeetingJoinInfoResponseCopyWith<$Res> {
       _$GetMeetingJoinInfoResponseCopyWithImpl<$Res,
           GetMeetingJoinInfoResponse>;
   @useResult
-  $Res call({String identity, String meetingToken, String meetingId});
+  $Res call(
+      {String identity,
+      String meetingToken,
+      String meetingId,
+      String? screenShareToken});
 }
 
 /// @nodoc
@@ -3116,6 +3123,7 @@ class _$GetMeetingJoinInfoResponseCopyWithImpl<$Res,
     Object? identity = null,
     Object? meetingToken = null,
     Object? meetingId = null,
+    Object? screenShareToken = freezed,
   }) {
     return _then(_value.copyWith(
       identity: null == identity
@@ -3130,6 +3138,10 @@ class _$GetMeetingJoinInfoResponseCopyWithImpl<$Res,
           ? _value.meetingId
           : meetingId // ignore: cast_nullable_to_non_nullable
               as String,
+      screenShareToken: freezed == screenShareToken
+          ? _value.screenShareToken
+          : screenShareToken // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -3143,7 +3155,11 @@ abstract class _$$_GetMeetingJoinInfoResponseCopyWith<$Res>
       __$$_GetMeetingJoinInfoResponseCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String identity, String meetingToken, String meetingId});
+  $Res call(
+      {String identity,
+      String meetingToken,
+      String meetingId,
+      String? screenShareToken});
 }
 
 /// @nodoc
@@ -3162,6 +3178,7 @@ class __$$_GetMeetingJoinInfoResponseCopyWithImpl<$Res>
     Object? identity = null,
     Object? meetingToken = null,
     Object? meetingId = null,
+    Object? screenShareToken = freezed,
   }) {
     return _then(_$_GetMeetingJoinInfoResponse(
       identity: null == identity
@@ -3176,17 +3193,23 @@ class __$$_GetMeetingJoinInfoResponseCopyWithImpl<$Res>
           ? _value.meetingId
           : meetingId // ignore: cast_nullable_to_non_nullable
               as String,
+      screenShareToken: freezed == screenShareToken
+          ? _value.screenShareToken
+          : screenShareToken // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
 
 /// @nodoc
 @JsonSerializable()
-class _$_GetMeetingJoinInfoResponse implements _GetMeetingJoinInfoResponse {
+class _$_GetMeetingJoinInfoResponse extends _GetMeetingJoinInfoResponse {
   _$_GetMeetingJoinInfoResponse(
       {required this.identity,
       required this.meetingToken,
-      required this.meetingId});
+      required this.meetingId,
+      this.screenShareToken})
+      : super._();
 
   factory _$_GetMeetingJoinInfoResponse.fromJson(Map<String, dynamic> json) =>
       _$$_GetMeetingJoinInfoResponseFromJson(json);
@@ -3197,11 +3220,10 @@ class _$_GetMeetingJoinInfoResponse implements _GetMeetingJoinInfoResponse {
   final String meetingToken;
   @override
   final String meetingId;
-
+// Token for the secondary Agora connection used for screen sharing.
+// The screen share UID is derived as uidToInt(userId) | (1 << 30).
   @override
-  String toString() {
-    return 'GetMeetingJoinInfoResponse(identity: $identity, meetingToken: $meetingToken, meetingId: $meetingId)';
-  }
+  final String? screenShareToken;
 
   @override
   bool operator ==(dynamic other) {
@@ -3213,13 +3235,15 @@ class _$_GetMeetingJoinInfoResponse implements _GetMeetingJoinInfoResponse {
             (identical(other.meetingToken, meetingToken) ||
                 other.meetingToken == meetingToken) &&
             (identical(other.meetingId, meetingId) ||
-                other.meetingId == meetingId));
+                other.meetingId == meetingId) &&
+            (identical(other.screenShareToken, screenShareToken) ||
+                other.screenShareToken == screenShareToken));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, identity, meetingToken, meetingId);
+  int get hashCode => Object.hash(
+      runtimeType, identity, meetingToken, meetingId, screenShareToken);
 
   @JsonKey(ignore: true)
   @override
@@ -3236,12 +3260,13 @@ class _$_GetMeetingJoinInfoResponse implements _GetMeetingJoinInfoResponse {
   }
 }
 
-abstract class _GetMeetingJoinInfoResponse
-    implements GetMeetingJoinInfoResponse {
+abstract class _GetMeetingJoinInfoResponse extends GetMeetingJoinInfoResponse {
   factory _GetMeetingJoinInfoResponse(
       {required final String identity,
       required final String meetingToken,
-      required final String meetingId}) = _$_GetMeetingJoinInfoResponse;
+      required final String meetingId,
+      final String? screenShareToken}) = _$_GetMeetingJoinInfoResponse;
+  _GetMeetingJoinInfoResponse._() : super._();
 
   factory _GetMeetingJoinInfoResponse.fromJson(Map<String, dynamic> json) =
       _$_GetMeetingJoinInfoResponse.fromJson;
@@ -3252,6 +3277,9 @@ abstract class _GetMeetingJoinInfoResponse
   String get meetingToken;
   @override
   String get meetingId;
+  @override // Token for the secondary Agora connection used for screen sharing.
+// The screen share UID is derived as uidToInt(userId) | (1 << 30).
+  String? get screenShareToken;
   @override
   @JsonKey(ignore: true)
   _$$_GetMeetingJoinInfoResponseCopyWith<_$_GetMeetingJoinInfoResponse>
@@ -11963,6 +11991,185 @@ abstract class _GetUserIdFromAgoraIdRequest
       get copyWith => throw _privateConstructorUsedError;
 }
 
+ResendEventEmailsRequest _$ResendEventEmailsRequestFromJson(
+    Map<String, dynamic> json) {
+  return _ResendEventEmailsRequest.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ResendEventEmailsRequest {
+  String get eventPath => throw _privateConstructorUsedError;
+  String get eventId => throw _privateConstructorUsedError;
+  List<String> get userIds => throw _privateConstructorUsedError;
+
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  @JsonKey(ignore: true)
+  $ResendEventEmailsRequestCopyWith<ResendEventEmailsRequest> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ResendEventEmailsRequestCopyWith<$Res> {
+  factory $ResendEventEmailsRequestCopyWith(ResendEventEmailsRequest value,
+          $Res Function(ResendEventEmailsRequest) then) =
+      _$ResendEventEmailsRequestCopyWithImpl<$Res, ResendEventEmailsRequest>;
+  @useResult
+  $Res call({String eventPath, String eventId, List<String> userIds});
+}
+
+/// @nodoc
+class _$ResendEventEmailsRequestCopyWithImpl<$Res,
+        $Val extends ResendEventEmailsRequest>
+    implements $ResendEventEmailsRequestCopyWith<$Res> {
+  _$ResendEventEmailsRequestCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? eventPath = null,
+    Object? eventId = null,
+    Object? userIds = null,
+  }) {
+    return _then(_value.copyWith(
+      eventPath: null == eventPath
+          ? _value.eventPath
+          : eventPath // ignore: cast_nullable_to_non_nullable
+              as String,
+      eventId: null == eventId
+          ? _value.eventId
+          : eventId // ignore: cast_nullable_to_non_nullable
+              as String,
+      userIds: null == userIds
+          ? _value.userIds
+          : userIds // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$_ResendEventEmailsRequestCopyWith<$Res>
+    implements $ResendEventEmailsRequestCopyWith<$Res> {
+  factory _$$_ResendEventEmailsRequestCopyWith(
+          _$_ResendEventEmailsRequest value,
+          $Res Function(_$_ResendEventEmailsRequest) then) =
+      __$$_ResendEventEmailsRequestCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({String eventPath, String eventId, List<String> userIds});
+}
+
+/// @nodoc
+class __$$_ResendEventEmailsRequestCopyWithImpl<$Res>
+    extends _$ResendEventEmailsRequestCopyWithImpl<$Res,
+        _$_ResendEventEmailsRequest>
+    implements _$$_ResendEventEmailsRequestCopyWith<$Res> {
+  __$$_ResendEventEmailsRequestCopyWithImpl(_$_ResendEventEmailsRequest _value,
+      $Res Function(_$_ResendEventEmailsRequest) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? eventPath = null,
+    Object? eventId = null,
+    Object? userIds = null,
+  }) {
+    return _then(_$_ResendEventEmailsRequest(
+      eventPath: null == eventPath
+          ? _value.eventPath
+          : eventPath // ignore: cast_nullable_to_non_nullable
+              as String,
+      eventId: null == eventId
+          ? _value.eventId
+          : eventId // ignore: cast_nullable_to_non_nullable
+              as String,
+      userIds: null == userIds
+          ? _value.userIds
+          : userIds // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$_ResendEventEmailsRequest implements _ResendEventEmailsRequest {
+  _$_ResendEventEmailsRequest(
+      {required this.eventPath, required this.eventId, required this.userIds});
+
+  factory _$_ResendEventEmailsRequest.fromJson(Map<String, dynamic> json) =>
+      _$$_ResendEventEmailsRequestFromJson(json);
+
+  @override
+  final String eventPath;
+  @override
+  final String eventId;
+  @override
+  final List<String> userIds;
+
+  @override
+  String toString() {
+    return 'ResendEventEmailsRequest(eventPath: $eventPath, eventId: $eventId, userIds: $userIds)';
+  }
+
+  @override
+  bool operator ==(dynamic other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$_ResendEventEmailsRequest &&
+            (identical(other.eventPath, eventPath) ||
+                other.eventPath == eventPath) &&
+            (identical(other.eventId, eventId) || other.eventId == eventId) &&
+            const DeepCollectionEquality().equals(other.userIds, userIds));
+  }
+
+  @JsonKey(ignore: true)
+  @override
+  int get hashCode => Object.hash(runtimeType, eventPath, eventId,
+      const DeepCollectionEquality().hash(userIds));
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$_ResendEventEmailsRequestCopyWith<_$_ResendEventEmailsRequest>
+      get copyWith => __$$_ResendEventEmailsRequestCopyWithImpl<
+          _$_ResendEventEmailsRequest>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$_ResendEventEmailsRequestToJson(
+      this,
+    );
+  }
+}
+
+abstract class _ResendEventEmailsRequest implements ResendEventEmailsRequest {
+  factory _ResendEventEmailsRequest(
+      {required final String eventPath,
+      required final String eventId,
+      required final List<String> userIds}) = _$_ResendEventEmailsRequest;
+
+  factory _ResendEventEmailsRequest.fromJson(Map<String, dynamic> json) =
+      _$_ResendEventEmailsRequest.fromJson;
+
+  @override
+  String get eventPath;
+  @override
+  String get eventId;
+  @override
+  List<String> get userIds;
+  @override
+  @JsonKey(ignore: true)
+  _$$_ResendEventEmailsRequestCopyWith<_$_ResendEventEmailsRequest>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
 GetUserIdFromAgoraIdResponse _$GetUserIdFromAgoraIdResponseFromJson(
     Map<String, dynamic> json) {
   return _GetUserIdFromAgoraIdResponse.fromJson(json);
@@ -12106,5 +12313,417 @@ abstract class _GetUserIdFromAgoraIdResponse
   @override
   @JsonKey(ignore: true)
   _$$_GetUserIdFromAgoraIdResponseCopyWith<_$_GetUserIdFromAgoraIdResponse>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+LookupEventParticipantByEmailRequest
+    _$LookupEventParticipantByEmailRequestFromJson(Map<String, dynamic> json) {
+  return _LookupEventParticipantByEmailRequest.fromJson(json);
+}
+
+/// @nodoc
+mixin _$LookupEventParticipantByEmailRequest {
+  String get eventPath => throw _privateConstructorUsedError;
+  String get email => throw _privateConstructorUsedError;
+
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  @JsonKey(ignore: true)
+  $LookupEventParticipantByEmailRequestCopyWith<
+          LookupEventParticipantByEmailRequest>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $LookupEventParticipantByEmailRequestCopyWith<$Res> {
+  factory $LookupEventParticipantByEmailRequestCopyWith(
+          LookupEventParticipantByEmailRequest value,
+          $Res Function(LookupEventParticipantByEmailRequest) then) =
+      _$LookupEventParticipantByEmailRequestCopyWithImpl<$Res,
+          LookupEventParticipantByEmailRequest>;
+  @useResult
+  $Res call({String eventPath, String email});
+}
+
+/// @nodoc
+class _$LookupEventParticipantByEmailRequestCopyWithImpl<$Res,
+        $Val extends LookupEventParticipantByEmailRequest>
+    implements $LookupEventParticipantByEmailRequestCopyWith<$Res> {
+  _$LookupEventParticipantByEmailRequestCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? eventPath = null,
+    Object? email = null,
+  }) {
+    return _then(_value.copyWith(
+      eventPath: null == eventPath
+          ? _value.eventPath
+          : eventPath // ignore: cast_nullable_to_non_nullable
+              as String,
+      email: null == email
+          ? _value.email
+          : email // ignore: cast_nullable_to_non_nullable
+              as String,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$_LookupEventParticipantByEmailRequestCopyWith<$Res>
+    implements $LookupEventParticipantByEmailRequestCopyWith<$Res> {
+  factory _$$_LookupEventParticipantByEmailRequestCopyWith(
+          _$_LookupEventParticipantByEmailRequest value,
+          $Res Function(_$_LookupEventParticipantByEmailRequest) then) =
+      __$$_LookupEventParticipantByEmailRequestCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({String eventPath, String email});
+}
+
+/// @nodoc
+class __$$_LookupEventParticipantByEmailRequestCopyWithImpl<$Res>
+    extends _$LookupEventParticipantByEmailRequestCopyWithImpl<$Res,
+        _$_LookupEventParticipantByEmailRequest>
+    implements _$$_LookupEventParticipantByEmailRequestCopyWith<$Res> {
+  __$$_LookupEventParticipantByEmailRequestCopyWithImpl(
+      _$_LookupEventParticipantByEmailRequest _value,
+      $Res Function(_$_LookupEventParticipantByEmailRequest) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? eventPath = null,
+    Object? email = null,
+  }) {
+    return _then(_$_LookupEventParticipantByEmailRequest(
+      eventPath: null == eventPath
+          ? _value.eventPath
+          : eventPath // ignore: cast_nullable_to_non_nullable
+              as String,
+      email: null == email
+          ? _value.email
+          : email // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$_LookupEventParticipantByEmailRequest
+    implements _LookupEventParticipantByEmailRequest {
+  _$_LookupEventParticipantByEmailRequest(
+      {required this.eventPath, required this.email});
+
+  factory _$_LookupEventParticipantByEmailRequest.fromJson(
+          Map<String, dynamic> json) =>
+      _$$_LookupEventParticipantByEmailRequestFromJson(json);
+
+  @override
+  final String eventPath;
+  @override
+  final String email;
+
+  @override
+  String toString() {
+    return 'LookupEventParticipantByEmailRequest(eventPath: $eventPath, email: $email)';
+  }
+
+  @override
+  bool operator ==(dynamic other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$_LookupEventParticipantByEmailRequest &&
+            (identical(other.eventPath, eventPath) ||
+                other.eventPath == eventPath) &&
+            (identical(other.email, email) || other.email == email));
+  }
+
+  @JsonKey(ignore: true)
+  @override
+  int get hashCode => Object.hash(runtimeType, eventPath, email);
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$_LookupEventParticipantByEmailRequestCopyWith<
+          _$_LookupEventParticipantByEmailRequest>
+      get copyWith => __$$_LookupEventParticipantByEmailRequestCopyWithImpl<
+          _$_LookupEventParticipantByEmailRequest>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$_LookupEventParticipantByEmailRequestToJson(
+      this,
+    );
+  }
+}
+
+abstract class _LookupEventParticipantByEmailRequest
+    implements LookupEventParticipantByEmailRequest {
+  factory _LookupEventParticipantByEmailRequest(
+      {required final String eventPath,
+      required final String email}) = _$_LookupEventParticipantByEmailRequest;
+
+  factory _LookupEventParticipantByEmailRequest.fromJson(
+          Map<String, dynamic> json) =
+      _$_LookupEventParticipantByEmailRequest.fromJson;
+
+  @override
+  String get eventPath;
+  @override
+  String get email;
+  @override
+  @JsonKey(ignore: true)
+  _$$_LookupEventParticipantByEmailRequestCopyWith<
+          _$_LookupEventParticipantByEmailRequest>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+LookupEventParticipantByEmailResponse
+    _$LookupEventParticipantByEmailResponseFromJson(Map<String, dynamic> json) {
+  return _LookupEventParticipantByEmailResponse.fromJson(json);
+}
+
+/// @nodoc
+mixin _$LookupEventParticipantByEmailResponse {
+  bool get isRegistered => throw _privateConstructorUsedError;
+  bool get isPresent => throw _privateConstructorUsedError;
+  String? get currentRoomName => throw _privateConstructorUsedError;
+  String? get userId => throw _privateConstructorUsedError;
+  String? get displayName => throw _privateConstructorUsedError;
+
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  @JsonKey(ignore: true)
+  $LookupEventParticipantByEmailResponseCopyWith<
+          LookupEventParticipantByEmailResponse>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $LookupEventParticipantByEmailResponseCopyWith<$Res> {
+  factory $LookupEventParticipantByEmailResponseCopyWith(
+          LookupEventParticipantByEmailResponse value,
+          $Res Function(LookupEventParticipantByEmailResponse) then) =
+      _$LookupEventParticipantByEmailResponseCopyWithImpl<$Res,
+          LookupEventParticipantByEmailResponse>;
+  @useResult
+  $Res call(
+      {bool isRegistered,
+      bool isPresent,
+      String? currentRoomName,
+      String? userId,
+      String? displayName});
+}
+
+/// @nodoc
+class _$LookupEventParticipantByEmailResponseCopyWithImpl<$Res,
+        $Val extends LookupEventParticipantByEmailResponse>
+    implements $LookupEventParticipantByEmailResponseCopyWith<$Res> {
+  _$LookupEventParticipantByEmailResponseCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? isRegistered = null,
+    Object? isPresent = null,
+    Object? currentRoomName = freezed,
+    Object? userId = freezed,
+    Object? displayName = freezed,
+  }) {
+    return _then(_value.copyWith(
+      isRegistered: null == isRegistered
+          ? _value.isRegistered
+          : isRegistered // ignore: cast_nullable_to_non_nullable
+              as bool,
+      isPresent: null == isPresent
+          ? _value.isPresent
+          : isPresent // ignore: cast_nullable_to_non_nullable
+              as bool,
+      currentRoomName: freezed == currentRoomName
+          ? _value.currentRoomName
+          : currentRoomName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      userId: freezed == userId
+          ? _value.userId
+          : userId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      displayName: freezed == displayName
+          ? _value.displayName
+          : displayName // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ) as $Val);
+  }
+}
+
+/// @nodoc
+abstract class _$$_LookupEventParticipantByEmailResponseCopyWith<$Res>
+    implements $LookupEventParticipantByEmailResponseCopyWith<$Res> {
+  factory _$$_LookupEventParticipantByEmailResponseCopyWith(
+          _$_LookupEventParticipantByEmailResponse value,
+          $Res Function(_$_LookupEventParticipantByEmailResponse) then) =
+      __$$_LookupEventParticipantByEmailResponseCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call(
+      {bool isRegistered,
+      bool isPresent,
+      String? currentRoomName,
+      String? userId,
+      String? displayName});
+}
+
+/// @nodoc
+class __$$_LookupEventParticipantByEmailResponseCopyWithImpl<$Res>
+    extends _$LookupEventParticipantByEmailResponseCopyWithImpl<$Res,
+        _$_LookupEventParticipantByEmailResponse>
+    implements _$$_LookupEventParticipantByEmailResponseCopyWith<$Res> {
+  __$$_LookupEventParticipantByEmailResponseCopyWithImpl(
+      _$_LookupEventParticipantByEmailResponse _value,
+      $Res Function(_$_LookupEventParticipantByEmailResponse) _then)
+      : super(_value, _then);
+
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? isRegistered = null,
+    Object? isPresent = null,
+    Object? currentRoomName = freezed,
+    Object? userId = freezed,
+    Object? displayName = freezed,
+  }) {
+    return _then(_$_LookupEventParticipantByEmailResponse(
+      isRegistered: null == isRegistered
+          ? _value.isRegistered
+          : isRegistered // ignore: cast_nullable_to_non_nullable
+              as bool,
+      isPresent: null == isPresent
+          ? _value.isPresent
+          : isPresent // ignore: cast_nullable_to_non_nullable
+              as bool,
+      currentRoomName: freezed == currentRoomName
+          ? _value.currentRoomName
+          : currentRoomName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      userId: freezed == userId
+          ? _value.userId
+          : userId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      displayName: freezed == displayName
+          ? _value.displayName
+          : displayName // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$_LookupEventParticipantByEmailResponse
+    implements _LookupEventParticipantByEmailResponse {
+  _$_LookupEventParticipantByEmailResponse(
+      {required this.isRegistered,
+      this.isPresent = false,
+      this.currentRoomName,
+      this.userId,
+      this.displayName});
+
+  factory _$_LookupEventParticipantByEmailResponse.fromJson(
+          Map<String, dynamic> json) =>
+      _$$_LookupEventParticipantByEmailResponseFromJson(json);
+
+  @override
+  final bool isRegistered;
+  @override
+  @JsonKey()
+  final bool isPresent;
+  @override
+  final String? currentRoomName;
+  @override
+  final String? userId;
+  @override
+  final String? displayName;
+
+  @override
+  String toString() {
+    return 'LookupEventParticipantByEmailResponse(isRegistered: $isRegistered, isPresent: $isPresent, currentRoomName: $currentRoomName, userId: $userId, displayName: $displayName)';
+  }
+
+  @override
+  bool operator ==(dynamic other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$_LookupEventParticipantByEmailResponse &&
+            (identical(other.isRegistered, isRegistered) ||
+                other.isRegistered == isRegistered) &&
+            (identical(other.isPresent, isPresent) ||
+                other.isPresent == isPresent) &&
+            (identical(other.currentRoomName, currentRoomName) ||
+                other.currentRoomName == currentRoomName) &&
+            (identical(other.userId, userId) || other.userId == userId) &&
+            (identical(other.displayName, displayName) ||
+                other.displayName == displayName));
+  }
+
+  @JsonKey(ignore: true)
+  @override
+  int get hashCode => Object.hash(runtimeType, isRegistered, isPresent,
+      currentRoomName, userId, displayName);
+
+  @JsonKey(ignore: true)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$_LookupEventParticipantByEmailResponseCopyWith<
+          _$_LookupEventParticipantByEmailResponse>
+      get copyWith => __$$_LookupEventParticipantByEmailResponseCopyWithImpl<
+          _$_LookupEventParticipantByEmailResponse>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$_LookupEventParticipantByEmailResponseToJson(
+      this,
+    );
+  }
+}
+
+abstract class _LookupEventParticipantByEmailResponse
+    implements LookupEventParticipantByEmailResponse {
+  factory _LookupEventParticipantByEmailResponse(
+      {required final bool isRegistered,
+      final bool isPresent,
+      final String? currentRoomName,
+      final String? userId,
+      final String? displayName}) = _$_LookupEventParticipantByEmailResponse;
+
+  factory _LookupEventParticipantByEmailResponse.fromJson(
+          Map<String, dynamic> json) =
+      _$_LookupEventParticipantByEmailResponse.fromJson;
+
+  @override
+  bool get isRegistered;
+  @override
+  bool get isPresent;
+  @override
+  String? get currentRoomName;
+  @override
+  String? get userId;
+  @override
+  String? get displayName;
+  @override
+  @JsonKey(ignore: true)
+  _$$_LookupEventParticipantByEmailResponseCopyWith<
+          _$_LookupEventParticipantByEmailResponse>
       get copyWith => throw _privateConstructorUsedError;
 }

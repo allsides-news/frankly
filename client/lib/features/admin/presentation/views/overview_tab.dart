@@ -374,7 +374,7 @@ class _OverviewTabState extends State<OverviewTab> implements OverviewView {
     switch (onboardingStep) {
       case OnboardingStep.brandSpace:
         return ActionButton(
-          text: 'Edit your Community',
+          text: 'Edit your Space',
           icon: Icon(Icons.edit, size: 20),
           textColor: context.theme.colorScheme.primary,
           type: ActionButtonType.outline,

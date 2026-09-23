@@ -2,7 +2,12 @@
   "@@locale": "en",
   "aVIssues": "A/V issues?",
   "about": "About",
-  "aboutUs": "About Us",
+  "aboutSectionBrandName": "AllSides Roundtables",
+  "aboutSectionClosing": ".",
+  "aboutSectionDialogueGuides": ". Dialogue guides are adapted from ",
+  "aboutSectionPoweredBy": "This platform is powered by ",
+  "aboutSectionTagline": "matches you with diverse discussion groups to build mutual understanding through guided conversations.",
+  "aboutUs": "About",
   "accountExistsWithSameEmail": "An account exists with the same email address but a different sign in method. Use Sign in with Email and click Forgot Password if you don't know it. Or, Sign Up again using a different email.",
   "addACategory": "Add a category",
   "addAPrerequisiteTemplate": "Add a prerequisite template",
@@ -11,7 +16,7 @@
   "addAgendaItem": "Add agenda item",
   "addCategory": "Add a category",
   "addComment": "Add comment",
-  "addCommunityImages": "Add community images",
+  "addCommunityImages": "Add space images",
   "addNew": "+ Add New",
   "addOption": "Add option",
   "addPrerequisiteTemplate": "Add a prerequisite template",
@@ -37,7 +42,6 @@
   "areYouSureYouWantToDeleteMedia": "Are you sure you want to delete media?",
   "areYouSureYouWantToRefreshTheGuide": "Are you sure you want to refresh the guide?",
   "aspectRatioClipped": "Aspect ratio clipped",
-  "videoElement": "Video element",
   "attendee": "Attendee",
   "audioInputDevice": "Audio Input Device:",
   "avIssues": "A/V issues?",
@@ -45,6 +49,8 @@
   "avErrorNotFound": "Audio/video devices not found.",
   "avErrorMediaAccess": "Unable to access media devices.",
   "avErrorPermissionRequired": "Permission to use audio/video devices is required.",
+  "avErrorListenOnly": "Camera or microphone isn't available. You can still join and listen.",
+  "avErrorJoinWithoutDevices": "Join without camera or microphone",
   "avErrorDisconnected": "Audio/video devices disconnected.",
   "avErrorConstraints": "Media constraints error.",
   "avErrorNetwork": "Network error with audio/video connection.",
@@ -53,8 +59,8 @@
   "banned": "Banned",
   "brandYourSpace": "Brand your space",
   "broadcast": "Broadcast",
-  "buildCommunitySpace": "Build your community space",
-  "buildYourCommunitySpace": "Build your community space",
+  "buildCommunitySpace": "Build your space",
+  "buildYourCommunitySpace": "Build your space",
   "byCategory": "By Category",
   "bySigningInRegisteringOrUsing": "By signing in, registering, or using {appName}, I agree to be bound by the ",
   "bySize": "By Size",
@@ -72,8 +78,8 @@
   "clearAgenda": "Clear agenda?",
   "close": "Close",
   "closeEdit": "Close Edit",
-  "communitySuccessPrefix": "You’ve successfully created your community",
-  "communitySuccessSuffix": "Click the pencil icon in the top right to edit your community settings.",
+  "communitySuccessPrefix": "You’ve successfully created your space",
+  "communitySuccessSuffix": "Click the pencil icon in the top right to edit your space settings.",
   "congratulations": "Congratulations!",
   "confirm": "Confirm",
   "confirmDelete": "Are you sure you want to delete?",
@@ -88,7 +94,7 @@
   "createAnAnnouncement": "Create an announcement",
   "createAnEvent": "Create an event",
   "createEvent": "Create Event",
-  "createACommunity": "Create a community",
+  "createACommunity": "Create a Space",
   "currentParticipants": "Current\nParticipants",
   "darkColorHex": "Dark Color HEX#",
   "defineBreakoutsOptional": "Define Breakouts (Optional)",
@@ -120,19 +126,18 @@
   "emailAddressAlreadyInUse": "You already created an account tied to this email address. Use Sign in with Email and click Forgot Password if you don't know it. Or, Sign Up again using a different email.",
   "emailAddressAlreadyInUseLoginError": "This email is already in use. Try ",
   "endBreakoutRooms": "End Breakout Rooms",
-  "enterValidName": "Please enter a valid name", 
+  "enterValidName": "Please enter a valid name",
   "endTime": "End Time",
   "enterHeadline": "Enter Headline",
   "enterImageTitle": "Enter Image title",
   "enterQuestionWithNumber": "Enter Question {number}",
-  "enterRoomNumber": "Ex: 2",
   "enterVideoTitle": "Enter Video title",
   "enterWaitingRoomText": "Enter waiting room text (optional)",
   "enterWaitingRoomTextOptional": "Enter waiting room text (optional)",
   "enterWordCloudPrompt": "Enter Word Cloud prompt",
   "error": "Error",
-  "or": "or",
-  "errorLoadingCommunities": "Something went wrong loading communities. Please refresh.",
+  "or": "Or",
+  "errorLoadingCommunities": "Something went wrong loading spaces. Please refresh.",
   "errorLoadingEmail": "Error loading email.",
   "errorLoadingMemberships": "Something went wrong loading memberships. Please refresh.",
   "errorLoadingProfileInfo": "There was an error loading profile info.",
@@ -141,6 +146,8 @@
   "eventDescription": "Event Description",
   "eventDetails": "Event Details",
   "eventIsLocked": "This event is locked",
+  "ended": "Ended",
+  "eventHasEnded": "This meeting has ended",
   "eventLocked": "This event is locked",
   "eventTabsContent": "event-tabs-content",
   "eventTitle": "Event Title",
@@ -169,6 +176,7 @@
   "language": "Language",
   "languageSelector": "Language Selector",
   "lastSession": "Last session",
+  "learnMore": "Learn more",
   "lightColorHex": "Light Color HEX#",
   "linkedinUrl": "LinkedIn URL",
   "livestream": "Livestream",
@@ -226,7 +234,6 @@
   "notifyMeAboutNewEvents": "Notify me about new events",
   "ofTotal": "of {count}",
   "optional": "Optional",
-  "or": "Or",
   "owner": "Owner",
   "participantActions": "Participant Actions",
   "participantActionsForUserWithId": "Participant Actions for user with ID {userId}",
@@ -266,6 +273,8 @@
   "questionWithNumber": "Question {number}",
   "raiseHandJoinSpeakerQueue": "Raise your hand to join the speaker queue",
   "record": "Record",
+  "transcribe": "Transcribe",
+  "screenShare": "Screen Share",
   "odometer": "Odometer",
   "saveSettings": "Save Settings",
   "restoreSettings": "Restore Default Settings",
@@ -307,8 +316,8 @@
   "showPassword": "Show Password",
   "showSidebarButton": "Show Sidebar Button",
   "sidebarUnfollowButton": "Sidebar Unfollow Button",
-  "sidebarFollowCommunityButton": "Sidebar Follow Community Button",
-  "followCommunityButton": "Follow Community Button",
+  "sidebarFollowCommunityButton": "Sidebar Follow Space Button",
+  "followCommunityButton": "Follow Space Button",
   "franklyLogo": "AllSides Logo",
   "signIn": "Log In",
   "signUp": "Sign Up",
@@ -332,7 +341,7 @@
   "sorryVimeoVideoLookupFailed": "Sorry, vimeo video lookup failed.",
   "sorryYoutubeVideoLookupFailed": "Sorry, youtube video lookup failed.",
   "spreadTheWord": "SPREAD THE WORD",
-  "startCommunity": "Start a community",
+  "startCommunity": "Start a Space",
   "startTime": "Start Time",
   "submitChatButton": "Submit Chat Button",
   "submitMessageButton": "Submit Message Button",
@@ -349,7 +358,7 @@
   "termsAgreementPrefix": "By signing in, registering, or using {appName}, I agree to be bound by the ",
   "termsOfService": "{appName} Terms of Service",
   "textCopied": "Text copied!",
-  "thereWasAnErrorLoadingEventTemplates": "There was an error loading event templates.",
+  "thereWasAnErrorLoadingEventTemplates": "There was an error loading templates for this space.",
   "thisEventIsLocked": "This event is locked",
   "thisUrlWasNotFound": "This URL was not found.",
   "troubleshoot": "Troubleshoot",
@@ -361,7 +370,6 @@
   "uniqueUrlDisplayName": "Unique URL display name (Optional)",
   "uniqueUrlDisplayNameOptional": "Unique URL display name (Optional)",
   "upcomingEvents": "Upcoming Events",
-  "updateToPlan": "Update to {name}?",
   "urlParameter": "URL Parameter",
   "usersAreInBreakoutRooms": "Users are in breakout rooms.",
   "videoElement": "{label}-video-element",
@@ -386,7 +394,7 @@
   "notifications": "Notifications",
   "billing": "Billing",
   "finish": "Finish",
-  "updateToPlan": "Update to {name} plan",
+  "updateToPlan": "Update to {name}?",
   "roleOwner": "Owner",
   "roleAdmin": "Admin",
   "roleModerator": "Moderator",
@@ -394,19 +402,16 @@
   "roleMember": "Member",
   "roleAttendee": "Attendee",
   "upvoteDownvoteSuggestions": "You can upvote and downvote suggested agenda items to discuss",
-  "suggest": "Suggest",
   "remove": "Remove",
   "enterWordCloudPromptHint": "Enter Word Cloud prompt",
   "wordCloudLabelText": "Word Cloud Prompt",
   "wordCloudParticipantsInfo": "Participants will be asked to respond with a list of words or short phrases",
-  "removeSuggestion": "Remove Suggestion",
   "addRoom": "Add Room",
   "copiedToClipboard": "Copied to clipboard",
   "bufferTimeDescription": "About {duration} of buffer time before event begins",
   "playsAt": "Plays at {time}",
   "introBeforeBreakouts": "About {duration} of intro before breakout rooms",
   "bufferAndIntroTime": "About {buffer} of buffer time and {intro} of introduction before breakout rooms",
-  "kickOutUser": "Kick out {displayName}?",
   "addToCalendar": "Add to calendar",
   "googleCalendar": "Google Calendar",
   "outlookCalendar": "Outlook Calendar",
@@ -418,9 +423,6 @@
   "downloadMembersRegistrationData": "Download Members Registration Data",
   "downloadChatsAndSuggestions": "Download Chats and Suggestions",
   "participantCount": "{count} participants",
-  "pasteOrEnterUrl": "Paste or enter URL",
-  "tag": "Tag",
-  "submitTagButton": "Submit",
   "yes": "Yes",
   "yesDelete": "Yes, Delete",
   "you": "You",
@@ -432,6 +434,31 @@
   "youtubeVideoLookupFailed": "Sorry, youtube video lookup failed.",
   "zoom": "Zoom",
   "helpCenter": "Help Center",
+  "@appNameHome": {
+    "placeholders": {
+      "appName": {}
+    }
+  },
+  "@appNameTitle": {
+    "placeholders": {
+      "appName": {}
+    }
+  },
+  "@appNameUnsubscribe": {
+    "placeholders": {
+      "appName": {}
+    }
+  },
+  "@appNameUserSettings": {
+    "placeholders": {
+      "appName": {}
+    }
+  },
+  "@appNameWelcome": {
+    "placeholders": {
+      "appName": {}
+    }
+  },
   "@appNameTermsOfService": {
     "placeholders": {
       "appName": {}
@@ -457,11 +484,7 @@
       "appName": {}
     }
   },
-  "@aspectRatioClipped": {
-    "placeholders": {
-      "label": {}
-    }
-  },
+  "@aspectRatioClipped": {},
   "@bySigningInRegisteringOrUsing": {
     "placeholders": {
       "appName": {}
@@ -470,6 +493,60 @@
   "@deleteAgendaItem": {
     "placeholders": {
       "title": {}
+    }
+  },
+  "@deleteAgendaItemName": {
+    "placeholders": {
+      "itemName": {}
+    }
+  },
+  "@confirmRemoveParticipant": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "@enterCategoryNum": {
+    "placeholders": {
+      "number": {}
+    }
+  },
+  "@meetingEndWithFollowMessage": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "@settingsFor": {
+    "placeholders": {
+      "communityName": {}
+    }
+  },
+  "@bufferTimeDescription": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@playsAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "@introBeforeBreakouts": {
+    "placeholders": {
+      "duration": {}
+    }
+  },
+  "@bufferAndIntroTime": {
+    "placeholders": {
+      "buffer": {},
+      "intro": {}
+    }
+  },
+  "@participantCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
     }
   },
   "@enterQuestionWithNumber": {
@@ -549,6 +626,11 @@
       "label": {}
     }
   },
+  "@welcomeName": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "@welcomeToApp": {
     "placeholders": {
       "appName": {}
@@ -560,11 +642,21 @@
     }
   },
   "prereqRequired": "Prerequisite required",
-  "myCommunities": "My Communities",
-  "youHaventJoinedAnyCommunities": "You haven't joined any communities.",
+  "myCommunities": "Following",
+  "youHaventJoinedAnyCommunities": "You haven't joined any spaces.",
   "logo": "Logo",
   "background": "Background",
   "makeThisSpacePrivate": "Make this space private",
-  "emailConsentText": "I agree to receive emails from AllSides, Newsweek, and Living Room Conversations and to the ",
-  "allsidesPrivacyPolicy": "AllSides Privacy Policy"
+  "emailConsentText": "I agree to receive emails from AllSides and to the ",
+  "allsidesPrivacyPolicy": "AllSides Privacy Policy",
+  "toCreateYourSpaceSignIn": "To create your space, first sign in.",
+  "newCommunity": "New space",
+  "editTheCommunity": "edit the space.",
+  "editTheCommunityTemplate": "edit the template.",
+  "communityName": "Space name",
+  "communityDescription": "Space description",
+  "updateCommunity": "Update space",
+  "newEventForWhichCommunity": "New event for which template?",
+  "createANewCommunity": "Create a new template",
+  "noCommunityAssociation": "No template association"
 }

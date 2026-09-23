@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
 import 'package:data_models/community/membership.dart';
@@ -9,7 +10,9 @@ class FirestoreMembershipService {
     String userId,
   ) =>
       firestoreDatabase.firestore
-          .collection('memberships/$userId/community-membership');
+          .collection('memberships')
+          .doc(userId)
+          .collection('community-membership');
 
   DocumentReference<Map<String, dynamic>> membershipsReference({
     required String userId,
@@ -58,16 +61,36 @@ class FirestoreMembershipService {
       communityId: communityId,
     ).get();
 
-    return _convertMembership(doc.data() ?? {});
+    return _convertMembership(doc.data() ?? {}).copyWith(communityId: doc.id);
   }
 
   static Future<List<Membership>> _convertMembershipListAsync(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) async {
-    final memberships = await Future.wait(
-      docs.map((doc) => compute(_convertMembership, doc.data())),
-    );
-
+    final memberships = <Membership>[];
+    for (final doc in docs) {
+      try {
+        // Web runs [compute] on the main isolate anyway; parsing here avoids
+        // edge-case failures with isolate / transfer of Firestore map payloads.
+        // Subcollection path is `.../community-membership/{communityDocId}` — that
+        // id is canonical; the `communityId` field in the map can drift.
+        if (kIsWeb) {
+          memberships.add(
+            _convertMembership(doc.data()).copyWith(communityId: doc.id),
+          );
+        } else {
+          final m = await compute(_convertMembership, doc.data());
+          memberships.add(m.copyWith(communityId: doc.id));
+        }
+      } catch (e, st) {
+        loggingService.log(
+          'FirestoreMembershipService: skipped invalid membership doc ${doc.id}',
+          logType: LogType.warning,
+          error: e,
+          stackTrace: st,
+        );
+      }
+    }
     return memberships;
   }
 
@@ -81,7 +104,7 @@ class FirestoreMembershipService {
       _convertMembership,
       docData,
     );
-    return membership;
+    return membership.copyWith(communityId: doc.id);
   }
 
   static Membership _convertMembership(Map<String, dynamic> data) {

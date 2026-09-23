@@ -260,14 +260,29 @@ class GetMeetingJoinInfoRequest
 
 @Freezed(makeCollectionsUnmodifiable: false)
 class GetMeetingJoinInfoResponse with _$GetMeetingJoinInfoResponse {
+  const GetMeetingJoinInfoResponse._();
+
   factory GetMeetingJoinInfoResponse({
     required String identity,
     required String meetingToken,
     required String meetingId,
+    // Token for the secondary Agora connection used for screen sharing.
+    // The screen share UID is derived as uidToInt(userId) | (1 << 30).
+    String? screenShareToken,
   }) = _GetMeetingJoinInfoResponse;
 
   factory GetMeetingJoinInfoResponse.fromJson(Map<String, dynamic> json) =>
       _$GetMeetingJoinInfoResponseFromJson(json);
+
+  // The tokens are Agora credentials; redact them so logging/diagnostic
+  // interpolation of this response never leaks them. Defined here (freezed
+  // skips generating toString when one exists) so regeneration keeps it.
+  @override
+  String toString() {
+    return 'GetMeetingJoinInfoResponse(identity: $identity, '
+        'meetingToken: [REDACTED], meetingId: $meetingId, '
+        'screenShareToken: ${screenShareToken != null ? '[REDACTED]' : null})';
+  }
 }
 
 @Freezed(makeCollectionsUnmodifiable: false)
@@ -963,6 +978,20 @@ class GetUserIdFromAgoraIdRequest
 }
 
 @Freezed(makeCollectionsUnmodifiable: false)
+class ResendEventEmailsRequest
+    with _$ResendEventEmailsRequest
+    implements SerializeableRequest {
+  factory ResendEventEmailsRequest({
+    required String eventPath,
+    required String eventId,
+    required List<String> userIds,
+  }) = _ResendEventEmailsRequest;
+
+  factory ResendEventEmailsRequest.fromJson(Map<String, dynamic> json) =>
+      _$ResendEventEmailsRequestFromJson(json);
+}
+
+@Freezed(makeCollectionsUnmodifiable: false)
 class GetUserIdFromAgoraIdResponse
     with _$GetUserIdFromAgoraIdResponse
     implements SerializeableRequest {
@@ -971,4 +1000,34 @@ class GetUserIdFromAgoraIdResponse
 
   factory GetUserIdFromAgoraIdResponse.fromJson(Map<String, dynamic> json) =>
       _$GetUserIdFromAgoraIdResponseFromJson(json);
+}
+
+@Freezed(makeCollectionsUnmodifiable: false)
+class LookupEventParticipantByEmailRequest
+    with _$LookupEventParticipantByEmailRequest
+    implements SerializeableRequest {
+  factory LookupEventParticipantByEmailRequest({
+    required String eventPath,
+    required String email,
+  }) = _LookupEventParticipantByEmailRequest;
+
+  factory LookupEventParticipantByEmailRequest.fromJson(
+          Map<String, dynamic> json) =>
+      _$LookupEventParticipantByEmailRequestFromJson(json);
+}
+
+@Freezed(makeCollectionsUnmodifiable: false)
+class LookupEventParticipantByEmailResponse
+    with _$LookupEventParticipantByEmailResponse {
+  factory LookupEventParticipantByEmailResponse({
+    required bool isRegistered,
+    @Default(false) bool isPresent,
+    String? currentRoomName,
+    String? userId,
+    String? displayName,
+  }) = _LookupEventParticipantByEmailResponse;
+
+  factory LookupEventParticipantByEmailResponse.fromJson(
+          Map<String, dynamic> json) =>
+      _$LookupEventParticipantByEmailResponseFromJson(json);
 }

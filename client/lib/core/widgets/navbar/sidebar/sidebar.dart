@@ -1,4 +1,6 @@
+import 'package:client/core/widgets/section_heading.dart';
 import 'package:client/core/utils/navigation_utils.dart';
+import 'package:client/core/utils/provider_utils.dart';
 import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/core/widgets/buttons/circle_icon_button.dart';
 import 'package:client/features/auth/utils/auth_utils.dart';
@@ -12,6 +14,7 @@ import 'package:client/core/widgets/custom_ink_well.dart';
 import 'package:client/core/widgets/custom_list_view.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
 import 'package:client/core/widgets/navbar/nav_bar_provider.dart';
+import 'package:client/core/widgets/navbar/sidebar/sidebar_community_order.dart';
 import 'package:client/core/widgets/navbar/sidebar/sidebar_navigation_list_item.dart';
 import 'package:client/features/auth/presentation/widgets/sign_in_options_content.dart';
 import 'package:client/features/user/data/providers/user_info_builder.dart';
@@ -25,7 +28,8 @@ import 'package:data_models/community/community.dart';
 import 'package:data_models/user/public_user_info.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
-import 'package:universal_html/js_util.dart' as js_util;
+import 'package:client/core/widgets/navbar/sidebar/sidebar_platform_version_stub.dart'
+    if (dart.library.html) 'package:client/core/widgets/navbar/sidebar/sidebar_platform_version_web.dart';
 import 'package:client/core/localization/language_selector.dart';
 
 /// This is the side navigation drawer that appears when the hamburger icon is clicked. It contains
@@ -133,7 +137,8 @@ class _SideBarState extends State<SideBar> {
       entryFrom: 'Sidebar._buildSidebarCommunityNavigation',
       stream: userDataService.userCommunities,
       builder: (context, communitiesUserBelongsTo) {
-        final currentCommunity = context.watch<CommunityProvider?>()?.community;
+        final currentCommunity =
+            watchProviderOrNull<CommunityProvider>(context)?.community;
         var communities = [
           if (routerDelegate.currentBeamLocation is CommunityLocation &&
               !isInitializedOnHome &&
@@ -146,27 +151,39 @@ class _SideBarState extends State<SideBar> {
           case 0:
             return SizedBox.shrink();
           case 1:
-            return _buildSingleCommunityNav(communities.first);
+            return _buildFollowingSection(
+              _buildSingleCommunityNav(communities.first),
+            );
           default:
-            return _buildMultipleCommunityNav(communities);
+            return _buildFollowingSection(
+              _buildMultipleCommunityNav(communities),
+            );
         }
       },
     );
   }
 
+  /// Labels the followed-Spaces list. Only rendered alongside a non-empty
+  /// list, so an empty sidebar doesn't show a heading over nothing.
+  Widget _buildFollowingSection(Widget communityList) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeading(context.l10n.myCommunities),
+          SizedBox(height: 12),
+          communityList,
+        ],
+      );
+
   Widget _buildMultipleCommunityNav(List<Community> communities) {
     if (routerDelegate.currentBeamLocation is CommunityLocation &&
         !isInitializedOnHome) {
-      final currentCommunity = communities.firstWhere(
-        (element) =>
-            context.watch<CommunityProvider>().communityId == element.id,
+      // Drawer can rebuild outside CommunityPage; watch() throws if missing.
+      communities = orderCommunitiesForSidebar(
+        communities,
+        currentCommunityId:
+            watchProviderOrNull<CommunityProvider>(context)?.communityId,
       );
-
-      communities = [
-        currentCommunity,
-        ...communities
-            .where((community) => community.id != currentCommunity.id),
-      ];
     }
 
     return AnimatedSidebarContent(
@@ -185,8 +202,7 @@ class _SideBarState extends State<SideBar> {
       );
 
   Widget _buildBottomSidebarButtons() {
-    final version =
-        js_util.getProperty(html.window, 'platformVersion').toString();
+    final version = readSidebarPlatformVersion(html.window);
     return Container(
       color: context.theme.colorScheme.surface,
       padding: const EdgeInsets.all(20),
@@ -254,18 +270,39 @@ class _SideBarState extends State<SideBar> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 24, 8, 24),
-            child: RichText(
-              text: TextSpan(
-                children: const [
-                  TextSpan(text: Environment.sidebarFooter),
-                  TextSpan(
-                    text: '.\n© ${Environment.copyrightStatement}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: const [
+                      TextSpan(text: Environment.sidebarFooter),
+                      TextSpan(text: '™'),
+                      TextSpan(
+                        text: '\n© ${Environment.copyrightStatement}',
+                      ),
+                    ],
+                    style: context.theme.textTheme.labelMedium!.copyWith(
+                      color: context.theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ],
-                style: context.theme.textTheme.labelMedium!.copyWith(
-                  color: context.theme.colorScheme.onSurfaceVariant,
                 ),
-              ),
+                const SizedBox(height: 16),
+                RichText(
+                  text: TextSpan(
+                    children: const [
+                      TextSpan(text: Environment.sidebarFooterF),
+                      TextSpan(text: '™'),
+                      TextSpan(
+                        text: '\n© ${Environment.copyrightStatementF}',
+                      ),
+                    ],
+                    style: context.theme.textTheme.labelMedium!.copyWith(
+                      color: context.theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Padding(
@@ -345,7 +382,7 @@ class _AnimatedSidebarContentState extends State<AnimatedSidebarContent> {
             CircleIconButton(
               onPressed: _startCommunityTapped,
               icon: Icons.add,
-              toolTipText: 'Start a community',
+              toolTipText: 'Start a Space',
             ),
             SizedBox(width: 11),
             HeightConstrainedText(

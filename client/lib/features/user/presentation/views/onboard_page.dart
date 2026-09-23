@@ -143,7 +143,7 @@ class _OnboardPageState extends State<OnboardPage> {
       child: ActionButton(
         text: text,
         onPressed: onNextPressed,
-        color: Theme.of(context).primaryColor,
+        color: Theme.of(context).colorScheme.primary,
       ),
     );
   }
@@ -454,7 +454,7 @@ class _OnboardPageState extends State<OnboardPage> {
         Column(
           children: [
             HeightConstrainedText(
-              'To create your community, first sign in.',
+              'To create your space, first sign in.',
               style: TextStyle(fontSize: 20),
             ),
             SizedBox(height: 10),
@@ -483,7 +483,7 @@ class _OnboardPageState extends State<OnboardPage> {
       fillViewport: true,
       child: Container(
         alignment: Alignment.center,
-        color: Theme.of(context).primaryColor,
+        color: Theme.of(context).colorScheme.primary,
         padding: EdgeInsets.all(10).copyWith(bottom: 60),
         child: widget.agreementId == null
             ? SizedBox.shrink()

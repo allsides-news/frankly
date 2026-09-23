@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:client/core/utils/date_utils.dart';
 import 'package:client/core/utils/navigation_utils.dart';
 import 'package:client/core/utils/toast_utils.dart';
@@ -28,6 +30,7 @@ import 'package:client/features/community/presentation/widgets/share_section.dar
 import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/core/widgets/confirm_dialog.dart';
 import 'package:client/features/events/presentation/widgets/event_participants_list.dart';
+import 'package:client/features/events/presentation/widgets/hostless_mark.dart';
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
@@ -38,7 +41,6 @@ import 'package:client/core/routing/locations.dart';
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/features/user/data/services/user_data_service.dart';
 import 'package:client/services.dart';
-import 'package:client/styles/app_asset.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/utils/dialogs.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
@@ -52,6 +54,7 @@ import 'package:data_models/community/membership.dart';
 import 'package:data_models/templates/template.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
+import 'package:client/features/events/data/event_template_ids.dart';
 
 enum _ParticipantStatus {
   needsParticipants,
@@ -69,6 +72,8 @@ class EventInfo extends StatefulHookWidget {
     bool showConfirm,
     bool joinCommunity,
     bool optInToNewsletters,
+    bool showBreakoutSurveyDialog,
+    bool showPreEventCta,
   }) onJoinEvent;
 
   const EventInfo({
@@ -84,6 +89,18 @@ class EventInfo extends StatefulHookWidget {
 }
 
 class _EventInfoState extends State<EventInfo> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      analytics.logPageView(
+        'event_page',
+        communityId: widget.event.communityId,
+        eventId: widget.event.id,
+      );
+    });
+  }
+
   EventProvider get _eventProvider => Provider.of<EventProvider>(context);
 
   BehaviorSubjectWrapper<List<Featured>>? _featuredStream;
@@ -94,6 +111,11 @@ class _EventInfoState extends State<EventInfo> {
 
   /// Holds state for a checkbox indicating if the user opted in to newsletters
   bool _optInToNewsletters = true;
+
+  /// The American Dream jump-page flow should keep the registration card focused
+  /// on the primary register action by hiding follow/newsletter opt-in CTAs.
+  bool get _showRsvpOptInCtas =>
+      _event.templateId != nationalRoundtableOnTheAmericanDreamTemplateId;
 
   Event get _event => _eventProvider.event;
 
@@ -199,6 +221,14 @@ class _EventInfoState extends State<EventInfo> {
     CommunityProvider communityProvider,
   ) async {
     final template = _presenter.getCombinedTemplateFromEvent();
+    if (template == null) {
+      showRegularToast(
+        context,
+        'Template is still loading. Please try again in a moment.',
+        toastType: ToastType.neutral,
+      );
+      return;
+    }
     final newId = firestoreDatabase.generateNewDocId(
       collectionPath: firestoreDatabase
           .templatesCollection(communityProvider.community.id)
@@ -214,8 +244,16 @@ class _EventInfoState extends State<EventInfo> {
   }
 
   Future<void> _showDuplicateEventDialog() async {
-    final template = context.read<TemplateProvider>().template;
-    final event = EventProvider.read(context).event;
+    final template = context.read<TemplateProvider>().templateOrNull;
+    final event = EventProvider.read(context).eventOrNull;
+    if (template == null || event == null) {
+      showRegularToast(
+        context,
+        'Event details are still loading. Please try again in a moment.',
+        toastType: ToastType.neutral,
+      );
+      return;
+    }
     await CreateEventDialog.show(
       context,
       template: template,
@@ -409,38 +447,64 @@ class _EventInfoState extends State<EventInfo> {
       type: isEventOpen ? ActionButtonType.filled : ActionButtonType.outline,
       key: EventInfo.enterEventButtonKey,
       expand: true,
-      onPressed: () => alertOnError(context, () async {
-        final eventPageProvider = context.read<EventPageProvider>();
-        JoinEventResults? joinResults;
-        if (!EventProvider.read(context).isParticipant) {
-          joinResults = await widget.onJoinEvent(showConfirm: false);
-          if (!joinResults.isJoined) return;
-        }
-        await alertOnError(context, () {
-          if (externalPlatform.platformKey == PlatformKey.community ||
-              !isPlatformSelectionEnabled) {
-            return eventPageProvider.enterMeeting(
-              surveyQuestions: joinResults?.surveyQuestions,
-            );
-          } else {
-            return launch(externalPlatform.url ?? '');
-          }
-        });
+      onPressed: isEventOpen
+          ? () => alertOnError(context, () async {
+                analytics.logEvent(
+                  AnalyticsTapEnterEventButtonEvent(
+                    communityId: widget.event.communityId,
+                    eventId: widget.event.id,
+                    templateId: widget.event.templateId,
+                    buttonText: text,
+                  ),
+                  eventTitle: widget.event.title,
+                );
 
-        final communityId = widget.event.communityId;
-        final eventId = widget.event.id;
-        final templateId = widget.event.templateId;
-        final isHost = (widget.event.eventType != EventType.hostless) &&
-            widget.event.creatorId == userService.currentUserId;
-        analytics.logEvent(
-          AnalyticsEnterEventEvent(
-            communityId: communityId,
-            eventId: eventId,
-            asHost: isHost,
-            templateId: templateId,
-          ),
-        );
-      }),
+                final eventPageProvider = context.read<EventPageProvider>();
+                final localEventProvider = EventProvider.read(context);
+                JoinEventResults? joinResults;
+                if (!localEventProvider.isParticipant) {
+                  // Skip the CTA and smart-match dialogs here; enterMeeting
+                  // shows both so the order is CTA -> smart match -> enter.
+                  joinResults = await widget.onJoinEvent(
+                    showConfirm: false,
+                    showBreakoutSurveyDialog: false,
+                    showPreEventCta: false,
+                  );
+                  // Re-check the actual participant state in case the join
+                  // succeeded but a later step (e.g. the CTA dialog) reported
+                  // a failure.
+                  if (!joinResults.isJoined &&
+                      !localEventProvider.isParticipant) {
+                    return;
+                  }
+                }
+                await alertOnError(context, () {
+                  if (externalPlatform.platformKey == PlatformKey.community ||
+                      !isPlatformSelectionEnabled) {
+                    return eventPageProvider.enterMeeting(
+                      surveyQuestions: joinResults?.surveyQuestions,
+                    );
+                  } else {
+                    return launch(externalPlatform.url ?? '');
+                  }
+                });
+
+                final communityId = widget.event.communityId;
+                final eventId = widget.event.id;
+                final templateId = widget.event.templateId;
+                final isHost = (widget.event.eventType != EventType.hostless) &&
+                    widget.event.creatorId == userService.currentUserId;
+                analytics.logEvent(
+                  AnalyticsEnterEventEvent(
+                    communityId: communityId,
+                    eventId: eventId,
+                    asHost: isHost,
+                    templateId: templateId,
+                  ),
+                  eventTitle: widget.event.title,
+                );
+              })
+          : null,
       text: text,
     );
   }
@@ -448,10 +512,12 @@ class _EventInfoState extends State<EventInfo> {
   Widget _buildJoinEventButton() {
     final startTime = widget.event.scheduledTime ?? clockService.now();
     final isLocked = widget.event.isLocked;
+    final isEnded = widget.event.isEnded;
 
     final localEventProvider = _eventProvider;
     final isBanned = localEventProvider.isBanned;
     final canShowFollowCommunity = _canShowFollowCommunity();
+    final showRsvpOptInCtas = _showRsvpOptInCtas;
 
     final showJoinButton = !isBanned &&
         context.read<EventPermissionsProvider>().canJoinEvent &&
@@ -486,6 +552,16 @@ class _EventInfoState extends State<EventInfo> {
         title: context.l10n.prereqRequired,
         message: context.l10n.removedFromEvent,
       );
+    } else if (isEnded) {
+      return WarningInfo(
+        icon: Icon(
+          Icons.info_outline,
+          size: 20,
+          color: context.theme.colorScheme.error,
+        ),
+        title: context.l10n.ended,
+        message: context.l10n.eventHasEnded,
+      );
     } else if (isLocked) {
       return WarningInfo(
         icon: Icon(
@@ -514,21 +590,35 @@ class _EventInfoState extends State<EventInfo> {
             key: EventInfo.rsvpButtonKey,
             height: 64,
             onPressed: () => alertOnError(context, () async {
+              analytics.logEvent(
+                AnalyticsTapRsvpButtonEvent(
+                  communityId: widget.event.communityId,
+                  eventId: widget.event.id,
+                  templateId: widget.event.templateId,
+                ),
+                eventTitle: widget.event.title,
+              );
               await widget.onJoinEvent(
-                joinCommunity:
-                    canShowFollowCommunity ? _joinCommunityDuringRsvp : true,
-                optInToNewsletters: _optInToNewsletters,
+                joinCommunity: showRsvpOptInCtas
+                    ? canShowFollowCommunity
+                        ? _joinCommunityDuringRsvp
+                        : true
+                    : false,
+                optInToNewsletters:
+                    showRsvpOptInCtas ? _optInToNewsletters : false,
               );
             }),
             expand: true,
-            text: 'RSVP',
+            text: 'REGISTER NOW!',
           ),
-          if (canShowFollowCommunity) ...[
+          if (showRsvpOptInCtas && canShowFollowCommunity) ...[
             SizedBox(height: 10),
             _buildFollowCommunityCheckbox(),
           ],
-          SizedBox(height: 10),
-          _buildNewsletterOptInCheckbox(),
+          if (showRsvpOptInCtas) ...[
+            SizedBox(height: 10),
+            _buildNewsletterOptInCheckbox(),
+          ],
         ],
       );
     } else {
@@ -542,6 +632,9 @@ class _EventInfoState extends State<EventInfo> {
     return CustomStreamBuilder<GetCommunityCalendarLinkResponse>(
       entryFrom: 'EventInfo._buildAddToCalendar',
       showLoading: false,
+      // If the calendar link lookup fails, hide the button instead of
+      // rendering an error message in the middle of the event card.
+      errorBuilder: (_) => SizedBox.shrink(),
       stream: cloudFunctionsEventService
           .getCommunityCalendarLink(
             GetCommunityCalendarLinkRequest(
@@ -627,25 +720,25 @@ class _EventInfoState extends State<EventInfo> {
       showLoading: false,
       builder: (_, featuredItems) {
         final String? text;
-        final AppAsset? appAsset;
+        final IconData? icon;
 
         if (isPublic) {
           if (_canEditEvent) {
             text =
                 'Public${featuredItems!.any((f) => f.documentPath == docPath) && _canModerateEvent ? ', Featured' : ''}';
-            appAsset = AppAsset.kGlobePng;
+            icon = Icons.public;
           } else {
             text = null;
-            appAsset = null;
+            icon = null;
           }
         } else {
           text = 'Private';
-          appAsset = AppAsset.kLockPng;
+          icon = Icons.lock_outline;
         }
 
         // Do not show anything if text is null. Text will be null if user is not admin and
         // the event is public
-        if (text == null || appAsset == null) {
+        if (text == null || icon == null) {
           return SizedBox.shrink();
         }
 
@@ -653,7 +746,14 @@ class _EventInfoState extends State<EventInfo> {
           children: [
             Tooltip(
               message: isPublic ? 'Public' : 'Private',
-              child: ProxiedImage(null, asset: appAsset, width: 20, height: 20),
+              // Material icon rather than media/globe.png and media/lock.png:
+              // a baked asset can't take a colour, so these stayed dark beside
+              // a label that follows the theme.
+              child: Icon(
+                icon,
+                size: 20,
+                color: context.theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             SizedBox(width: 6),
             HeightConstrainedText(
@@ -698,7 +798,7 @@ class _EventInfoState extends State<EventInfo> {
 
   Widget _buildNewsletterOptInCheckbox() {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Checkbox(
           activeColor: context.theme.colorScheme.primary,
@@ -715,11 +815,80 @@ class _EventInfoState extends State<EventInfo> {
         SizedBox(width: 5),
         Flexible(
           child: Text(
-            'Sign me up to receive Newsweek\'s political discourse newsletter, The 1600, and AllSides newsletters.',
+            'Sign up for the AllSides newsletter.',
             style: context.theme.textTheme.bodyMedium,
           ),
         ),
       ],
+    );
+  }
+
+  void _showParticipantsDialog(BuildContext context) {
+    ParticipantsDialog(
+      eventProvider: EventProvider.read(context),
+      eventPermissions: context.read<EventPermissionsProvider>(),
+    ).show(context);
+  }
+
+  Widget _buildRegisteredEventStatus({
+    required bool canAccessParticipantListDetails,
+  }) {
+    if (!_isParticipant) return const SizedBox.shrink();
+
+    final participantCount = _eventProvider.actualParticipantCount;
+    final selfParticipant = _eventProvider.selfParticipant;
+    final showReminderText = selfParticipant?.optInToNewsletters ?? false;
+    final hasOtherParticipants = participantCount > 1;
+    final showAttendeeList = hasOtherParticipants &&
+        Provider.of<CommunityProvider>(context)
+            .settings
+            .showPostRegistrationAttendeeCount;
+
+    Widget statusContent = showAttendeeList
+        ? EventPageParticipantsList(
+            _event,
+            showParticipantCount: false,
+            showGoingText: true,
+            currentUserFirst: true,
+            excludeAvatarSemantics: true,
+            allowParticipantsToViewCount: true,
+          )
+        : Text(
+            'You’re going!',
+            style: context.theme.textTheme.bodyMedium,
+          );
+
+    if (canAccessParticipantListDetails) {
+      statusContent = Semantics(
+        button: true,
+        label: 'Open participants list',
+        child: CustomInkWell(
+          onTap: () => _showParticipantsDialog(context),
+          child: statusContent,
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(child: statusContent),
+          if (showReminderText) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                'We’ll email you a reminder one hour before the event.',
+                textAlign: TextAlign.center,
+                style: context.theme.textTheme.bodySmall!.copyWith(
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -731,26 +900,53 @@ class _EventInfoState extends State<EventInfo> {
           bottom: Radius.circular(20),
         ),
       ),
-      child: ShareSection(
-        url: _getShareUrl(),
-        body: _getShareBody(),
-        subject: 'Join my event on ${Environment.appName}!',
-        iconColor: context.theme.colorScheme.primary,
-        iconBackgroundColor: context.theme.colorScheme.surfaceContainerLowest,
-        size: 40,
-        iconSize: 20,
-        wrapIcons: false,
-        shareCallback: (ShareType type) {
-          final communityId = widget.event.communityId;
-          final eventId = widget.event.id;
-          final templateId = widget.event.templateId;
-          analytics.logEvent(
-            AnalyticsPressShareEventEvent(
-              communityId: communityId,
-              eventId: eventId,
-              shareType: type,
-              templateId: templateId,
-            ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          final double size;
+          final double padding;
+          final bool wrapIcons;
+
+          // Five share icons need ~64px each at default size; shrink on narrow cards.
+          if (maxWidth < 260) {
+            size = 28;
+            padding = 2;
+            wrapIcons = true;
+          } else if (maxWidth < 320) {
+            size = 32;
+            padding = 4;
+            wrapIcons = false;
+          } else {
+            size = 40;
+            padding = 10;
+            wrapIcons = false;
+          }
+
+          return ShareSection(
+            url: _getShareUrl(),
+            body: _getShareBody(),
+            subject: 'Join my event on ${Environment.appName}!',
+            iconColor: context.theme.colorScheme.primary,
+            iconBackgroundColor:
+                context.theme.colorScheme.surfaceContainerLowest,
+            size: size,
+            iconSize: min(size - 16, 20),
+            buttonPadding: padding,
+            wrapIcons: wrapIcons,
+            shareCallback: (ShareType type) {
+              final communityId = widget.event.communityId;
+              final eventId = widget.event.id;
+              final templateId = widget.event.templateId;
+              analytics.logEvent(
+                AnalyticsPressShareEventEvent(
+                  communityId: communityId,
+                  eventId: eventId,
+                  shareType: type,
+                  templateId: templateId,
+                ),
+                eventTitle: widget.event.title,
+              );
+            },
           );
         },
       ),
@@ -765,6 +961,7 @@ class _EventInfoState extends State<EventInfo> {
     final canCancelParticipation = eventPermissions.canCancelParticipation;
     final canViewCounts = eventPermissions.canViewParticipantCounts;
     final canAccessParticipantListDetails = canViewCounts;
+    final showPreRsvpParticipantSummaryRow = !_isParticipant;
     final isMobile = responsiveLayoutService.isMobile(context);
 
     return Card.outlined(
@@ -836,7 +1033,11 @@ class _EventInfoState extends State<EventInfo> {
                         _event.title ?? '',
                         maxLines: 3,
                         style: context.theme.textTheme.headlineMedium!.copyWith(
-                          color: Theme.of(context).primaryColor,
+                          // This sits on the card's surfaceContainerLowest, so
+                          // it takes the surface pair. The legacy
+                          // ThemeData.primaryColor is never configured here and
+                          // doesn't track the colour scheme.
+                          color: context.theme.colorScheme.onSurface,
                           decoration: _event.status == EventStatus.canceled
                               ? TextDecoration.lineThrough
                               : null,
@@ -870,52 +1071,55 @@ class _EventInfoState extends State<EventInfo> {
                   ),
                   SizedBox(height: 20),
                 ],
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: CustomInkWell(
-                            onTap: canAccessParticipantListDetails
-                                ? () => ParticipantsDialog(
-                                      eventProvider:
-                                          EventProvider.read(context),
-                                      eventPermissions: context
-                                          .read<EventPermissionsProvider>(),
-                                    ).show(context)
-                                : null,
-                            child: EventPageParticipantsList(
-                              _event,
-                              showParticipantCount: canViewCounts,
-                            ),
+                if (showPreRsvpParticipantSummaryRow || _canEditEvent) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: showPreRsvpParticipantSummaryRow
+                              ? Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: CustomInkWell(
+                                    onTap: canAccessParticipantListDetails
+                                        ? () => _showParticipantsDialog(context)
+                                        : null,
+                                    child: EventPageParticipantsList(
+                                      _event,
+                                      showParticipantCount: canViewCounts,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                        if (_canEditEvent)
+                          CircleIconButton(
+                            onPressed: widget.onMessagePressed,
+                            toolTipText: 'Message',
+                            icon: CupertinoIcons.paperplane,
+                            color: context.theme.colorScheme.surfaceContainer,
+                            iconColor: context.theme.colorScheme.onSurface,
                           ),
-                        ),
-                      ),
-                      if (_canEditEvent)
-                        CircleIconButton(
-                          onPressed: widget.onMessagePressed,
-                          toolTipText: 'Message',
-                          icon: CupertinoIcons.paperplane,
-                          color: context.theme.colorScheme.surfaceContainer,
-                          iconColor: context.theme.colorScheme.onSurface,
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
+                  SizedBox(height: 10),
+                ],
+                _buildJoinEventButton(),
+                _buildRegisteredEventStatus(
+                  canAccessParticipantListDetails:
+                      canAccessParticipantListDetails,
                 ),
                 SizedBox(height: 10),
-                _buildJoinEventButton(),
-                SizedBox(height: 10),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     if (canCancelParticipation || _canEditEvent)
                       Expanded(child: _buildAddToCalendar()),
                     if (canCancelParticipation) ...[
+                      SizedBox(width: 8),
                       Expanded(child: _buildCancelParticipationButton()),
                     ] else if (context
                             .watch<EventPermissionsProvider>()
@@ -946,30 +1150,38 @@ class _EventInfoState extends State<EventInfo> {
   }
 
   Widget _buildEventTypeName() {
+    final iconColor = context.theme.colorScheme.onSurfaceVariant;
+
     final String? type;
-    final AppAsset? appAsset;
+    final Widget? leading;
     switch (_eventProvider.event.eventType) {
       case EventType.hosted:
         type = null;
-        appAsset = null;
+        leading = null;
         break;
       case EventType.hostless:
         type = 'Hostless';
-        appAsset = AppAsset.kHostlessPng;
+        leading = HostlessMark(color: iconColor);
         break;
       case EventType.livestream:
         type = 'Livestream';
-        appAsset = AppAsset.kPlayScreenPng;
+        // Near-identical to media/play-screen.png: a rounded frame with a
+        // play triangle.
+        leading = Icon(
+          Icons.smart_display_outlined,
+          size: 20,
+          color: iconColor,
+        );
         break;
     }
 
-    if (type == null || appAsset == null) {
+    if (type == null || leading == null) {
       return SizedBox.shrink();
     }
 
     return Row(
       children: [
-        ProxiedImage(null, asset: appAsset, width: 20, height: 20),
+        leading,
         SizedBox(width: 6),
         Text(
           type,

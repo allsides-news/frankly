@@ -92,33 +92,31 @@ class OnEvent extends OnFirestoreFunction<Event> {
       emailType = EventEmailType.canceled;
     } else if (before.scheduledTime != after.scheduledTime) {
       emailType = EventEmailType.updated;
-    } else if (!before.isLocked && after.isLocked) {
-      // Event was just locked - but only stop recordings if event has ACTUALLY ended
-      // This allows admins to lock events (prevent new joins) while keeping recordings active
-      
-      final now = DateTime.now();
-      final hasActuallyEnded = after.hasEnded(now);
-      
-      if (hasActuallyEnded) {
-        // Event has truly ended - stop recordings and send thank you emails
-        emailType = EventEmailType.ended;
-        
-        print('Event locked AND past end time - stopping all recordings for event: ${after.id}');
-        try {
-          await AgoraUtils().stopAllRecordingsForEvent(
+    } else if (!before.isEnded && after.isEnded) {
+      // Event was just ended - stop all recordings and send thank you emails.
+      // Locking (isLocked) only controls entry and intentionally does NOT trigger this.
+      emailType = EventEmailType.ended;
+
+      // Stop all recordings and STT agents (main room + breakouts) to finalize files.
+      // STT stop is unconditional: alwaysTranscribe may have been toggled off after
+      // agents started. _stopSttFromState is a no-op when no agent is running.
+      print('Event ended - stopping recordings and STT for event: ${after.id}');
+      await Future.wait([
+        _swallowErrors(
+          action: () => AgoraUtils().stopAllRecordingsForEvent(
             eventPath: after.fullPath,
             eventId: after.id,
-          );
-        } catch (e) {
-          print('Error stopping recordings for event ${after.id}: $e');
-          // Continue with event ending even if recording stop fails
-        }
-      } else {
-        // Event locked but still within duration - keep recordings running
-        print('Event locked but still within scheduled duration - keeping recordings active for event: ${after.id}');
-        print('Scheduled end: ${after.scheduledEndTime}, Current time: $now');
-        // Don't send ended email or stop recordings yet
-      }
+          ),
+          description: 'stop recordings for ${after.id}',
+        ),
+        _swallowErrors(
+          action: () => AgoraUtils().stopAllSttForEvent(
+            eventPath: after.fullPath,
+            eventId: after.id,
+          ),
+          description: 'stop STT agents for ${after.id}',
+        ),
+      ]);
     }
 
     if (emailType == null) return;

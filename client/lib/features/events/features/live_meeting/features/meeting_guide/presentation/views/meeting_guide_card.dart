@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
 import 'package:client/features/events/features/live_meeting/presentation/views/leave_regular_dialog.dart';
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
@@ -16,21 +15,22 @@ import 'package:client/features/events/features/live_meeting/features/meeting_gu
 import 'package:client/features/events/features/live_meeting/features/meeting_guide/presentation/meeting_guide_card_presenter.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_guide/presentation/widgets/meeting_guide_card_tutorial.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_guide/data/providers/meeting_guide_card_store.dart';
-import 'package:client/features/events/features/live_meeting/features/meeting_guide/presentation/widgets/raising_hand.dart';
+import 'package:client/features/events/features/live_meeting/features/meeting_guide/presentation/widgets/participant_avatar_stack.dart';
+import 'package:client/features/events/features/live_meeting/features/meeting_guide/presentation/widgets/ready_to_advance_bar.dart';
+import 'package:client/features/events/features/live_meeting/presentation/views/live_meeting_mobile_page.dart'
+    show kMeetingPanelInset;
 import 'package:client/features/events/features/live_meeting/features/meeting_agenda/data/providers/meeting_agenda_provider.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/localization/localization_helper.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_guide/presentation/widgets/fade_scroll_view.dart';
-import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
 import 'package:client/features/user/data/providers/user_info_builder.dart';
 import 'package:client/app.dart';
 import 'package:client/features/user/data/services/user_data_service.dart';
 import 'package:client/services.dart';
 import 'package:client/features/user/data/services/user_service.dart';
-import 'package:client/styles/app_asset.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/data/providers/dialog_provider.dart';
 import 'package:client/core/utils/extensions.dart';
@@ -59,6 +59,7 @@ class _MeetingGuideCardState extends State<MeetingGuideCard> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       // Only show tutorial is it was not shown before and if meeting is not hosted (only in hostLess).
       final canShowTutorial = !responsiveLayoutService.isMobile(context) &&
           !sharedPreferencesService.wasMeetingTutorialShown() &&
@@ -86,8 +87,18 @@ class _MeetingGuideCardState extends State<MeetingGuideCard> {
       child: Container(
         decoration: BoxDecoration(
           color: context.theme.colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(ReadyToAdvanceBar.cardRadius),
+          // One edge around the item and its advance rail together, so the
+          // two read as a single card rather than two panels that happen to
+          // touch.
+          border: Border.all(
+            color: AppNeutralColors.of(context).neutral300,
+            width: 1,
+          ),
         ),
+        // Clipped so the rail's square left edge can't paint outside the
+        // card's rounded corners.
+        clipBehavior: Clip.antiAlias,
         child: MeetingGuideCardContent(onMinimizeCard: widget.onMinimizeCard),
       ),
     );
@@ -97,9 +108,18 @@ class _MeetingGuideCardState extends State<MeetingGuideCard> {
 class MeetingGuideCardContent extends StatefulWidget {
   final void Function() onMinimizeCard;
 
+  /// Render only the agenda item's title row.
+  ///
+  /// The mobile panel retracts to a peek that has room for the handle and one
+  /// line about the current item -- enough to know what the room is on without
+  /// opening it. The body and the advance bar don't fit in that height and
+  /// would overflow it.
+  final bool isCollapsed;
+
   const MeetingGuideCardContent({
     Key? key,
     required this.onMinimizeCard,
+    this.isCollapsed = false,
   }) : super(key: key);
 
   @override
@@ -129,11 +149,13 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
     final isMeetingStarted = _presenter.isMeetingStarted();
     final isCardPending = _presenter.isCardPending();
     final isInBreakout = agendaProvider.isInBreakouts;
+    final breakoutsActive = LiveMeetingProvider.watch(context).breakoutsActive;
 
     final meetingFinished = currentItem == null &&
         isMeetingStarted &&
         !isCardPending &&
-        !isInBreakout;
+        !isInBreakout &&
+        !breakoutsActive;
     final canUserControlMeeting = _presenter.canUserControlMeeting;
     final isHosted = agendaProvider.event?.isHosted ?? false;
 
@@ -154,9 +176,10 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
       return SizedBox.shrink();
     }
 
-    final isMobile = responsiveLayoutService.isMobile(context);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 14),
+    final isMobile = _presenter.isMobile(context);
+
+    final body = Padding(
+      padding: EdgeInsets.symmetric(horizontal: kMeetingPanelInset),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,17 +193,50 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
               child: _buildCardBody(currentItem),
             ),
           ),
-          if (!isMobile) _buildBottomSection(),
         ],
       ),
+    );
+
+    // The advance control is a rail beside the item on desktop and a strip
+    // beneath it on mobile. Both are full-bleed -- they draw their own edge
+    // against the card, so they sit outside the body's horizontal padding.
+    if (isMobile) {
+      if (widget.isCollapsed) {
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: kMeetingPanelInset),
+          child: _buildTopSection(currentItem),
+        );
+      }
+
+      // max, not min: the panel is taller than the item on a short agenda,
+      // and shrink-wrapping left the advance bar floating mid-panel instead
+      // of sitting against the bottom bar.
+      return Column(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: body),
+          _buildBottomSection(),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: body),
+        _buildBottomSection(),
+      ],
     );
   }
 
   Widget _buildTopSection(AgendaItem agendaItem) {
     context.watch<MeetingGuideCardStore>();
 
-    final isHandRaised = _presenter.isHandRaised();
-    final title = _presenter.getTitle(agendaItem);
+    final agendaItems = _presenter.getAgendaItems();
+    final position = _presenter.getTemplateIndex(agendaItems, agendaItem);
+    final title =
+        '$position/${agendaItems.length} ${_presenter.getTitle(agendaItem)}';
     final isMobile = _presenter.isMobile(context);
 
     return Column(
@@ -189,10 +245,6 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
         if (!isMobile)
           Row(
             children: [
-              RaisingHandToggle(
-                isHandRaised: isHandRaised,
-                isCardMinimized: false,
-              ),
               Spacer(),
               ActionButton(
                 type: ActionButtonType.filled,
@@ -200,12 +252,11 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
                 onPressed: widget.onMinimizeCard,
                 color: context.theme.colorScheme.surfaceContainerLowest,
                 padding: EdgeInsets.zero,
-                child: ProxiedImage(
-                  null,
-                  asset: AppAsset.kMinimizePng,
-                  height: 22,
-                  width: 22,
-                  loadingColor: Colors.transparent,
+                // Was media/minimize.png, whose colour is baked in.
+                child: Icon(
+                  Icons.close_fullscreen,
+                  size: 20,
+                  color: context.theme.colorScheme.onSurface,
                 ),
               ),
             ],
@@ -250,7 +301,13 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
                 ),
               ),
             SizedBox(width: 10),
-            ProxiedImage(null, asset: AppAsset.clock(), width: 20, height: 20),
+            // A Material icon rather than media/clock.png: a baked asset
+            // can't take a colour, so it sat at low contrast on the card.
+            Icon(
+              Icons.schedule,
+              size: 20,
+              color: context.theme.colorScheme.onSurfaceVariant,
+            ),
             SizedBox(width: 10),
           ],
         ),
@@ -336,8 +393,11 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
                         SizedBox(height: 20),
                         ActionButton(
                           type: ActionButtonType.filled,
-                          color: context.theme.colorScheme.surfaceContainer,
-                          textColor: context.theme.colorScheme.onSurface,
+                          // Was surfaceContainer, which is exactly what the
+                          // mobile sheet paints behind it -- the fill cancelled
+                          // out and the button read as bare text.
+                          color: context.theme.colorScheme.primary,
+                          textColor: context.theme.colorScheme.onPrimary,
                           onPressed: () => alertOnError(context, () async {
                             final currentAgendaItemId =
                                 _presenter.getCurrentAgendaItemId();
@@ -396,7 +456,7 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
         ),
         if (_presenter.canUserControlMeeting)
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14),
+            padding: EdgeInsets.symmetric(horizontal: kMeetingPanelInset),
             child: _buildBottomSection(),
           ),
       ],
@@ -436,9 +496,15 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
     context.watch<AgendaProvider>();
     context.watch<MeetingGuideCardStore>();
 
+    // Kept inside the rail/strip: returning a bare widget here collapsed the
+    // desktop rail to nothing, so re-entering an event that had gone back to
+    // pending lost the advance control entirely.
     final isCardPending = _presenter.isCardPending();
     if (isCardPending) {
-      return CountdownWidget();
+      return ReadyToAdvanceBar.shell(
+        isMobile: _presenter.isMobile(context),
+        child: CountdownWidget(),
+      );
     }
 
     context.watch<LiveMeetingProvider>();
@@ -450,107 +516,121 @@ class _MeetingGuideCardContentState extends State<MeetingGuideCardContent>
     final participantAgendaItemDetailsStream =
         _presenter.getParticipantAgendaItemDetailsStream();
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Divider(
-          height: 1,
-          thickness: 1,
-          color: context.theme.colorScheme.onPrimaryContainer,
-        ),
-        SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: context.theme.colorScheme.surfaceContainerLowest,
-          ),
-          child: CustomStreamBuilder<List<ParticipantAgendaItemDetails>>(
-            entryFrom: '_MeetingGuideCard._buildBottomSection',
-            stream: participantAgendaItemDetailsStream,
-            height: 100,
-            builder: (context, participantAgendaItemDetailsList) {
-              final readyToAdvance =
-                  _presenter.isReadyToAdvance(participantAgendaItemDetailsList);
-              final canUserControlMeeting = _presenter.canUserControlMeeting;
-              final currentAgendaItemId = _presenter.getCurrentAgendaItemId();
-              final currentItem = _presenter.getCurrentAgendaItem();
-              final presentParticipantIds =
-                  _presenter.getPresentParticipantIds().toSet();
-              final readyToMoveOnCount = _presenter.readyToMoveOnCount(
-                participantAgendaItemDetailsList,
-                presentParticipantIds,
+    return CustomStreamBuilder<List<ParticipantAgendaItemDetails>>(
+      entryFrom: '_MeetingGuideCard._buildBottomSection',
+      stream: participantAgendaItemDetailsStream,
+      height: 100,
+      builder: (context, participantAgendaItemDetailsList) {
+        final readyToAdvance =
+            _presenter.isReadyToAdvance(participantAgendaItemDetailsList);
+        final canUserControlMeeting = _presenter.canUserControlMeeting;
+        final currentAgendaItemId = _presenter.getCurrentAgendaItemId();
+        final currentItem = _presenter.getCurrentAgendaItem();
+        final presentParticipantIds =
+            _presenter.getPresentParticipantIds().toSet();
+        final isMeetingStarted = _presenter.isMeetingStarted();
+        final isCardPending = _presenter.isCardPending();
+        final watchedAgendaProvider = context.watch<AgendaProvider>();
+        final isInBreakout = watchedAgendaProvider.isInBreakouts;
+        final breakoutsActive =
+            LiveMeetingProvider.watch(context).breakoutsActive;
+        final meetingFinished = currentItem == null &&
+            isMeetingStarted &&
+            !isCardPending &&
+            !isInBreakout &&
+            !breakoutsActive;
+        final isHosted = _presenter.isHosted();
+
+        final isMobile = _presenter.isMobile(context);
+
+        if (isHosted) {
+          if (!canUserControlMeeting) return SizedBox.shrink();
+          if (meetingFinished) return const SizedBox.shrink();
+
+          // No tally: a host advances the room rather than waiting on a
+          // vote, so the count would be information they can't act on.
+          return ReadyToAdvanceBar(
+            participants: const [],
+            hasVoted: false,
+            isHost: true,
+            showBackButton: _presenter.isBackButtonShown(),
+            isMobile: isMobile,
+            onBack: () => _presenter.goToPreviousAgendaItem(),
+            onNext: () => alertOnError(context, () async {
+              await AgendaProvider.read(context).moveForward(
+                currentAgendaItemId: currentAgendaItemId ?? '',
               );
-              final isMeetingStarted = _presenter.isMeetingStarted();
-              final isCardPending = _presenter.isCardPending();
-              final isInBreakout =
-                  context.watch<AgendaProvider>().isInBreakouts;
-              final meetingFinished = currentItem == null &&
-                  isMeetingStarted &&
-                  !isCardPending &&
-                  !isInBreakout;
-              final isHosted = _presenter.isHosted();
-
-              if (isHosted) {
-                if (!canUserControlMeeting) return SizedBox.shrink();
-
-                final isBackButtonShown = _presenter.isBackButtonShown();
-                return Row(
-                  children: [
-                    if (isBackButtonShown)
-                      ActionButton(
-                        color: Colors.transparent,
-                        textColor: context.theme.colorScheme.primary,
-                        icon: Icons.arrow_back_ios,
-                        text: 'Back',
-                        onPressed: () => _presenter.goToPreviousAgendaItem(),
-                      ),
-                    Spacer(),
-                    if (!meetingFinished)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: _ReadyButton(
-                          currentAgendaItemId: currentAgendaItemId ?? '',
-                        ),
-                      ),
-                  ],
-                );
-              } else {
-                return Row(
-                  children: [
-                    Spacer(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                      child: Tooltip(
-                        message:
-                            '$readyToMoveOnCount out of ${presentParticipantIds.length} participants '
-                            'are ready to move on.',
-                        child: Text(
-                          '$readyToMoveOnCount/${presentParticipantIds.length}',
-                          style: AppTextStyle.body.copyWith(
-                            color: context.theme.colorScheme.primary,
-                          ),
-                        ),
+            }),
+          );
+        } else {
+          // Once the breakout meeting has a finishMeeting event the
+          // server-side CheckAdvanceMeetingGuide returns early without
+          // writing readyToAdvance, so the button can never dismiss itself.
+          //
+          // Say so rather than showing nothing. A hostless event is always in
+          // a breakout, so the `meetingFinished` branch above is never true
+          // for one and the end card never runs -- finishing the last item
+          // just removed the control and left no sign anything had happened.
+          if (watchedAgendaProvider.isMeetingFinished) {
+            return ReadyToAdvanceBar.shell(
+              isMobile: isMobile,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 16,
+                    color: context.theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: HeightConstrainedText(
+                      'Agenda complete',
+                      style: context.theme.textTheme.bodyMedium?.copyWith(
+                        color: context.theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (readyToAdvance)
-                      ActionButton(
-                        type: ActionButtonType.outline,
-                        textColor: context.theme.colorScheme.primary,
-                        text: 'Ready',
-                        icon: Icons.check_circle_outline,
-                      )
-                    else
-                      _ReadyButton(
-                        currentAgendaItemId: currentAgendaItemId ?? '',
-                      ),
-                  ],
-                );
-              }
-            },
-          ),
-        ),
-        SizedBox(height: 6),
-      ],
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Ready first, then stable by id, so a vote arriving doesn't
+          // reshuffle the faces.
+          final readyIds = (participantAgendaItemDetailsList ?? [])
+              .where((p) => p.readyToAdvance ?? false)
+              .map((p) => p.userId)
+              .toSet();
+          final participants = presentParticipantIds
+              .map(
+                (id) => ParticipantReadiness(
+                  userId: id,
+                  isReady: readyIds.contains(id),
+                ),
+              )
+              .toList()
+            ..sort((a, b) {
+              if (a.isReady != b.isReady) return a.isReady ? -1 : 1;
+              return a.userId.compareTo(b.userId);
+            });
+
+          return ReadyToAdvanceBar(
+            participants: participants,
+            hasVoted: readyToAdvance,
+            isHost: false,
+            showBackButton: false,
+            isMobile: isMobile,
+            onBack: null,
+            onNext: () => alertOnError(context, () async {
+              await AgendaProvider.read(context).moveForward(
+                currentAgendaItemId: currentAgendaItemId ?? '',
+              );
+            }),
+          );
+        }
+      },
     );
   }
 
@@ -580,8 +660,9 @@ class CountdownWidget extends StatelessWidget {
               Expanded(
                 child: HeightConstrainedText(
                   'Moving to the next agenda item...',
-                  style: AppTextStyle.subhead
-                      .copyWith(color: context.theme.colorScheme.onPrimary),
+                  style: AppTextStyle.subhead.copyWith(
+                    color: context.theme.colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ),
               SizedBox(width: 10),
@@ -590,7 +671,7 @@ class CountdownWidget extends StatelessWidget {
               math.max(1, countdownSeconds).toString(),
               style: TextStyle(
                 fontSize: isMobile ? 24 : 38,
-                color: context.theme.colorScheme.onPrimary,
+                color: context.theme.colorScheme.onPrimaryContainer,
               ),
             ),
           ],
@@ -600,29 +681,9 @@ class CountdownWidget extends StatelessWidget {
   }
 }
 
-class _ReadyButton extends HookWidget {
-  final String currentAgendaItemId;
 
-  const _ReadyButton({
-    Key? key,
-    required this.currentAgendaItemId,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final agendaProvider = AgendaProvider.watch(context);
-    return ActionButton(
-      tooltipText: 'Click Next when you’re ready to move on.',
-      color: Colors.transparent,
-      type: ActionButtonType.outline,
-      textColor: context.theme.colorScheme.primary,
-      icon: Icons.arrow_forward_ios,
-      onPressed: () => alertOnError(context, () async {
-        await agendaProvider.moveForward(
-          currentAgendaItemId: currentAgendaItemId,
-        );
-      }),
-      text: 'Next',
-    );
-  }
-}
+/// The "Ready to move on?" control replacing the old "Next" button. Before
+/// voting it's a clickable pill; after voting it becomes plain, non-tappable
+/// "Ready" text -- per the redesign, it has no cursor interaction once
+/// checked. (No undo here -- once you vote there's no way back, same
+/// limitation as the button it replaces.)

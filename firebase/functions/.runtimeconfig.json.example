@@ -17,6 +17,7 @@
     "mailing_address": "1557 Massachusetts Ave, Cambridge, MA 02138",
     "alt_email_domain": "cyber.harvard.edu",
     "project_id": "dev",
+    "firebase_database_id": "(default)",
     "name": "Frankly",
     "functions_url_prefix": "http://127.0.0.1:5001/dev/us-central1",
     "full_url": "http://localhost:5000",

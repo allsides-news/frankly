@@ -60,10 +60,11 @@ class TemplateProvider with ChangeNotifier {
       .._template = _template;
   }
 
-  late Future<Template> _templateFuture;
+  Future<Template>? _templateFuture;
   Template? _template;
 
-  Future<Template> get templateFuture => _templateFuture;
+  Future<Template> get templateFuture => _templateFuture ??= _loadTemplate();
+  Template? get templateOrNull => _template;
   Template get template {
     final templateValue = _template;
     if (templateValue == null) {
@@ -74,7 +75,7 @@ class TemplateProvider with ChangeNotifier {
   }
 
   void initialize() {
-    _templateFuture = _loadTemplate();
+    _templateFuture ??= _loadTemplate();
   }
 
   Future<Template> _loadTemplate() async {

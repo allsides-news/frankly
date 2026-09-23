@@ -55,8 +55,9 @@ class FirestoreDiscussionThreadsService {
         .doc(pathToDoc)
         .snapshots()
         .sampleTime(Duration(milliseconds: 200))
+        .where((s) => s.exists && s.data() != null)
         .map(
-          (s) => _convertDiscussionThreadItem(s.data() as Map<String, dynamic>),
+          (s) => _convertDiscussionThreadItem(s.data()!),
         );
   }
 

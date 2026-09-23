@@ -1,7 +1,8 @@
+import 'dart:math' show max;
+
 import 'package:client/core/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:client/core/widgets/profile_chip.dart';
-import 'package:client/features/user/data/providers/user_info_builder.dart';
 import 'package:client/features/user/presentation/widgets/user_profile_chip.dart';
 import 'package:client/features/user/data/services/user_service.dart';
 import 'package:client/styles/styles.dart';
@@ -19,6 +20,10 @@ class ParticipantsList extends StatefulWidget {
   final double iconSize;
   final int? participantCount;
   final bool showParticipantCount;
+  final bool showGoingText;
+  final bool currentUserFirst;
+  final bool excludeAvatarSemantics;
+  final bool? isCurrentUserParticipant;
 
   const ParticipantsList({
     required this.event,
@@ -27,6 +32,10 @@ class ParticipantsList extends StatefulWidget {
     this.iconSize = 40,
     this.participantCount,
     this.showParticipantCount = true,
+    this.showGoingText = false,
+    this.currentUserFirst = true,
+    this.excludeAvatarSemantics = false,
+    this.isCurrentUserParticipant,
     Key? key,
   }) : super(key: key);
 
@@ -38,10 +47,14 @@ class _ParticipantsListState extends State<ParticipantsList> {
   /// Set a seed so that the event uses the same random images all the time
   late final int randomImageSeedValue = widget.event.id.hashCode;
 
-  String get currentUserId => context.watch<UserService>().currentUserId!;
+  String? get currentUserId => context.watch<UserService>().currentUserId;
 
   bool get isParticipant {
-    return widget.participantIds.contains(currentUserId);
+    if (widget.isCurrentUserParticipant != null) {
+      return widget.isCurrentUserParticipant!;
+    }
+    final userId = currentUserId;
+    return userId != null && widget.participantIds.contains(userId);
   }
 
   int get _participantCount =>
@@ -55,7 +68,12 @@ class _ParticipantsListState extends State<ParticipantsList> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Stack(children: _buildUserIcons()),
+        if (widget.excludeAvatarSemantics)
+          ExcludeSemantics(
+            child: Stack(children: _buildUserIcons()),
+          )
+        else
+          Stack(children: _buildUserIcons()),
         if (widget.showParticipantCount) ...[
           SizedBox(width: 5),
           Flexible(child: _buildParticipantCount()),
@@ -65,18 +83,21 @@ class _ParticipantsListState extends State<ParticipantsList> {
   }
 
   List<Widget> _buildUserIcons() {
-    final isCreator = widget.event.creatorId == currentUserId;
+    final userId = currentUserId;
+    final isCreator = userId != null && widget.event.creatorId == userId;
 
     // Show creator and current user first.
     final prefixParticipants = [
-      if (isParticipant && !isCreator) currentUserId,
+      if (isParticipant && !isCreator && userId != null) userId,
       widget.event.creatorId,
     ];
 
+    final extraIconSlots =
+        max(0, widget.numberOfIconsToShow - prefixParticipants.length);
+
     final List<Widget> chipWidgets;
     if (widget.event.useParticipantCountEstimate) {
-      final numRandomParticipants =
-          widget.numberOfIconsToShow - prefixParticipants.length;
+      final numRandomParticipants = extraIconSlots;
       chipWidgets = [
         for (final participantId in prefixParticipants)
           _buildUserProfileChip(participantId),
@@ -87,10 +108,20 @@ class _ParticipantsListState extends State<ParticipantsList> {
         ...prefixParticipants,
         ...widget.participantIds
             .where((p) => !prefixParticipants.contains(p))
-            .take(widget.numberOfIconsToShow - prefixParticipants.length),
+            .take(extraIconSlots),
       ];
       chipWidgets = [
         for (final id in participantIds) _buildUserProfileChip(id),
+      ];
+    }
+
+    if (widget.currentUserFirst) {
+      return [
+        for (var i = chipWidgets.length - 1; i >= 0; i--)
+          Padding(
+            padding: EdgeInsets.only(left: i * 19.0),
+            child: chipWidgets[i],
+          ),
       ];
     }
 
@@ -126,45 +157,39 @@ class _ParticipantsListState extends State<ParticipantsList> {
   }
 
   Widget _buildParticipantCount() {
-    if (_participantCount == 1 &&
-        !widget.event.useParticipantCountEstimate &&
-        !isParticipant) {
-      return _buildSingleParticipantName();
-    } else {
-      final String text;
+    final String text;
 
-      if (isParticipant) {
+    if (isParticipant) {
+      final otherParticipantCount = max(0, _participantCount - 1);
+
+      if (widget.showGoingText && otherParticipantCount > 0) {
+        text =
+            'You + $otherParticipantCount ${otherParticipantCount == 1 ? 'person' : 'people'} are going';
+      } else {
         text =
             'You ${_participantCount > 1 ? '+ ${_participantCount - 1}' : ''}';
-      } else if (widget.event.useParticipantCountEstimate) {
-        text =
-            '$_participantCount ${_participantCount == 1 ? 'Person' : 'People'}';
-      } else if (_participantCount > widget.numberOfIconsToShow) {
-        text = '+${_participantCount - widget.numberOfIconsToShow}';
-      } else if (_participantCount > 1) {
-        text = '$_participantCount People';
-      } else {
-        text = '';
       }
-      return HeightConstrainedText(
-        text,
-        style: context.theme.textTheme.bodyMedium!
-            .copyWith(color: context.theme.colorScheme.onSurface),
-      );
+    } else if (widget.event.useParticipantCountEstimate) {
+      text =
+          '$_participantCount ${_participantCount == 1 ? 'Person' : 'People'}';
+    } else if (_participantCount == 1) {
+      // Show a generic count rather than the lone attendee's real name.
+      text = '1 person';
+    } else if (_participantCount > widget.numberOfIconsToShow) {
+      text = '+${_participantCount - widget.numberOfIconsToShow}';
+    } else if (_participantCount > 1) {
+      text = '$_participantCount People';
+    } else {
+      text = '';
     }
+
+    return HeightConstrainedText(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: context.theme.textTheme.bodyMedium!
+          .copyWith(color: context.theme.colorScheme.onSurface),
+    );
   }
-
-  Widget _buildSingleParticipantName() => UserInfoBuilder(
-        userId: widget.participantIds.first,
-        builder: (context, loading, user) {
-          final name = user.data?.displayName;
-          bool showName = !loading && name != null;
-
-          return HeightConstrainedText(
-            showName ? name : '1 person',
-            style: context.theme.textTheme.bodyMedium!
-                .copyWith(color: context.theme.colorScheme.onSurface),
-          );
-        },
-      );
 }

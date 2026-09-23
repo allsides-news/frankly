@@ -126,6 +126,26 @@ class _SettingsTabState extends State<SettingsTab> {
                   ),
                   whiteBackground,
                 ),
+                _buildSettingsToggle(
+                  'Show attendee count on event cards to non-admins',
+                  settings.showAttendeeCountToNonAdmins,
+                  (val) => _toggleCommunitySetting(
+                    settings.copyWith(
+                      showAttendeeCountToNonAdmins: val,
+                    ),
+                  ),
+                  context.theme.colorScheme.primary.withOpacity(0.1),
+                ),
+                _buildSettingsToggle(
+                  'Show attendee count below the register button after signup',
+                  settings.showPostRegistrationAttendeeCount,
+                  (val) => _toggleCommunitySetting(
+                    settings.copyWith(
+                      showPostRegistrationAttendeeCount: val,
+                    ),
+                  ),
+                  whiteBackground,
+                ),
                 if (kShowStripeFeatures
                     ? agreement?.allowPayments ?? false
                     : false) ...[
@@ -187,6 +207,16 @@ class _SettingsTabState extends State<SettingsTab> {
                   whiteBackground,
                 ),
                 _buildSettingsToggle(
+                  'Transcribe (Speech-to-Text)',
+                  eventSettings.alwaysTranscribe ?? false,
+                  (val) => _toggleEventSetting(
+                    eventSettings.copyWith(
+                      alwaysTranscribe: !(eventSettings.alwaysTranscribe ?? false),
+                    ),
+                  ),
+                  context.theme.colorScheme.primary.withOpacity(0.1),
+                ),
+                _buildSettingsToggle(
                   'Odometer',
                   eventSettings.talkingTimer ?? true,
                   (val) => _toggleEventSetting(
@@ -215,27 +245,31 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   Future<void> _toggleCommunitySetting(CommunitySettings communitySettings) {
-    return cloudFunctionsCommunityService.updateCommunity(
-      UpdateCommunityRequest(
-        community: context
-            .read<CommunityProvider>()
-            .community
-            .copyWith(communitySettings: communitySettings),
-        keys: [Community.kFieldCommunitySettings],
-      ),
-    );
+    return alertOnError(context, () async {
+      await cloudFunctionsCommunityService.updateCommunity(
+        UpdateCommunityRequest(
+          community: context
+              .read<CommunityProvider>()
+              .community
+              .copyWith(communitySettings: communitySettings),
+          keys: [Community.kFieldCommunitySettings],
+        ),
+      );
+    });
   }
 
   Future<void> _toggleEventSetting(EventSettings eventSettings) {
-    return cloudFunctionsCommunityService.updateCommunity(
-      UpdateCommunityRequest(
-        community: context
-            .read<CommunityProvider>()
-            .community
-            .copyWith(eventSettings: eventSettings),
-        keys: [Community.kFieldEventSettings],
-      ),
-    );
+    return alertOnError(context, () async {
+      await cloudFunctionsCommunityService.updateCommunity(
+        UpdateCommunityRequest(
+          community: context
+              .read<CommunityProvider>()
+              .community
+              .copyWith(eventSettings: eventSettings),
+          keys: [Community.kFieldEventSettings],
+        ),
+      );
+    });
   }
 
   Widget _buildStripeConnectLink(
@@ -270,7 +304,7 @@ class _SettingsTabState extends State<SettingsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Dev Settings - Community Settings',
+              'Dev Settings - Space Settings',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             SizedBox(height: 8),

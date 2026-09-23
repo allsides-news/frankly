@@ -22,11 +22,24 @@ class EventPermissionsProvider with ChangeNotifier {
     required this.communityProvider,
   });
 
-  void initialize() => userDataService.addListener(() => notifyListeners());
+  void initialize() => userDataService.addListener(notifyListeners);
 
-  bool get avCheckEnabled =>
-      communityProvider.settings.enableAVCheck &&
-      eventProvider.event.eventType == EventType.hosted;
+  @override
+  void dispose() {
+    userDataService.removeListener(notifyListeners);
+    super.dispose();
+  }
+
+  Event? get _event => eventProvider.eventOrNull;
+
+  /// The AV check applies to all participatory meetings (hosted and
+  /// hostless). Livestream attendees only watch, so they are not prompted.
+  bool get avCheckEnabled {
+    final event = _event;
+    if (event == null) return false;
+    return communityProvider.settings.enableAVCheck &&
+        event.eventType != EventType.livestream;
+  }
 
   bool get showTalkingTimeWarnings => !_isHost;
 
@@ -81,12 +94,15 @@ class EventPermissionsProvider with ChangeNotifier {
   }
 
   bool get canJoinEvent {
+    final event = _event;
+    if (event == null) return false;
+
     // Check if event has ended based on duration
-    if (eventProvider.event.hasEnded(clockService.now())) {
+    if (event.hasEnded(clockService.now())) {
       return false;
     }
 
-    if (eventProvider.event.isLocked) {
+    if (event.isLocked || event.isEnded) {
       return false;
     } else if (communityProvider.settings.requireApprovalToJoin) {
       return communityPermissions.membershipStatus.isMember;
@@ -96,29 +112,36 @@ class EventPermissionsProvider with ChangeNotifier {
   }
 
   bool get _isHost {
+    final event = _event;
     final currentUser = userService.currentUserId;
-    return currentUser != null && 
-           eventProvider.event.creatorId == currentUser;
+    return event != null &&
+        currentUser != null &&
+        event.creatorId == currentUser;
   }
 
   bool get canBroadcastChat =>
+      _isHost || communityPermissions.membershipStatus.isMod;
+
+  /// Event host or community mod+ (mod, admin, owner).
+  bool get canInitiateScreenShare =>
       _isHost || communityPermissions.membershipStatus.isMod;
 
   /// Returns true if the user should have chat disabled in hostless waiting room.
   /// Members and Attendees cannot chat in hostless waiting room, but can chat in breakouts.
   bool shouldDisableChatInHostlessWaitingRoom(BuildContext context) {
     // Only disable for hostless events
-    if (eventProvider.event.eventType != EventType.hostless) {
+    if (_event?.eventType != EventType.hostless) {
       return false;
     }
 
     // Check if we have a LiveMeetingProvider available
-    final liveMeetingProvider = watchProviderOrNull<LiveMeetingProvider>(context);
-    
+    final liveMeetingProvider =
+        watchProviderOrNull<LiveMeetingProvider>(context);
+
     // Only disable in waiting room, not in breakouts
     final isInWaitingRoom = liveMeetingProvider?.shouldBeInWaitingRoom ?? false;
     final isInBreakout = liveMeetingProvider?.isInBreakout ?? false;
-    
+
     if (!isInWaitingRoom || isInBreakout) {
       return false;
     }
@@ -126,11 +149,10 @@ class EventPermissionsProvider with ChangeNotifier {
     // Disable for Members and Attendees only
     // Facilitators, Mods, Admins, and Owners can still chat
     final status = communityPermissions.membershipStatus;
-    final isRestrictedRole = 
-        (status == MembershipStatus.member || 
-         status == MembershipStatus.attendee) &&
+    final isRestrictedRole = (status == MembershipStatus.member ||
+            status == MembershipStatus.attendee) &&
         !status.isFacilitator;
-    
+
     return isRestrictedRole;
   }
 
@@ -141,7 +163,7 @@ class EventPermissionsProvider with ChangeNotifier {
 
   bool canKickParticipantInParticipantWidget(String userId) =>
       userId != userService.currentUserId &&
-      eventProvider.event.eventType == EventType.hostless;
+      _event?.eventType == EventType.hostless;
 
   bool get canParticipate => eventProvider.isParticipant;
 
@@ -156,8 +178,7 @@ class EventPermissionsProvider with ChangeNotifier {
       communityPermissions.canModerateContent;
 
   bool canRemoveParticipant(Participant participant) {
-    final participantIsHostOfEvent =
-        participant.id == eventProvider.event.creatorId;
+    final participantIsHostOfEvent = participant.id == _event?.creatorId;
     final participantIsUser = participant.id == userService.currentUserId;
 
     return !participantIsHostOfEvent &&

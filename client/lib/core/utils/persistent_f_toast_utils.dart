@@ -18,6 +18,11 @@ class PersistentFToast {
     // Dismiss any existing toast
     dismiss();
 
+    // Skip if context is disposed or overlay unavailable (e.g. after navigation)
+    if (context is Element && !context.mounted) return;
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+
     _isShowing = true;
 
     // Create a custom overlay entry for truly persistent toast
@@ -82,7 +87,7 @@ class PersistentFToast {
     );
 
     // Insert the overlay
-    Overlay.of(context).insert(_overlayEntry!);
+    overlay.insert(_overlayEntry!);
   }
 
   /// Dismiss the current persistent toast

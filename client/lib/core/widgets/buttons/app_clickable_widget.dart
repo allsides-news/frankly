@@ -13,12 +13,23 @@ class AppClickableWidget extends StatelessWidget {
   /// rectangular shape will be applied.
   final bool isIcon;
 
+  /// Inset around [child]. Defaults to 8 on all sides; pass [EdgeInsets.zero]
+  /// where the caller already controls its own spacing and can't afford the
+  /// extra 16px in each axis.
+  final EdgeInsets? padding;
+
+  /// Corner radius of the ink/hover shape when [isIcon] is false. Defaults to
+  /// 10.
+  final double? borderRadius;
+
   const AppClickableWidget({
     Key? key,
     required this.child,
     required this.onTap,
     this.tooltipMessage,
     this.isIcon = true,
+    this.padding,
+    this.borderRadius,
   }) : super(key: key);
 
   @override
@@ -38,7 +49,9 @@ class AppClickableWidget extends StatelessWidget {
   Widget _buildChild() {
     final shapeBorder = isIcon
         ? CircleBorder()
-        : RoundedRectangleBorder(borderRadius: BorderRadius.circular(10));
+        : RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(borderRadius ?? 10),
+          );
 
     return Material(
       shape: shapeBorder,
@@ -47,7 +60,7 @@ class AppClickableWidget extends StatelessWidget {
         customBorder: shapeBorder,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: padding ?? const EdgeInsets.all(8.0),
           child: child,
         ),
       ),

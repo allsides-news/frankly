@@ -106,7 +106,10 @@ class _MeetingRatingState extends State<MeetingRating> {
                 color: context.theme.colorScheme.onSurface,
               );
             },
-            unratedColor: context.theme.colorScheme.outlineVariant,
+            // Not outlineVariant: under the dark theme that is neutral700,
+            // which is exactly what the dialog behind it is painted, so an
+            // unrated bar -- all five stars, before anyone taps -- vanished.
+            unratedColor: context.theme.colorScheme.onSurfaceVariant,
             onRatingUpdate: (rating) => alertOnError(context, () async {
               setState(() => _currentRating = rating);
               final event = context.read<EventProvider>().event;
@@ -121,6 +124,7 @@ class _MeetingRatingState extends State<MeetingRating> {
                   eventId: event.id,
                   rating: rating,
                 ),
+                eventTitle: event.title,
               );
             }),
           ),

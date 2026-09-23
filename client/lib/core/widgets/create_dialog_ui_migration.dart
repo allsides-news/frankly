@@ -75,9 +75,15 @@ class _CreateDialogUiMigrationState<T>
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         alignment: Alignment.topRight,
-                        child: IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: Icon(Icons.close),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                          ),
+                          child: IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: Icon(Icons.close),
+                          ),
                         ),
                       ),
                     ),

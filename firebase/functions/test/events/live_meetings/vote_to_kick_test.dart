@@ -16,24 +16,46 @@ import '../../util/event_test_utils.dart';
 import '../../util/function_test_fixture.dart';
 import '../../util/live_meeting_test_utils.dart';
 
+// Voter IDs that participate in breakout room alongside the target.
+const voterUserId1 = adminUserId;
+const voterUserId2 = 'testUser3';
+
 void main() {
   late String communityId;
   const targetUserId = 'testUser2';
   const templateId = '9654';
   const liveMeetingId = 'testMeeting123';
-  //GetIt.instance.registerSingleton(const Uuid());
   final eventUtils = EventTestUtils();
   final communityUtils = CommunityTestUtils();
   late Event testEvent;
   late MockAgoraUtils mockAgoraUtils;
   setupTestFixture();
 
+  /// Joins [uid] to [testEvent] and places them in [liveMeetingId] as an
+  /// active, present participant — matching the real-world state a participant
+  /// has while sitting in a breakout room.
+  Future<void> joinIntoRoom(
+    String uid, {
+    ParticipantStatus status = ParticipantStatus.active,
+    bool isPresent = true,
+    MembershipStatus membershipStatus = MembershipStatus.attendee,
+  }) =>
+      eventUtils.joinEvent(
+        communityId: communityId,
+        templateId: templateId,
+        eventId: testEvent.id,
+        uid: uid,
+        currentBreakoutRoomId: liveMeetingId,
+        isPresent: isPresent,
+        participantStatus: status,
+        participantMembershipStatus: membershipStatus,
+      );
+
   setUp(() async {
     setFirebaseAppFactory(() => FirebaseAdmin.instance.initializeApp()!);
 
     communityId = await communityUtils.createTestCommunity();
 
-    // Create test event
     testEvent = Event(
       id: '5678',
       status: EventStatus.active,
@@ -48,14 +70,13 @@ void main() {
       userId: adminUserId,
     );
 
-    // Add participant
-    await eventUtils.joinEvent(
-      communityId: communityId,
-      templateId: templateId,
-      eventId: testEvent.id,
-      uid: targetUserId,
-      participantStatus: ParticipantStatus.active,
-    );
+    // Place all four room members into the breakout room.
+    // targetUserId is the person being voted on; the other two are voters.
+    // adminUserId was created by createEvent without a room assignment, so we
+    // re-join them here (merge: true) to set currentBreakoutRoomId.
+    await joinIntoRoom(targetUserId);
+    await joinIntoRoom(voterUserId1);
+    await joinIntoRoom(voterUserId2);
 
     mockAgoraUtils = MockAgoraUtils();
     when(
@@ -66,24 +87,27 @@ void main() {
     ).thenAnswer((_) => Future.value());
   });
 
-  test('Successfully creates new kick proposal', () async {
-    final req = VoteToKickRequest(
-      eventPath: testEvent.fullPath,
-      liveMeetingPath: '${testEvent.fullPath}/live-meetings/$liveMeetingId',
-      targetUserId: targetUserId,
-      inFavor: true,
-      reason: 'Inappropriate behavior',
-    );
+  VoteToKickRequest buildRequest({bool inFavor = true, String? reason}) =>
+      VoteToKickRequest(
+        eventPath: testEvent.fullPath,
+        liveMeetingPath: '${testEvent.fullPath}/live-meetings/$liveMeetingId',
+        targetUserId: targetUserId,
+        inFavor: inFavor,
+        reason: reason ?? 'Inappropriate behavior',
+      );
 
+  test('Successfully creates new kick proposal', () async {
     final voteToKick = VoteToKick(agoraUtils: mockAgoraUtils);
 
     await voteToKick.action(
-      req,
-      CallableContext(adminUserId, null, 'fakeInstanceId'),
+      buildRequest(),
+      CallableContext(voterUserId1, null, 'fakeInstanceId'),
     );
 
     final proposalsSnapshot = await firestore
-        .collection('${req.liveMeetingPath}/proposals')
+        .collection(
+          '${testEvent.fullPath}/live-meetings/$liveMeetingId/proposals',
+        )
         .where('type', isEqualTo: 'kick')
         .where('targetUserId', isEqualTo: targetUserId)
         .get();
@@ -94,7 +118,7 @@ void main() {
         proposalsSnapshot.documents.first.data.toMap(),
       ),
     );
-    expect(proposal.initiatingUserId, equals(adminUserId));
+    expect(proposal.initiatingUserId, equals(voterUserId1));
     expect(proposal.targetUserId, equals(targetUserId));
     expect(proposal.status, equals(EventProposalStatus.open));
     expect(proposal.votes?.length, equals(1));
@@ -102,27 +126,44 @@ void main() {
     expect(proposal.votes?.first.reason, equals('Inappropriate behavior'));
   });
 
-  test('User gets kicked when receiving sufficient votes', () async {
-    final req = VoteToKickRequest(
-      eventPath: testEvent.fullPath,
-      liveMeetingPath: '${testEvent.fullPath}/live-meetings/$liveMeetingId',
-      targetUserId: targetUserId,
-      inFavor: true,
-      reason: 'Inappropriate behavior',
-    );
-
+  test('Proposal stays open until all present participants have voted',
+      () async {
+    // With 3 participants in the room (target + 2 voters), the threshold is 2.
+    // After only one voter votes the proposal must remain open.
     final voteToKick = VoteToKick(agoraUtils: mockAgoraUtils);
 
-    // First vote
     await voteToKick.action(
-      req,
-      CallableContext(adminUserId, null, 'fakeInstanceId'),
+      buildRequest(),
+      CallableContext(voterUserId1, null, 'fakeInstanceId'),
     );
 
-    // Second vote from different user
+    final proposalsSnapshot = await firestore
+        .collection(
+          '${testEvent.fullPath}/live-meetings/$liveMeetingId/proposals',
+        )
+        .where('type', isEqualTo: 'kick')
+        .where('targetUserId', isEqualTo: targetUserId)
+        .get();
+
+    final proposal = EventProposal.fromJson(
+      firestoreUtils.fromFirestoreJson(
+        proposalsSnapshot.documents.first.data.toMap(),
+      ),
+    );
+    expect(proposal.status, equals(EventProposalStatus.open));
+  });
+
+  test('User gets kicked when all present participants vote in favour',
+      () async {
+    final voteToKick = VoteToKick(agoraUtils: mockAgoraUtils);
+
     await voteToKick.action(
-      req,
-      CallableContext('testUser3', null, 'fakeInstanceId'),
+      buildRequest(),
+      CallableContext(voterUserId1, null, 'fakeInstanceId'),
+    );
+    await voteToKick.action(
+      buildRequest(),
+      CallableContext(voterUserId2, null, 'fakeInstanceId'),
     );
 
     final participantSnapshot = await firestore
@@ -133,7 +174,6 @@ void main() {
     );
 
     expect(participant.status, equals(ParticipantStatus.banned));
-
     verify(
       () => mockAgoraUtils.kickParticipant(
         roomId: liveMeetingId,
@@ -142,32 +182,59 @@ void main() {
     ).called(1);
   });
 
-  test('Throws unauthorized error when target user is a moderator', () async {
-    // Make target user a moderator
+  test(
+      'Phantom participant (isPresent=false) does not inflate threshold — '
+      'proposal still closes with remaining voters', () async {
+    // Simulate a participant who disconnected abruptly: currentBreakoutRoomId
+    // is still set but isPresent is false.  This is the root cause of the
+    // "poll continues forever" bug.  The phantom must NOT count toward the
+    // voting threshold, so the two genuinely-present voters should be
+    // sufficient to close the proposal.
+    await joinIntoRoom('phantomUser', isPresent: false);
 
-    await eventUtils.joinEvent(
-      communityId: communityId,
-      templateId: templateId,
-      eventId: testEvent.id,
-      uid: targetUserId,
-      participantStatus: ParticipantStatus.active,
-      participantMembershipStatus: MembershipStatus.mod,
+    final voteToKick = VoteToKick(agoraUtils: mockAgoraUtils);
+
+    await voteToKick.action(
+      buildRequest(),
+      CallableContext(voterUserId1, null, 'fakeInstanceId'),
+    );
+    await voteToKick.action(
+      buildRequest(),
+      CallableContext(voterUserId2, null, 'fakeInstanceId'),
     );
 
-    final req = VoteToKickRequest(
-      eventPath: testEvent.fullPath,
-      liveMeetingPath: '${testEvent.fullPath}/live-meetings/$liveMeetingId',
-      targetUserId: targetUserId,
-      inFavor: true,
-      reason: 'Test reason',
+    final proposalsSnapshot = await firestore
+        .collection(
+          '${testEvent.fullPath}/live-meetings/$liveMeetingId/proposals',
+        )
+        .where('type', isEqualTo: 'kick')
+        .where('targetUserId', isEqualTo: targetUserId)
+        .get();
+
+    final proposal = EventProposal.fromJson(
+      firestoreUtils.fromFirestoreJson(
+        proposalsSnapshot.documents.first.data.toMap(),
+      ),
+    );
+    expect(
+      proposal.status,
+      isNot(equals(EventProposalStatus.open)),
+      reason: 'Phantom (disconnected) participant should not block consensus',
+    );
+  });
+
+  test('Throws unauthorized error when target user is a moderator', () async {
+    await joinIntoRoom(
+      targetUserId,
+      membershipStatus: MembershipStatus.mod,
     );
 
     final voteToKick = VoteToKick(agoraUtils: mockAgoraUtils);
 
     expect(
       () => voteToKick.action(
-        req,
-        CallableContext(adminUserId, null, 'fakeInstanceId'),
+        buildRequest(),
+        CallableContext(voterUserId1, null, 'fakeInstanceId'),
       ),
       throwsA(
         predicate(
@@ -180,32 +247,22 @@ void main() {
     );
   });
 
-  test('Proposal gets rejected when receiving sufficient opposing votes',
-      () async {
-    final req = VoteToKickRequest(
-      eventPath: testEvent.fullPath,
-      liveMeetingPath: '${testEvent.fullPath}/live-meetings/$liveMeetingId',
-      targetUserId: targetUserId,
-      inFavor: false,
-      reason: 'Not necessary',
-    );
-
+  test('Proposal gets rejected when consensus is not reached', () async {
     final voteToKick = VoteToKick(agoraUtils: mockAgoraUtils);
 
-    // First vote against
     await voteToKick.action(
-      req,
-      CallableContext(adminUserId, null, 'fakeInstanceId'),
+      buildRequest(inFavor: false, reason: 'Not necessary'),
+      CallableContext(voterUserId1, null, 'fakeInstanceId'),
     );
-
-    // Second vote against from different user
     await voteToKick.action(
-      req,
-      CallableContext('testUser3', null, 'fakeInstanceId'),
+      buildRequest(inFavor: false, reason: 'Not necessary'),
+      CallableContext(voterUserId2, null, 'fakeInstanceId'),
     );
 
     final proposalsSnapshot = await firestore
-        .collection('${req.liveMeetingPath}/proposals')
+        .collection(
+          '${testEvent.fullPath}/live-meetings/$liveMeetingId/proposals',
+        )
         .where('type', isEqualTo: 'kick')
         .where('targetUserId', isEqualTo: targetUserId)
         .get();

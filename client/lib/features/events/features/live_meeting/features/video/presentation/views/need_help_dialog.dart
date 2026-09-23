@@ -25,8 +25,6 @@ __Try a different device or browser:__ We recommend Chrome or Firefox on a lapto
 
 const needHelpMarkdownWithContactAdmin = '''
 $needHelpMarkdown
-
-If you still need help, [click here](ask-admin) to request an admin to join your room and assist you as soon as they can.
 ''';
 
 class NeedHelpDialog extends StatelessWidget {
@@ -44,13 +42,16 @@ class NeedHelpDialog extends StatelessWidget {
       child: GestureDetector(
         onTap: () {},
         child: Container(
+          margin: const EdgeInsets.all(AppSize.kDialogEdgeInset),
           constraints: BoxConstraints(
             maxWidth: 600,
             maxHeight: 600,
           ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            color: Colors.white,
+            // Was hardcoded white while every string inside it draws from the
+            // theme, so under a dark theme this was near-white text on white.
+            color: context.theme.colorScheme.surfaceContainerLowest,
           ),
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -94,6 +95,40 @@ class NeedHelpDialog extends StatelessWidget {
                   },
                 ),
               ),
+              if (showContactAdmin) ...[
+                SizedBox(height: 16),
+                Text(
+                  'If you still need help, click the button below to request an admin to join your room and assist you as soon as they can.',
+                  textAlign: TextAlign.left,
+                  style: AppTextStyle.bodyMedium.copyWith(
+                    color: context.theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Center(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFD700),
+                      foregroundColor: Colors.black,
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: Text(
+                      'CLICK HERE',
+                      style: AppTextStyle.bodyMedium.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               SizedBox(height: 12),
               RichText(
                 text: TextSpan(

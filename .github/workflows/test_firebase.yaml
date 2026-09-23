@@ -13,7 +13,7 @@ jobs:
         working-directory: firebase/functions
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: dorny/paths-filter@v3
         id: changes
@@ -46,13 +46,33 @@ jobs:
         if: steps.changes.outputs.functions == 'true'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.22.2" # could read version from pubspec file, but would need to be exact
+          flutter-version: "3.41.4" # Pin stable toolchain (see client/UPGRADE-README.md)
           channel: "stable"
           cache: true
           cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
           cache-path: "${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:"
           pub-cache-key: "flutter-pub-:os:-:channel:-:version:-:arch:-:hash:"
           pub-cache-path: "/home/runner/.pub-cache" #hardcoded not ideal, but no way to reference $HOME
+
+      # Incomplete tool-cache restores can omit Dart SDK pieces; build_runner then fails looking for
+      # frontend_server*.snapshot. Current Dart SDKs ship frontend_server_aot.dart.snapshot (JIT path optional).
+      # Do not use `flutter --version` here: after removing dart-sdk the flutter wrapper has no dart binary.
+      - name: Repair incomplete Flutter/Dart SDK in tool cache
+        if: steps.changes.outputs.functions == 'true'
+        run: |
+          SDK_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin"
+          SNAP_JIT="$SDK_BIN/snapshots/frontend_server.dart.snapshot"
+          SNAP_AOT="$SDK_BIN/snapshots/frontend_server_aot.dart.snapshot"
+          dart_sdk_complete() {
+            [ -x "$SDK_BIN/dart" ] && { [ -f "$SNAP_JIT" ] || [ -f "$SNAP_AOT" ]; }
+          }
+          if ! dart_sdk_complete; then
+            echo "::warning::Flutter tool cache missing Dart SDK or frontend_server snapshot; re-downloading Dart SDK"
+            rm -rf "$FLUTTER_ROOT/bin/cache/dart-sdk"
+            rm -f "$FLUTTER_ROOT/bin/cache/engine-dart-sdk.stamp"
+            bash "$FLUTTER_ROOT/bin/internal/update_dart_sdk.sh"
+          fi
+          dart_sdk_complete || { echo "::error::Dart SDK still incomplete after repair"; exit 1; }
 
       - name: Install Dart Dependencies
         if: steps.changes.outputs.functions == 'true'
@@ -70,6 +90,13 @@ jobs:
           key: ${{ runner.os }}-firebase-emulators-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-firebase-emulators-
+
+      - name: Set up Java 21
+        if: steps.changes.outputs.firestore == 'true' || steps.changes.outputs.functions == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Install Firebase Tools
         if: steps.changes.outputs.firestore == 'true' || steps.changes.outputs.functions == 'true'

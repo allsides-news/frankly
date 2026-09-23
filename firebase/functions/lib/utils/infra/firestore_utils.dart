@@ -13,9 +13,8 @@ void setFirebaseAppFactory(App Function() factory) {
 
 App get firebaseApp => _firebaseAppSingleton ??= _firebaseAppFactory();
 Firestore get firestore {
-  final databaseId = firebaseApp.options.databaseURL.contains('allsides-roundtables-db') ?? false;
-  // Note: firebase_admin_interop doesn't support named databases directly
-  // The database ID needs to be configured via the Node.js admin SDK initialization
+  // Note: firebase_admin_interop doesn't support named databases directly.
+  // The database ID needs to be configured via the Node.js admin SDK initialization.
   return firebaseApp.firestore();
 }
 
@@ -31,7 +30,8 @@ class FirestoreUtils {
     final ref = firestore.document(path);
     final snapshot =
         transaction == null ? await ref.get() : await transaction.get(ref);
-    return constructor(fromFirestoreJson(snapshot.data.toMap()));
+    final data = snapshot.exists ? snapshot.data.toMap() : <String, dynamic>{};
+    return constructor(fromFirestoreJson(data));
   }
 
   Map<String, dynamic> fromFirestoreJson(Map<String, dynamic> json) {

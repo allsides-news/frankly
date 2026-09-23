@@ -19,7 +19,7 @@ class Emotion with _$Emotion {
 
   factory Emotion({
     required String creatorId,
-    required EmotionType emotionType,
+    @JsonKey(unknownEnumValue: EmotionType.thumbsUp) required EmotionType emotionType,
   }) = _Emotion;
 
   factory Emotion.fromJson(Map<String, dynamic> json) =>

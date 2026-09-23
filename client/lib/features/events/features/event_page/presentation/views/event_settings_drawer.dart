@@ -6,10 +6,8 @@ import 'package:client/features/events/features/event_page/presentation/event_se
 import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/core/widgets/buttons/app_clickable_widget.dart';
 import 'package:client/core/widgets/custom_switch_tile.dart';
-import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_list_view.dart';
 import 'package:client/config/environment.dart';
-import 'package:client/styles/app_asset.dart';
 import 'package:client/core/utils/dialogs.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/events/event.dart';
@@ -79,11 +77,10 @@ class _EventSettingsDrawerState extends State<EventSettingsDrawer>
                 style: context.theme.textTheme.headlineSmall,
               ),
               AppClickableWidget(
-                child: ProxiedImage(
-                  null,
-                  asset: AppAsset.kXPng,
-                  width: 24,
-                  height: 24,
+                child: Icon(
+                  Icons.close,
+                  size: 24,
+                  color: context.theme.colorScheme.onSurface,
                 ),
                 onTap: () {
                   if (_presenter.wereChangesMade()) {
@@ -128,6 +125,30 @@ class _EventSettingsDrawerState extends State<EventSettingsDrawer>
             val: _model.eventSettings.alwaysRecord ?? false,
             isIndicatorShown: _presenter.isSettingNotDefaultIndicatorShown(
               (settings) => settings.alwaysRecord,
+            ),
+          ),
+          SizedBox(height: 16),
+          _SwitchAndTooltip(
+            onUpdate: (isSelected) => _presenter.updateSetting(
+              EventSettings.kFieldAlwaysTranscribe,
+              isSelected,
+            ),
+            text: context.l10n.transcribe,
+            val: _model.eventSettings.alwaysTranscribe ?? false,
+            isIndicatorShown: _presenter.isSettingNotDefaultIndicatorShown(
+              (settings) => settings.alwaysTranscribe,
+            ),
+          ),
+          SizedBox(height: 16),
+          _SwitchAndTooltip(
+            onUpdate: (isSelected) => _presenter.updateSetting(
+              EventSettings.kFieldAllowScreenShare,
+              isSelected,
+            ),
+            text: context.l10n.screenShare,
+            val: _model.eventSettings.allowScreenshare ?? false,
+            isIndicatorShown: _presenter.isSettingNotDefaultIndicatorShown(
+              (settings) => settings.allowScreenshare,
             ),
           ),
           SizedBox(height: 16),
@@ -194,11 +215,13 @@ class _EventSettingsDrawerState extends State<EventSettingsDrawer>
 
   @override
   void closeDrawer() {
+    if (!mounted) return;
     Navigator.pop(context);
   }
 
   @override
   void showMessage(String message, {ToastType toastType = ToastType.neutral}) {
+    if (!mounted) return;
     showRegularToast(context, message, toastType: toastType);
   }
 
@@ -257,32 +280,37 @@ class _SwitchAndTooltipState extends State<_SwitchAndTooltip> {
     const size = 6.0;
     final bool isConstrainedHorizontally =
         MediaQuery.of(context).size.width < 475;
-    return GestureDetector(
+    return Semantics(
+      label: context.l10n.changedFromDefault,
+      button: true,
       onTap: activateTooltip,
-      child: MouseRegion(
-        onEnter: (_) => activateTooltip(),
-        child: SimpleTooltip(
-          tooltipDirection: isConstrainedHorizontally
-              ? TooltipDirection.right
-              : TooltipDirection.up,
-          animationDuration: const Duration(milliseconds: 250),
-          borderWidth: 0,
-          ballonPadding: const EdgeInsets.all(8),
-          content: HeightConstrainedText(
-            context.l10n.changedFromDefault,
-            style: context.theme.textTheme.bodyMedium,
-            textAlign: TextAlign.left,
-          ),
-          show: _visible,
-          child: Padding(
-            padding: const EdgeInsets.only(right: 4.0),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: context.theme.colorScheme.primary,
+      child: GestureDetector(
+        onTap: activateTooltip,
+        child: MouseRegion(
+          onEnter: (_) => activateTooltip(),
+          child: SimpleTooltip(
+            tooltipDirection: isConstrainedHorizontally
+                ? TooltipDirection.right
+                : TooltipDirection.up,
+            animationDuration: const Duration(milliseconds: 250),
+            borderWidth: 0,
+            ballonPadding: const EdgeInsets.all(8),
+            content: HeightConstrainedText(
+              context.l10n.changedFromDefault,
+              style: context.theme.textTheme.bodyMedium,
+              textAlign: TextAlign.left,
+            ),
+            show: _visible,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.theme.colorScheme.primary,
+                ),
+                height: size,
+                width: size,
               ),
-              height: size,
-              width: size,
             ),
           ),
         ),

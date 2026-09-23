@@ -120,8 +120,15 @@ class ReassignBreakoutRoom extends OnCallMethod<ReassignBreakoutRoomRequest> {
         final breakoutRoom = BreakoutRoom.fromJson(
           firestoreUtils.fromFirestoreJson(newRoomDoc.data.toMap()),
         );
+        // Deduplicate: only add the userId if not already present.
+        // Without this guard, repeated reassignments inflate participantIds
+        // with duplicate entries that produce ghost participant counts.
+        final updatedIds = List<String>.from(breakoutRoom.participantIds);
+        if (!updatedIds.contains(request.userId)) {
+          updatedIds.add(request.userId);
+        }
         reassignedBreakoutRoom = breakoutRoom.copyWith(
-          participantIds: breakoutRoom.participantIds..add(request.userId),
+          participantIds: updatedIds,
         );
 
         print(
@@ -145,8 +152,14 @@ class ReassignBreakoutRoom extends OnCallMethod<ReassignBreakoutRoomRequest> {
         final breakoutRoom = BreakoutRoom.fromJson(
           firestoreUtils.fromFirestoreJson(breakoutRoomDoc.data.toMap()),
         );
+        // Remove ALL occurrences of this userId, not just the first.
+        // Pre-existing corrupt data (confirmed via QA logs) can have a user
+        // appearing 5× in participantIds; a single remove() would leave 4
+        // stale copies behind after reassignment.
+        final cleanedIds = List<String>.from(breakoutRoom.participantIds)
+          ..removeWhere((id) => id == request.userId);
         final updatedBreakoutRoom = breakoutRoom.copyWith(
-          participantIds: breakoutRoom.participantIds..remove(request.userId),
+          participantIds: cleanedIds,
         );
         print(
           'removing participantId: ${breakoutRoomDoc.reference.path}/${breakoutRoomDoc.reference.documentID}',

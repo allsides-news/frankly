@@ -13,7 +13,11 @@ abstract class AbstractCalendarFeed implements CloudFunction {
   Future<String> generateData({required Community community});
   ContentType getContentType();
 
+  void setResponseHeaders(HttpHeaders headers) {}
+
   Future<void> expressAction(ExpressHttpRequest expressRequest) async {
+    setResponseHeaders(expressRequest.response.headers);
+
     try {
       if (expressRequest.requestedUri.pathSegments.length != 3) {
         throw Exception("Bad path");

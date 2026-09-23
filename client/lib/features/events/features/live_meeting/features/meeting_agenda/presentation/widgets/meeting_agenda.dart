@@ -91,7 +91,13 @@ class _MeetingAgendaState extends State<MeetingAgenda> {
   AgendaProvider get _agendaProvider => Provider.of<AgendaProvider>(context);
 
   Widget _buildAgendaItem({required AgendaItem item}) {
-    return AgendaItemCard(agendaItem: item);
+    // Stable per-item key (already expected elsewhere -- see the
+    // Key(item.id) comparisons in onReorder below) so Flutter matches each
+    // card's State by item identity rather than by list position. Without
+    // it, deleting/reordering an item can reassign another item's in-flight
+    // edit state (e.g. an unsaved item's typed title/content) to whatever
+    // now sits at its old position.
+    return AgendaItemCard(key: Key(item.id), agendaItem: item);
   }
 
   bool get canEditAgenda {

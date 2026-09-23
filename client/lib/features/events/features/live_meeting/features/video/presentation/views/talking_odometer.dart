@@ -7,12 +7,15 @@ import 'package:client/features/events/features/live_meeting/features/video/pres
 import 'package:client/features/events/features/live_meeting/features/video/presentation/widgets/colorful_meter.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/utils/extensions.dart';
-import 'package:client/core/localization/localization_helper.dart';
 
 /// Shows a meter indicating to the user if they have been speaking more, less, or the same as
 /// everyone else in the meeting.
 class TalkingOdometer extends StatefulWidget {
-  const TalkingOdometer({Key? key}) : super(key: key);
+  /// Should match the background this meter is placed on, so the time pill
+  /// reads as part of that background rather than a separate box.
+  final Color pillColor;
+
+  const TalkingOdometer({Key? key, required this.pillColor}) : super(key: key);
 
   @override
   State<TalkingOdometer> createState() => _TalkingOdometerState();
@@ -65,7 +68,8 @@ class _TalkingOdometerState extends State<TalkingOdometer>
         key: _model.tooltipKey,
         triggerMode: TooltipTriggerMode.manual,
         message: message,
-        textStyle: AppTextStyle.body,
+        textStyle: AppTextStyle.body
+          .copyWith(color: context.theme.colorScheme.onSurface),
         verticalOffset: 40,
         preferBelow: false,
         padding: const EdgeInsets.all(30),
@@ -75,9 +79,10 @@ class _TalkingOdometerState extends State<TalkingOdometer>
         ),
         child: ColorfulMeter(
           value: applyWarning ? adjustedValue : value,
-          title: _presenter.userTotalTalkingTime
+          userId: _presenter.localParticipantUserId,
+          timeText: _presenter.userTotalTalkingTime
               .getFormattedTime(showHours: false),
-          subtitle: context.l10n.mins,
+          pillColor: widget.pillColor,
         ),
       ),
     );
@@ -85,16 +90,19 @@ class _TalkingOdometerState extends State<TalkingOdometer>
 
   @override
   void updateView() {
+    if (!mounted) return;
     setState(() {});
   }
 
   @override
   void cancelAnimation() {
+    if (!mounted) return;
     _warningController.stop();
   }
 
   @override
   void startAnimation() {
+    if (!mounted) return;
     _warningController.value = 1;
     _warningController.repeat(reverse: true);
   }

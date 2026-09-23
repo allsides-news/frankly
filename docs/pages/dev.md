@@ -6,7 +6,7 @@ Most components of Frankly can be run on your local machine. This section descri
 
 
 !!! warning "Important"
-    Frankly runs on Flutter `3.22.2.` **Please use this version of Flutter in order to avoid any unexpected errors.**
+    Frankly targets Flutter **3.41.4** (stable). Match CI and run `client/update.sh` after checkout so toolchain and patched deps align (details in `client/UPGRADE-README.md`).
 
 This section covers setting up a new computer for Flutter development.
 
@@ -400,12 +400,12 @@ If you want to use emulators, ensure you start the emulators first. Then run the
 
 To run the app with backend pointing at staging.
 ```
-flutter run -d chrome --release --web-renderer html -t lib/main.dart --dart-define-from-file=.env.json
+flutter run -d chrome --release -t lib/main.dart --dart-define-from-file=.env.json
 ```
 
 To run the app with locally running functions, firestore, and auth emulators
 ```
-flutter run -d chrome --release --web-renderer html -t lib/dev_emulators_main.dart --dart-define-from-file=.env.json
+flutter run -d chrome --release -t lib/dev_emulators_main.dart --dart-define-from-file=.env.json
 ```
 
 ### Supported browsers

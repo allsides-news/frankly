@@ -30,6 +30,13 @@ String get _agoraStorageSecretKey =>
 functions.config.get('agora.storage_secret_key') as String? ?? '';
 
 class AgoraUtils {
+  /// Token + privilege lifetime. Must comfortably exceed the longest event:
+  /// the web SDK's automatic reconnect re-joins with the ORIGINAL token, so
+  /// a short TTL strands users whose network blips late in a meeting (join
+  /// rejected until a manual refresh). The client also renews proactively
+  /// via onTokenPrivilegeWillExpire as a second layer.
+  static const _tokenExpireSeconds = 60 * 60 * 24;
+
   String createToken({required int uid, required String roomId}) {
     return agoraModule.RtcTokenBuilder.buildTokenWithUid(
       _agoraAppId,
@@ -37,7 +44,11 @@ class AgoraUtils {
       roomId,
       uid,
       1 /** Publisher */,
-      60 * 10,
+      _tokenExpireSeconds,
+      // agora-token 2.x takes a separate privilege expiry; previously
+      // omitted (undefined). Pass it explicitly so join/publish privileges
+      // match the token lifetime.
+      _tokenExpireSeconds,
     );
   }
 
@@ -61,6 +72,8 @@ class AgoraUtils {
     String? eventId,
     String? filePrefix,
     String? recordingStatePath,
+    String? screenSharerUserId,
+    int? screenShareAgoraUid,
   }) async {
     // Verify that recording has been properly claimed before proceeding
     if (recordingStatePath != null) {
@@ -115,6 +128,8 @@ class AgoraUtils {
         roomId: roomId,
         resourceId: resourceId,
         filePrefix: filePrefix ?? eventId ?? roomId,
+        screenSharerUserId: screenSharerUserId,
+        screenShareAgoraUid: screenShareAgoraUid,
       );
       
       // Update recording state from 'claiming' to 'recording' in Firestore
@@ -161,9 +176,6 @@ class AgoraUtils {
     final plainCredential = '$_agoraRestKey:$_agoraRestSecret';
     final authorizationField =
         'Basic ${convert.base64.encode(convert.utf8.encode(plainCredential))}';
-
-    print('Authorization field: $authorizationField');
-
     return {
       'Authorization': authorizationField,
       'Content-Type': 'application/json',
@@ -194,22 +206,48 @@ class AgoraUtils {
     required String roomId,
     required String resourceId,
     required String filePrefix,
+    String? screenSharerUserId,
+    int? screenShareAgoraUid,
   }) async {
     final token = createToken(uid: _recordingUid, roomId: roomId);
+
+    // If screen sharing is already active when recording starts, begin with
+    // Vertical Presentation layout so the screen UID occupies the large slot
+    // from the first frame. Without this, the layout defaults to grid and
+    // only switches when the OnLiveMeeting Firestore trigger fires — but that
+    // trigger already fired before recording started, so the layout would
+    // never update for this session.
+    final Map<String, dynamic> transcodingConfig;
+    if (screenSharerUserId != null) {
+      final maxUid = screenShareAgoraUid ?? uidToInt(screenSharerUserId);
+      transcodingConfig = {
+        "height": 720,
+        "width": 1280,
+        "bitrate": 2000,
+        "fps": 20,
+        "mixedVideoLayout": 2,
+        "backgroundColor": "#000000",
+        "maxResolutionUid": maxUid.toString(),
+      };
+    } else {
+      transcodingConfig = {
+        // 720p is the minimum resolution for screen content to be readable.
+        "height": 720,
+        "width": 1280,
+        "bitrate": 2000,
+        "fps": 20,
+        "mixedVideoLayout": 1,
+        "backgroundColor": "#000000",
+      };
+    }
+
     final request = {
       "cname": roomId,
       "uid": _recordingUid.toString(),
       "clientRequest": {
         "token": token,
         "recordingConfig": {
-          "transcodingConfig": {
-            "height": 360,
-            "width": 640,
-            "bitrate": 500,
-            "fps": 15,
-            "mixedVideoLayout": 1,
-            "backgroundColor": "#000000",
-          },
+          "transcodingConfig": transcodingConfig,
         },
         "recordingFileConfig": {
           "avFileType": ["hls", "mp4"],
@@ -304,6 +342,13 @@ class AgoraUtils {
             continue; // Retry
           }
           throw HttpsError(HttpsError.resourceExhausted, 'Rate limit stopping recording', null);
+        }
+
+        // 404 means Agora already auto-stopped the recording (channel went empty before event ended).
+        // The files are already finalized in Cloud Storage — treat as success.
+        if (result.statusCode == 404) {
+          print('Recording for room $roomId already stopped by Agora (404) — treating as success');
+          return;
         }
 
         if (result.statusCode < 200 || result.statusCode > 299) {
@@ -438,6 +483,351 @@ class AgoraUtils {
     }
   }
 
+  /// Updates the composite recording layout when screen sharing starts or stops.
+  ///
+  /// When [screenSharerUserId] is non-null (screen sharing active):
+  ///   - Switches to Vertical Presentation layout (mixedVideoLayout: 2)
+  ///   - The screen sharer's video (now the screen stream, not camera) occupies
+  ///     ~75% of the frame on the left; other participants fill a column on the right
+  ///
+  /// When [screenSharerUserId] is null (screen sharing stopped):
+  ///   - Reverts to Best Fit grid layout (mixedVideoLayout: 1)
+  ///
+  /// This is non-blocking/best-effort — a failure does not interrupt the meeting.
+  Future<void> updateRecordingLayout({
+    required String roomId,
+    required String resourceId,
+    required String sid,
+    required String? screenSharerUserId,
+    int? screenShareAgoraUid,
+  }) async {
+    final Map<String, dynamic> layoutConfig;
+
+    if (screenSharerUserId != null) {
+      // Use the screen UID (bit 30 set) as maxResolutionUid only when the
+      // client confirmed it joined the channel (dual-engine path). Legacy
+      // clients publish screen capture on the camera UID via
+      // publishScreenCaptureVideo — the screen UID never joins, so pointing
+      // maxResolutionUid there would render the large slot black.
+      final maxUid = screenShareAgoraUid ?? uidToInt(screenSharerUserId);
+      layoutConfig = {
+        "mixedVideoLayout": 2,
+        "backgroundColor": "#000000",
+        "maxResolutionUid": maxUid.toString(),
+      };
+    } else {
+      layoutConfig = {
+        "mixedVideoLayout": 1,
+        "backgroundColor": "#000000",
+      };
+    }
+
+    try {
+      final result = await http.post(
+        Uri.parse(
+          'https://api.agora.io/v1/apps/$_agoraAppId/cloud_recording/resourceid/$resourceId/sid/$sid/mode/mix/updateLayout',
+        ),
+        headers: _getAuthHeaders(),
+        body: convert.json.encode({
+          "cname": roomId,
+          "uid": _recordingUid.toString(),
+          "clientRequest": layoutConfig,
+        }),
+      );
+
+      print('updateRecordingLayout result (room $roomId, sharer: $screenSharerUserId): ${result.statusCode} ${result.body}');
+
+      if (result.statusCode < 200 || result.statusCode > 299) {
+        // Log but don't throw — recording can continue with the old layout.
+        print('Warning: recording layout update failed for room $roomId: ${result.statusCode}');
+      }
+    } catch (e) {
+      print('Warning: recording layout update threw for room $roomId: $e');
+    }
+  }
+
+  // ─── Real-Time Speech-to-Text (STT) ────────────────────────────────────────
+
+  /// UID used by the STT bot in every channel. Must not collide with real user
+  /// UIDs (which are 30-bit values derived from Firebase UIDs).
+  static const int _sttBotUid = 678;
+
+  /// Starts an Agora Real-Time STT agent for the given [roomId].
+  ///
+  /// One agent per room subscribes to all participants. The Agora output (JSON
+  /// format) includes the speaker UID alongside each utterance, providing
+  /// diarization without per-participant bots.
+  ///
+  /// Files are stored under [filePrefix] in the configured GCS bucket
+  /// (e.g. ["stt", "{eventId}"] → gs://bucket/stt/{eventId}/...).
+  ///
+  /// Uses the same claim-based idempotency pattern as [recordRoom] to prevent
+  /// duplicate STT starts when multiple participants join simultaneously.
+  Future<void> startSttAgent({
+    required String roomId,
+    required String filePrefix,
+    String? sttStatePath,
+    String? expectedClaimId,
+    List<String> languages = const ['en-US'],
+  }) async {
+    if (sttStatePath != null) {
+      final stateDoc = await firestore.document(sttStatePath).get();
+      if (stateDoc.exists) {
+        final state = stateDoc.data.toMap();
+        final status = state['status'] as String?;
+        final stateRoomId = state['roomId'] as String?;
+        final timestamp = state['startedAt'] as Timestamp? ??
+            state['claimedAt'] as Timestamp?;
+        final isRecent = timestamp != null &&
+            DateTime.now().difference(timestamp.toDateTime()) <
+                const Duration(minutes: 15);
+        if (status == 'running' && stateRoomId == roomId && isRecent) {
+          print('STT agent already running for room $roomId, skipping');
+          return;
+        }
+        if (status != 'claiming' && status != 'running') {
+          print('STT state has unexpected status "$status" for $roomId, skipping');
+          return;
+        }
+        if (!isRecent) {
+          print('Found stale STT state for $roomId, skipping (needs fresh claim)');
+          return;
+        }
+        if (expectedClaimId != null) {
+          final storedClaimId = state['claimId'] as String?;
+          if (storedClaimId != expectedClaimId) {
+            print('STT claim ID mismatch for $roomId (expected $expectedClaimId, got $storedClaimId) — lost race, skipping');
+            return;
+          }
+        }
+        print('Verified STT claim for $roomId, proceeding with agent start');
+      } else {
+        print('No STT claim found for $roomId, skipping (claim required)');
+        return;
+      }
+    }
+
+    final agentName = _buildSttAgentName(roomId);
+    final token = createToken(uid: _sttBotUid, roomId: roomId);
+
+    final request = {
+      'languages': languages,
+      'name': agentName,
+      'maxIdleTime': 300,
+      'rtcConfig': {
+        'channelName': roomId,
+        // This endpoint IS the Real-Time STT v7.x API. The "/v1/" segment is the
+        // REST path version for this API family; the product version (v7.x) is
+        // reflected in the docs URL, not the path. v6.x used a different path:
+        // /v1/projects/{id}/rtsc/speech-to-text/...
+        // In v7.x, subBotUid is deprecated — pubBotUid covers both subscribe and publish.
+        // https://docs.agora.io/en/real-time-stt/rest-api/v7.x/join
+        'pubBotUid': _sttBotUid.toString(),
+        'pubBotToken': token,
+        'enableJsonProtocol': true,
+      },
+      'captionConfig': {
+        'sliceDuration': 60,
+        'storage': {
+          'vendor': 6,
+          'region': 0,
+          'bucket': _agoraStorageBucketName,
+          'accessKey': _agoraStorageAccessKey,
+          'secretKey': _agoraStorageSecretKey,
+          'fileNamePrefix': filePrefix.split('/'),
+        },
+      },
+    };
+
+    print('Starting STT agent for room $roomId with name $agentName');
+    try {
+      final result = await http.post(
+        Uri.parse(
+          'https://api.agora.io/api/speech-to-text/v1/projects/$_agoraAppId/join',
+        ),
+        headers: _getAuthHeaders(),
+        body: convert.json.encode(request),
+      );
+
+      print('STT start result: ${result.statusCode} ${result.body}');
+
+      if (result.statusCode < 200 || result.statusCode > 299) {
+        throw HttpsError(HttpsError.internal, 'Error starting STT agent', null);
+      }
+
+      final agentId = convert.jsonDecode(result.body)['agent_id'] as String;
+
+      if (sttStatePath != null) {
+        await firestore.document(sttStatePath).setData(
+          DocumentData.fromMap(firestoreUtils.toFirestoreJson({
+            'status': 'running',
+            'roomId': roomId,
+            'agentId': agentId,
+            'agentName': agentName,
+            'filePrefix': filePrefix,
+            'startedAt': Firestore.fieldValues.serverTimestamp(),
+          })),
+          SetOptions(merge: true),
+        );
+        print('Updated STT state to "running" for room $roomId (agent $agentId)');
+      }
+    } catch (e) {
+      print('Error starting STT agent for room $roomId: $e');
+      if (sttStatePath != null) {
+        await firestore.document(sttStatePath).setData(
+          DocumentData.fromMap(firestoreUtils.toFirestoreJson({
+            'status': 'error',
+            'roomId': roomId,
+            'error': e.toString(),
+            'errorAt': Firestore.fieldValues.serverTimestamp(),
+          })),
+          SetOptions(merge: true),
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Stops the STT agent identified by [agentId] for the given [roomId].
+  Future<void> stopSttAgent({
+    required String roomId,
+    required String agentId,
+  }) async {
+    print('Stopping STT agent $agentId for room $roomId');
+    try {
+      final result = await http.post(
+        Uri.parse(
+          'https://api.agora.io/api/speech-to-text/v1/projects/$_agoraAppId/agents/$agentId/leave',
+        ),
+        headers: _getAuthHeaders(),
+      );
+
+      print('STT stop result: ${result.statusCode} ${result.body}');
+
+      if (result.statusCode == 404) {
+        print('STT agent $agentId already stopped (404) — treating as success');
+        return;
+      }
+      if (result.statusCode < 200 || result.statusCode > 299) {
+        throw HttpsError(HttpsError.internal, 'Error stopping STT agent', null);
+      }
+    } catch (e) {
+      print('Error stopping STT agent $agentId for room $roomId: $e');
+      rethrow;
+    }
+  }
+
+  /// Stops all STT agents for an event (main room + all breakouts).
+  Future<void> stopAllSttForEvent({
+    required String eventPath,
+    required String eventId,
+  }) async {
+    print('Stopping all STT agents for event: $eventId');
+    final liveMeetingPath = '$eventPath/live-meetings/$eventId';
+
+    try {
+      final stopTasks = <_StopSttTask>[];
+
+      // Main room STT
+      stopTasks.add(_StopSttTask(
+        statePath: '$liveMeetingPath/stt-state/current',
+        roomType: 'main room',
+      ));
+
+      // Breakout room STTs — fetch all sessions' room collections in parallel.
+      final sessionsSnapshot = await firestore
+          .collection('$liveMeetingPath/breakout-room-sessions')
+          .get();
+
+      await Future.wait(
+        sessionsSnapshot.documents.map((sessionDoc) async {
+          final roomsSnapshot = await firestore
+              .collection(
+                '$liveMeetingPath/breakout-room-sessions/${sessionDoc.documentID}/breakout-rooms',
+              )
+              .get();
+          for (final roomDoc in roomsSnapshot.documents) {
+            final docId = roomDoc.documentID;
+            // roomId is the Agora channel name stored in the document — must match
+            // the live-meetings/{id} segment written at join time in live_meeting_utils.dart.
+            final agoraRoomId = roomDoc.data.toMap()['roomId'] as String? ?? docId;
+            stopTasks.add(_StopSttTask(
+              statePath:
+                  '$liveMeetingPath/breakout-room-sessions/${sessionDoc.documentID}/breakout-rooms/$docId/live-meetings/$agoraRoomId/stt-state/current',
+              roomType: 'breakout room $agoraRoomId',
+            ));
+          }
+        }),
+      );
+
+      print('Found ${stopTasks.length} STT agent(s) to stop for event $eventId');
+
+      const batchSize = 100;
+      const batchDelay = Duration(milliseconds: 200);
+
+      for (var i = 0; i < stopTasks.length; i += batchSize) {
+        final batch = stopTasks.skip(i).take(batchSize).toList();
+        await Future.wait(
+          batch.map((task) => _stopSttFromState(task.statePath, task.roomType)),
+        );
+        if (i + batchSize < stopTasks.length) {
+          await Future.delayed(batchDelay);
+        }
+      }
+
+      print('Finished stopping all STT agents for event $eventId');
+    } catch (e) {
+      print('Error stopping STT agents for event $eventId: $e');
+    }
+  }
+
+  Future<void> _stopSttFromState(String statePath, String roomType) async {
+    try {
+      final stateDoc = await firestore.document(statePath).get();
+      if (!stateDoc.exists) return;
+
+      final state = stateDoc.data.toMap();
+      final status = state['status'] as String?;
+      final agentId = state['agentId'] as String?;
+      final roomId = state['roomId'] as String?;
+
+      if (status == 'claiming') {
+        // Agent not yet started — delete the claim so the racing startSttAgent
+        // finds no document and aborts rather than starting after event end.
+        await firestore.document(statePath).delete();
+        print('Deleted in-progress STT claim for $roomType — event ended mid-claim');
+        return;
+      }
+
+      if (status != 'running' || agentId == null || roomId == null) {
+        print('STT not active for $roomType (status: $status)');
+        return;
+      }
+
+      await stopSttAgent(roomId: roomId, agentId: agentId);
+
+      await firestore.document(statePath).setData(
+        DocumentData.fromMap(firestoreUtils.toFirestoreJson({
+          'status': 'stopped',
+          'stoppedAt': Firestore.fieldValues.serverTimestamp(),
+        })),
+        SetOptions(merge: true),
+      );
+      print('Stopped STT agent for $roomType');
+    } catch (e) {
+      print('Error stopping STT for $roomType at $statePath: $e');
+    }
+  }
+
+  /// Builds a unique STT agent name from [roomId] (max 64 chars, unique).
+  /// The name cannot be reused across calls; timestamp suffix ensures uniqueness.
+  String _buildSttAgentName(String roomId) {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    // "stt-" prefix + up to 46 chars of roomId + "-" + 13-digit timestamp = max 64
+    final safeRoomId = roomId.length > 46 ? roomId.substring(0, 46) : roomId;
+    return 'stt-$safeRoomId-$ts';
+  }
+
   Future<void> kickParticipant({
     required String roomId,
     required String userId,
@@ -463,6 +853,14 @@ class AgoraUtils {
       throw HttpsError(HttpsError.internal, 'Error kicking user', null);
     }
   }
+}
+
+/// Helper class for batching stop STT tasks
+class _StopSttTask {
+  final String statePath;
+  final String roomType;
+
+  _StopSttTask({required this.statePath, required this.roomType});
 }
 
 /// Helper class for batching stop recording tasks
@@ -493,5 +891,6 @@ abstract class RtcTokenBuilderClient {
     int uid,
     int role,
     int tokenExpire,
+    int privilegeExpire,
   );
 }

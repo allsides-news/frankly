@@ -23,6 +23,8 @@ import 'package:client/core/utils/meta_tag_service.dart';
 import 'package:data_models/community/community.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
+import 'package:client/core/widgets/pulse_loading_placeholder.dart';
+import 'package:client/core/widgets/delayed_loading_placeholder.dart';
 
 class CommunityPage extends StatefulWidget {
   final bool fillViewport;
@@ -75,111 +77,158 @@ class CommunityPageState extends State<CommunityPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: CustomStreamBuilder<Community?>(
-        entryFrom: '_CommunityPageState._buildCommunityContent',
-        stream: context.watch<CommunityProvider>().communityStream,
-        errorMessage: 'Something went wrong loading this community.',
-        builder: (_, community) {
-          // Update meta tags for social sharing when community loads
-          if (community != null) {
+    // The Space page paints its own ground in every state, not just the one
+    // where it has a Space to show. CustomScaffold -- which is what normally
+    // supplies the background -- is built inside the stream's `builder`, so
+    // the loading and error states render with nothing behind them at all and
+    // fall through to the white page behind the app. Their text still takes
+    // the theme's onSurface, which under a dark theme is a pale grey: the
+    // error read as unstyled and near-invisible.
+    return ColoredBox(
+      color: context.theme.colorScheme.surface,
+      child: Center(
+        child: CustomStreamBuilder<Community?>(
+          entryFrom: '_CommunityPageState._buildCommunityContent',
+          loadingBuilder: (_) => const DelayedLoadingPlaceholder(
+            child: PulseLoadingPlaceholder(height: 320),
+          ),
+          stream: context.watch<CommunityProvider>().communityStream,
+          errorMessage: 'Something went wrong loading this space.',
+          builder: (_, community) {
+            // BehaviorSubjectWrapper emits active+null before Firestore responds,
+            // bypassing CustomStreamBuilder's loading guard. Hold content until
+            // community is available so child presenters can safely access communityId.
+            if (community == null) return const SizedBox.shrink();
+
             final currentUrl = html.window.location.href;
             MetaTagService.updateCommunityMetaTags(
-              communityName: community.name ?? 'Community',
+              communityName: community.name ?? 'Space',
               communityDescription: community.description,
-              communityImageUrl: community.profileImageUrl ?? community.bannerImageUrl,
+              communityImageUrl:
+                  community.profileImageUrl ?? community.bannerImageUrl,
               communityUrl: currentUrl,
             );
-          }
-          
-          final darkThemeColor =
-              ThemeUtils.parseColor(community?.themeDarkColor) ??
-                  context.theme.colorScheme.primary;
-          final isOnPageWithDefaultColors =
-              CheckCurrentLocation.isTemplatePage ||
-                  CheckCurrentLocation.isEventPage ||
-                  CheckCurrentLocation.isCommunityAdminPage;
-          final enableCustomColors = !isOnPageWithDefaultColors;
-          final lightThemeColor =
-              ThemeUtils.parseColor(community?.themeLightColor) ??
-                  Theme.of(context).colorScheme.surface;
-          return Consumer<UserService>(
-            builder: (_, __, ___) => Consumer<UserDataService>(
-              builder: (_, __, ___) {
-                final primaryColor = enableCustomColors
-                    ? darkThemeColor
-                    : context.theme.colorScheme.primary;
-                final secondaryColor = enableCustomColors
-                    ? lightThemeColor
-                    : context.theme.colorScheme.secondary;
 
-                return ChangeNotifierProvider<CommunityPermissionsProvider>(
-                  create: (context) => CommunityPermissionsProvider(
-                    communityProvider: Provider.of<CommunityProvider>(
-                      context,
-                      listen: false,
+            // Event pages now carry the Space's colours too; admin and template
+            // pages stay on the app's default palette.
+            final isOnPageWithDefaultColors =
+                CheckCurrentLocation.isTemplatePage ||
+                    CheckCurrentLocation.isCommunityAdminPage;
+            final enableCustomColors = !isOnPageWithDefaultColors;
+
+            // Swaps by brightness, so the admin's validated contrast pair holds
+            // in dark mode instead of putting light-on-light.
+            final brand = SpaceBrandColors.resolve(
+              lightColor: community.themeLightColor,
+              darkColor: community.themeDarkColor,
+              brightness: Theme.of(context).brightness,
+            );
+            final brandBackground =
+                brand?.background ?? Theme.of(context).colorScheme.surface;
+            final brandForeground =
+                brand?.foreground ?? context.theme.colorScheme.primary;
+            return Consumer<UserService>(
+              builder: (_, __, ___) => Consumer<UserDataService>(
+                builder: (_, __, ___) {
+                  final primaryColor = enableCustomColors
+                      ? brandForeground
+                      : context.theme.colorScheme.primary;
+                  final containerColor = enableCustomColors
+                      ? brandBackground
+                      : context.theme.colorScheme.primaryContainer;
+                  // Overriding a role without its `on` partner breaks the pair
+                  // for everything in this subtree: a primary fill kept pulling
+                  // the default onPrimary, so on a Space with a dark brand
+                  // colour every filled button went dark-on-dark. The two brand
+                  // colours are contrast-validated against each other, so each
+                  // is the other's readable foreground.
+                  final onPrimaryColor = enableCustomColors
+                      ? brandBackground
+                      : context.theme.colorScheme.onPrimary;
+                  final onContainerColor = enableCustomColors
+                      ? brandForeground
+                      : context.theme.colorScheme.onPrimaryContainer;
+
+                  return ChangeNotifierProvider<CommunityPermissionsProvider>(
+                    create: (context) => CommunityPermissionsProvider(
+                      communityProvider: Provider.of<CommunityProvider>(
+                        context,
+                        listen: false,
+                      ),
+                    )..initialize(),
+                    child: Builder(
+                      builder: (context) {
+                        final isCreateMeetingAvailable =
+                            widget.isCreateEventFabVisible &&
+                                context
+                                    .watch<CommunityPermissionsProvider>()
+                                    .canCreateEvent;
+
+                        return CustomScaffold(
+                          bgColor: enableCustomColors ? brandBackground : null,
+                          fillViewport: widget.fillViewport,
+                          bottomNavigationBar: _showBottomNav
+                              ? CommunityBottomNavBar(
+                                  showCreateMeetingButton:
+                                      isCreateMeetingAvailable,
+                                )
+                              : null,
+                          floatingActionButton: _buildFab(context),
+                          childTheme: Theme.of(context).copyWith(
+                            colorScheme: Theme.of(context).colorScheme.copyWith(
+                                  primary: primaryColor,
+                                  onPrimary: onPrimaryColor,
+                                  onPrimaryContainer: onContainerColor,
+                                  // The Space's light colour is the *background*
+                                  // half of a contrast-validated pair (the colour
+                                  // picker enforces "light color must be
+                                  // lighter"). It used to be assigned to
+                                  // `secondary`, which the app reads as a
+                                  // foreground -- so every foreground use of
+                                  // `secondary` rendered light-on-light and
+                                  // vanished on custom-coloured Spaces.
+                                  primaryContainer: containerColor,
+                                ),
+                            switchTheme: SwitchTheme.of(context).copyWith(
+                              thumbColor:
+                                  WidgetStateColor.resolveWith((states) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return containerColor;
+                                } else {
+                                  return primaryColor;
+                                }
+                              }),
+                              trackColor:
+                                  WidgetStateColor.resolveWith((states) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return primaryColor;
+                                } else {
+                                  return context
+                                      .theme.colorScheme.onPrimaryContainer;
+                                }
+                              }),
+                            ),
+                            radioTheme: RadioTheme.of(context).copyWith(
+                              fillColor: WidgetStateColor.resolveWith((states) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return primaryColor;
+                                } else {
+                                  return context
+                                      .theme.colorScheme.onPrimaryContainer;
+                                }
+                              }),
+                            ),
+                          ),
+                          child: widget.content,
+                        );
+                      },
                     ),
-                  )..initialize(),
-                  child: Builder(
-                    builder: (context) {
-                      final isCreateMeetingAvailable =
-                          widget.isCreateEventFabVisible &&
-                              context
-                                  .watch<CommunityPermissionsProvider>()
-                                  .canCreateEvent;
-
-                      return CustomScaffold(
-                        bgColor: enableCustomColors ? lightThemeColor : null,
-                        fillViewport: widget.fillViewport,
-                        bottomNavigationBar: _showBottomNav
-                            ? CommunityBottomNavBar(
-                                showCreateMeetingButton:
-                                    isCreateMeetingAvailable,
-                              )
-                            : null,
-                        floatingActionButton: _buildFab(context),
-                        childTheme: Theme.of(context).copyWith(
-                          colorScheme: Theme.of(context).colorScheme.copyWith(
-                                primary: primaryColor,
-                                secondary: secondaryColor,
-                              ),
-                          switchTheme: SwitchTheme.of(context).copyWith(
-                            thumbColor: WidgetStateColor.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return secondaryColor;
-                              } else {
-                                return primaryColor;
-                              }
-                            }),
-                            trackColor: WidgetStateColor.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return primaryColor;
-                              } else {
-                                return context
-                                    .theme.colorScheme.onPrimaryContainer;
-                              }
-                            }),
-                          ),
-                          radioTheme: RadioTheme.of(context).copyWith(
-                            fillColor: WidgetStateColor.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) {
-                                return primaryColor;
-                              } else {
-                                return context
-                                    .theme.colorScheme.onPrimaryContainer;
-                              }
-                            }),
-                          ),
-                        ),
-                        child: widget.content,
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
-          );
-        },
+                  );
+                },
+              ),
+            );
+          },
+        ),
       ),
     );
   }

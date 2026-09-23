@@ -261,8 +261,10 @@ class FirestoreMeetingGuideService {
       ).toJson(),
     );
 
-    loggingService
-        .log('FirestoreMeetingGuideService.toggleHandRaise: Data: $updateMap');
+    loggingService.log(
+      'FirestoreMeetingGuideService.toggleHandRaise: '
+      'isHandRaised=$isHandRaised path=$documentPath data=$updateMap',
+    );
 
     // handRaisedTime is set to serverTimestamp unless we reset to null.
     if (isHandRaised) {
@@ -272,9 +274,17 @@ class FirestoreMeetingGuideService {
       updateMap[ParticipantAgendaItemDetails.kFieldHandRaisedTime] = null;
     }
 
-    await firestoreDatabase.firestore
-        .doc(documentPath)
-        .set(toFirestoreJson(updateMap), SetOptions(merge: true));
+    try {
+      await firestoreDatabase.firestore
+          .doc(documentPath)
+          .set(toFirestoreJson(updateMap), SetOptions(merge: true));
+    } catch (e, stackTrace) {
+      loggingService.log(
+        'FirestoreMeetingGuideService.toggleHandRaise ERROR: '
+        'path=$documentPath error=$e\n$stackTrace',
+      );
+      rethrow;
+    }
   }
 
   Future<void> updateVideoPosition({

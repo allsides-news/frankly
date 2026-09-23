@@ -70,6 +70,8 @@ class AppAsset {
   static const AppAsset kLogoIconPng = AppAsset('media/logo-icon.png');
   static const AppAsset kLogoPng = AppAsset('media/logo.png');
   //static const AppAsset kLogoSvg = AppAsset('media/logo.svg');
+  static const AppAsset kLogoRoundtablesPng =
+      AppAsset('media/logo-roundtables.png');
 
   static const AppAsset kSpokenCheckMark =
       AppAsset('media/spoken_check_mark.png');
@@ -102,6 +104,15 @@ class AppAsset {
   static const AppAsset kPlayScreenPng = AppAsset('media/play-screen.png');
   static const AppAsset kLockPng = AppAsset('media/lock.png');
   static const AppAsset kHostlessPng = AppAsset('media/hostless.png');
+
+  /// The ring-of-dots hostless mark, as vector art so it can be tinted --
+  /// every path shares one fill, so a colorFilter recolours the whole thing.
+  static const AppAsset kHostlessSvg = AppAsset('media/hostless.svg');
+
+  /// Shown where a Space has no banner of its own. Drawn at 4:1 to match
+  /// kSpaceBannerAspectRatio, in translucent greys so it reads as a placeholder
+  /// over either theme's background rather than a picture in its own right.
+  static const AppAsset kBannerEmptySvg = AppAsset('media/banner-empty.svg');
   static const AppAsset kCheckCircleGreen =
       AppAsset('media/checkCircle-green.png');
   static const AppAsset kCheckCircleGray =

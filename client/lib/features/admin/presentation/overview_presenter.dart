@@ -61,7 +61,7 @@ class OverviewPresenter {
       case OnboardingStep.inviteSomeone:
         return 'Follow along for upcoming events, resources, and more.';
       case OnboardingStep.createStripeAccount:
-        return 'Enable donations for your community.';
+        return 'Enable donations for your space.';
     }
   }
 
@@ -77,7 +77,7 @@ class OverviewPresenter {
       case OnboardingStep.createStripeAccount:
         return null;
     }
-    return null;
+    
   }
 
   void toggleExpansion(OnboardingStep? onboardingStep) {

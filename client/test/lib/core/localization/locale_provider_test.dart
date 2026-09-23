@@ -18,7 +18,7 @@ void main() {
 
     test('setLocale sets a simple locale correctly', () async {
       // Arrange
-      final testLocale = const Locale('en');
+      const testLocale = Locale('en');
       
       // Act
       await localeProvider.setLocale(testLocale);
@@ -33,7 +33,7 @@ void main() {
 
     test('setLocale sets a locale with country code correctly', () async {
       // Arrange
-      final testLocale = const Locale('en', 'US');
+      const testLocale = Locale('en', 'US');
       
       // Act
       await localeProvider.setLocale(testLocale);
@@ -48,7 +48,7 @@ void main() {
 
     test('setLocale sets a complex locale with script correctly', () async {
       // Arrange
-      final testLocale = const Locale.fromSubtags(
+      const testLocale = Locale.fromSubtags(
         languageCode: 'zh',
         scriptCode: 'Hant',
         countryCode: 'TW',

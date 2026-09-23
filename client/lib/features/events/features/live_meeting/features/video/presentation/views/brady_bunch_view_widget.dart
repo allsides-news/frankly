@@ -1,8 +1,8 @@
+import 'package:client/services.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/events/features/live_meeting/features/video/utils/brady_bunch_layout.dart';
 import 'package:client/features/events/features/live_meeting/features/video/data/providers/conference_room.dart';
 import 'package:client/features/events/features/live_meeting/features/video/presentation/widgets/participant_widget.dart';
-import 'package:client/features/events/features/live_meeting/features/video/presentation/views/video_flutter_meeting.dart';
 import 'package:client/features/events/features/live_meeting/features/video/presentation/widgets/custom_page_view_builder.dart';
 
 import '../../data/providers/agora_room.dart';
@@ -19,10 +19,18 @@ class _BradyBunchViewWidgetState extends State<BradyBunchViewWidget> {
 
   final _currentPageNotifier = ValueNotifier<int>(0);
 
-  static const int _maxParticipantsPerPage = 10;
+  /// A page holds fewer on a phone, where the same count would leave every
+  /// tile too small to read a face in.
+  static const int _maxParticipantsPerPageDesktop = 9;
+  static const int _maxParticipantsPerPageMobile = 6;
+
+  int get _maxParticipantsPerPage =>
+      responsiveLayoutService.isMobile(context)
+          ? _maxParticipantsPerPageMobile
+          : _maxParticipantsPerPageDesktop;
 
   List<AgoraParticipant> get participants =>
-      ConferenceRoom.watch(context).participants;
+      ConferenceRoom.watchOrNull(context)?.participants ?? [];
 
   int _calculateNumberOfPages() {
     return (participants.length / _maxParticipantsPerPage).ceil();
@@ -37,6 +45,9 @@ class _BradyBunchViewWidgetState extends State<BradyBunchViewWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (participants.isEmpty) {
+      return const SizedBox.expand();
+    }
     return CustomPageViewBuilder(
       pageController: _pageController,
       currentPageNotifier: _currentPageNotifier,
@@ -64,8 +75,13 @@ class _BradyBunchViewWidgetState extends State<BradyBunchViewWidget> {
     return RepaintBoundary(
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          final width = constraints.maxWidth;
-          final height = constraints.maxHeight;
+          // Tiles carry half the gutter each, so without this the grid's outer
+          // edge sat at half the margin a featured tile gets. Taken off the
+          // layout's width and height too, or the grid would size itself for
+          // space the padding has already claimed.
+          const outerMargin = kVideoTileMargin / 2;
+          final width = constraints.maxWidth - outerMargin * 2;
+          final height = constraints.maxHeight - outerMargin * 2;
 
           final participantsOnThisPageStartIndex =
               pageIndex * _maxParticipantsPerPage;
@@ -74,10 +90,13 @@ class _BradyBunchViewWidgetState extends State<BradyBunchViewWidget> {
               .take(_maxParticipantsPerPage)
               .toList();
 
-          return BradyBunchLayoutWidget(
-            height: height,
-            width: width,
-            pageParticipants: pageParticipants,
+          return Padding(
+            padding: const EdgeInsets.all(outerMargin),
+            child: BradyBunchLayoutWidget(
+              height: height,
+              width: width,
+              pageParticipants: pageParticipants,
+            ),
           );
         },
       ),
@@ -118,6 +137,10 @@ class BradyBunchLayoutWidget extends StatelessWidget {
     }
 
     return Column(
+      // Centred so a lone participant sits level with the agenda card beside
+      // it. This was top-aligned to stop a too-tall grid clipping at both
+      // ends; the layout takes the outer margin off its own width and height
+      // now, so it sizes to fit and there is nothing to clip.
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (int i = 0; i < layout.rows; i++)
@@ -132,12 +155,16 @@ class BradyBunchLayoutWidget extends StatelessWidget {
                       Flexible(
                         child: AspectRatio(
                           aspectRatio: aspectRatioAtIndex(i, j),
-                          child: ParticipantWidget(
-                            borderRadius: BorderRadius.zero,
-                            globalKey: CommunityGlobalKey.fromLabel(
-                              participantAtIndex(i, j).userId,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.all(kVideoTileMargin / 2),
+                            child: ParticipantWidget(
+                              borderRadius:
+                                  BorderRadius.circular(kVideoTileRadius),
+                              globalKey:
+                                  ValueKey(participantAtIndex(i, j).userId),
+                              participant: participantAtIndex(i, j),
                             ),
-                            participant: participantAtIndex(i, j),
                           ),
                         ),
                       ),

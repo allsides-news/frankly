@@ -7,23 +7,44 @@ import 'package:data_models/events/event.dart';
 class SurveyPresenter extends ChangeNotifier {
   final CommunityProvider communityProvider;
   final EventProvider eventProvider;
+  final Map<String, String> savedMatchingQuestionAnswers;
 
   SurveyPresenter({
     required this.communityProvider,
     required this.eventProvider,
+    this.savedMatchingQuestionAnswers = const {},
   });
 
   late List<BreakoutQuestion> _surveyQuestions;
+  bool _savedAnswersApplied = false;
 
   final zipCodeController = TextEditingController();
 
   List<BreakoutQuestion> get surveyQuestions => _surveyQuestions;
+  bool get savedAnswersApplied => _savedAnswersApplied;
 
   void initialize() {
     final breakoutQuestions =
         eventProvider.event.breakoutRoomDefinition?.breakoutQuestions ?? [];
 
-    _surveyQuestions = breakoutQuestions.map((b) => b.copyWith()).toList();
+    var savedAnswersApplied = false;
+    _surveyQuestions = breakoutQuestions.map((question) {
+      final savedAnswerOptionId = savedMatchingQuestionAnswers[question.id];
+      final savedAnswerStillExists = savedAnswerOptionId != null &&
+          savedAnswerOptionId.isNotEmpty &&
+          question.answers
+              .expand((answer) => answer.options)
+              .any((option) => option.id == savedAnswerOptionId);
+
+      if (savedAnswerStillExists) {
+        savedAnswersApplied = true;
+        return question.copyWith(answerOptionId: savedAnswerOptionId);
+      }
+
+      return question.copyWith();
+    }).toList();
+    _savedAnswersApplied = savedAnswersApplied;
+
     zipCodeController.addListener(notifyListeners);
   }
 

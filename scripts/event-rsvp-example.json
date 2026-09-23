@@ -1,0 +1,19 @@
+{
+  "action": "rsvp",
+  "userId": "GP1IFvzLnKa1b81zDiNcH0u9EER2",
+  "communityId": "gh6jl9ZPOsETSxSacFV7",
+  "templateId": "misc",
+  "eventId": "fXL3NooV7GAV9CwBENqe",
+  "breakoutSurveyAnswers": [
+    { "question": "Coffee or Tea?", "answer": "Coffee" },
+    { "question": "Morning person or Night owl?", "answer": "Night owl" }
+  ],
+  "zipCode": "80302",
+  "optInToCommunity": true,
+  "optInToNewsletters": true,
+  "joinParameters": {
+    "utm_source": "partner-site",
+    "utm_medium": "api",
+    "utm_campaign": "fall-events"
+  }
+}

@@ -47,11 +47,15 @@ class SurveyDialog extends StatelessWidget {
       );
     }
 
+    final savedMatchingQuestionAnswers =
+        await firestoreEventService.getSavedMatchingQuestionAnswers();
+
     final dialogResult = await CreateDialogUiMigration<SurveyDialogResult>(
       builder: (context) => ChangeNotifierProvider(
         create: (_) => SurveyPresenter(
           communityProvider: communityProvider,
           eventProvider: eventProvider,
+          savedMatchingQuestionAnswers: savedMatchingQuestionAnswers,
         )..initialize(),
         child: PointerInterceptor(child: SurveyDialog()),
       ),
@@ -68,6 +72,10 @@ class SurveyDialog extends StatelessWidget {
 
     const String description =
         'Please answer a few questions so we can match you with the right group.';
+    const String matchingExplanation =
+        'This information helps us pair you with participants who have different experiences and perspectives.';
+    const String savedAnswersMessage =
+        'Your saved answers from last time are pre-selected below. You can update them before continuing.';
 
     return Padding(
       padding: const EdgeInsets.all(30.0),
@@ -84,6 +92,35 @@ class SurveyDialog extends StatelessWidget {
             description,
             style: AppTextStyle.bodyMedium,
           ),
+          SizedBox(height: 10),
+          HeightConstrainedText(
+            matchingExplanation,
+            style: AppTextStyle.bodyMedium.copyWith(
+              color: context.theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (surveyPresenter.savedAnswersApplied) ...[
+            SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color:
+                    context.theme.colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      context.theme.colorScheme.primary.withValues(alpha: 0.18),
+                ),
+              ),
+              child: HeightConstrainedText(
+                savedAnswersMessage,
+                style: AppTextStyle.bodyMedium.copyWith(
+                  color: context.theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
           SizedBox(height: spacerHeight),
           for (var questionData in surveyPresenter.surveyQuestions)
             _buildQuestionInfo(context, questionData),

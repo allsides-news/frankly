@@ -129,56 +129,7 @@ class _ConfirmTextInputDialogueState extends State<ConfirmTextInputDialogue> {
                 ),
               ),
               SizedBox(height: 40),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (!isNullOrEmpty(widget.cancelText))
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: ActionButton(
-                          type: ActionButtonType.outline,
-                          height: 55,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 12,
-                          ),
-                          minWidth: 100,
-                          color: Colors.transparent,
-                          text: widget.cancelText,
-                          // Use textColor property for proper foreground color
-                          textColor: context.theme.colorScheme.onPrimary,
-                          textStyle: AppTextStyle.body,
-                          borderSide: BorderSide(
-                            color: context.theme.colorScheme.onPrimary,
-                            width: 2,
-                          ),
-                          onPressed: _cancel,
-                        ),
-                      ),
-                    )
-                  else
-                    SizedBox.shrink(),
-                  Expanded(
-                    child: ActionButton(
-                      height: 55,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      color: context.theme.colorScheme.onPrimary,
-                      disabledColor: context.theme.colorScheme.onPrimary.withOpacity(0.5),
-                      text: widget.confirmText,
-                      // Use textColor property for proper foreground color
-                      textColor: context.theme.colorScheme.primary,
-                      textStyle: AppTextStyle.body.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      onPressed: (_textInput.trim().isNotEmpty) ? _confirm : null,
-                    ),
-                  ),
-                ],
-              ),
+              _buildButtons(context),
                 ],
               ),
             ),
@@ -199,6 +150,50 @@ class _ConfirmTextInputDialogueState extends State<ConfirmTextInputDialogue> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildButtons(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!isNullOrEmpty(widget.cancelText)) ...[
+          ActionButton(
+            type: ActionButtonType.outline,
+            height: 55,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 12,
+            ),
+            color: Colors.transparent,
+            text: widget.cancelText,
+            textColor: context.theme.colorScheme.onPrimary,
+            textStyle: AppTextStyle.body,
+            borderSide: BorderSide(
+              color: context.theme.colorScheme.onPrimary,
+              width: 2,
+            ),
+            onPressed: _cancel,
+          ),
+          SizedBox(height: 12),
+        ],
+        ActionButton(
+          height: 55,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 12,
+          ),
+          color: context.theme.colorScheme.onPrimary,
+          disabledColor:
+              context.theme.colorScheme.onPrimary.withOpacity(0.5),
+          text: widget.confirmText,
+          textColor: context.theme.colorScheme.primary,
+          textStyle: AppTextStyle.body.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+          onPressed: (_textInput.trim().isNotEmpty) ? _confirm : null,
+        ),
+      ],
     );
   }
 

@@ -1,12 +1,14 @@
-import 'package:client/core/widgets/custom_loading_indicator.dart';
+import 'package:client/core/widgets/pulse_loading_placeholder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:client/features/events/features/event_page/data/providers/template_provider.dart';
 import 'package:client/core/widgets/editable_image.dart';
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/services.dart';
+import 'package:client/styles/styles.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/templates/template.dart';
+import 'package:client/core/widgets/delayed_loading_placeholder.dart';
 
 class EventOrTemplatePicture extends HookWidget {
   final Event? event;
@@ -24,6 +26,11 @@ class EventOrTemplatePicture extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Proportional, not a flat radius: at a mobile thumbnail size a fixed 20
+    // was half the image's width, which rendered as a circle.
+    final imageRadius = BorderRadius.circular(
+      (height ?? 160) * AppSize.kEventImageRadiusRatio,
+    );
     final localEvent = event;
     final localTemplate = template;
     final eventImage = localEvent?.image;
@@ -55,16 +62,22 @@ class EventOrTemplatePicture extends HookWidget {
           future: imageFuture,
           builder: (_, snapshot) =>
               snapshot.connectionState == ConnectionState.waiting
-                  ? CustomLoadingIndicator()
+                  ? DelayedLoadingPlaceholder(
+                      child: PulseLoadingPlaceholder(
+                        height: height ?? 160,
+                        width: height,
+                        borderRadius: imageRadius,
+                      ),
+                    )
                   : EditableImage(
                       initialUrl: snapshot.data ?? '',
                       allowEdit: onEdit != null,
                       onImageSelect: onEdit,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: imageRadius,
                       child: ProxiedImage(
                         snapshot.data ?? '',
                         height: height,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: imageRadius,
                         width: height,
                       ),
                     ),

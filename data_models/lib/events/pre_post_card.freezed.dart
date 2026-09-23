@@ -23,6 +23,8 @@ mixin _$PrePostCard {
   String get headline => throw _privateConstructorUsedError;
   String get message => throw _privateConstructorUsedError;
   PrePostCardType get type => throw _privateConstructorUsedError;
+  List<PrePostSurveyQuestion> get surveyQuestions =>
+      throw _privateConstructorUsedError;
   List<PrePostUrlParams> get prePostUrls => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -41,6 +43,7 @@ abstract class $PrePostCardCopyWith<$Res> {
       {String headline,
       String message,
       PrePostCardType type,
+      List<PrePostSurveyQuestion> surveyQuestions,
       List<PrePostUrlParams> prePostUrls});
 }
 
@@ -60,6 +63,7 @@ class _$PrePostCardCopyWithImpl<$Res, $Val extends PrePostCard>
     Object? headline = null,
     Object? message = null,
     Object? type = null,
+    Object? surveyQuestions = null,
     Object? prePostUrls = null,
   }) {
     return _then(_value.copyWith(
@@ -75,6 +79,10 @@ class _$PrePostCardCopyWithImpl<$Res, $Val extends PrePostCard>
           ? _value.type
           : type // ignore: cast_nullable_to_non_nullable
               as PrePostCardType,
+      surveyQuestions: null == surveyQuestions
+          ? _value.surveyQuestions
+          : surveyQuestions // ignore: cast_nullable_to_non_nullable
+              as List<PrePostSurveyQuestion>,
       prePostUrls: null == prePostUrls
           ? _value.prePostUrls
           : prePostUrls // ignore: cast_nullable_to_non_nullable
@@ -95,6 +103,7 @@ abstract class _$$_PrePostCardCopyWith<$Res>
       {String headline,
       String message,
       PrePostCardType type,
+      List<PrePostSurveyQuestion> surveyQuestions,
       List<PrePostUrlParams> prePostUrls});
 }
 
@@ -112,6 +121,7 @@ class __$$_PrePostCardCopyWithImpl<$Res>
     Object? headline = null,
     Object? message = null,
     Object? type = null,
+    Object? surveyQuestions = null,
     Object? prePostUrls = null,
   }) {
     return _then(_$_PrePostCard(
@@ -127,6 +137,10 @@ class __$$_PrePostCardCopyWithImpl<$Res>
           ? _value.type
           : type // ignore: cast_nullable_to_non_nullable
               as PrePostCardType,
+      surveyQuestions: null == surveyQuestions
+          ? _value.surveyQuestions
+          : surveyQuestions // ignore: cast_nullable_to_non_nullable
+              as List<PrePostSurveyQuestion>,
       prePostUrls: null == prePostUrls
           ? _value.prePostUrls
           : prePostUrls // ignore: cast_nullable_to_non_nullable
@@ -142,6 +156,7 @@ class _$_PrePostCard extends _PrePostCard {
       {required this.headline,
       required this.message,
       required this.type,
+      this.surveyQuestions = const [],
       this.prePostUrls = const []})
       : super._();
 
@@ -156,11 +171,14 @@ class _$_PrePostCard extends _PrePostCard {
   final PrePostCardType type;
   @override
   @JsonKey()
+  final List<PrePostSurveyQuestion> surveyQuestions;
+  @override
+  @JsonKey()
   final List<PrePostUrlParams> prePostUrls;
 
   @override
   String toString() {
-    return 'PrePostCard(headline: $headline, message: $message, type: $type, prePostUrls: $prePostUrls)';
+    return 'PrePostCard(headline: $headline, message: $message, type: $type, surveyQuestions: $surveyQuestions, prePostUrls: $prePostUrls)';
   }
 
   @override
@@ -173,12 +191,19 @@ class _$_PrePostCard extends _PrePostCard {
             (identical(other.message, message) || other.message == message) &&
             (identical(other.type, type) || other.type == type) &&
             const DeepCollectionEquality()
+                .equals(other.surveyQuestions, surveyQuestions) &&
+            const DeepCollectionEquality()
                 .equals(other.prePostUrls, prePostUrls));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, headline, message, type,
+  int get hashCode => Object.hash(
+      runtimeType,
+      headline,
+      message,
+      type,
+      const DeepCollectionEquality().hash(surveyQuestions),
       const DeepCollectionEquality().hash(prePostUrls));
 
   @JsonKey(ignore: true)
@@ -200,6 +225,7 @@ abstract class _PrePostCard extends PrePostCard {
       {required final String headline,
       required final String message,
       required final PrePostCardType type,
+      final List<PrePostSurveyQuestion> surveyQuestions,
       final List<PrePostUrlParams> prePostUrls}) = _$_PrePostCard;
   _PrePostCard._() : super._();
 
@@ -212,6 +238,8 @@ abstract class _PrePostCard extends PrePostCard {
   String get message;
   @override
   PrePostCardType get type;
+  @override
+  List<PrePostSurveyQuestion> get surveyQuestions;
   @override
   List<PrePostUrlParams> get prePostUrls;
   @override

@@ -64,10 +64,13 @@ class _CalendarMenuButtonState extends State<CalendarMenuButton> {
                   color: context.theme.colorScheme.onSurfaceVariant,
                 ),
                 SizedBox(width: 10),
-                HeightConstrainedText(
-                  context.l10n.addToCalendar,
-                  style: context.theme.textTheme.bodyMedium!.copyWith(
-                    color: context.theme.colorScheme.onSurfaceVariant,
+                Flexible(
+                  child: HeightConstrainedText(
+                    context.l10n.addToCalendar,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.theme.textTheme.bodyMedium!.copyWith(
+                      color: context.theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],

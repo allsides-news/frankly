@@ -30,6 +30,8 @@ import 'package:data_models/events/live_meetings/live_meeting.dart';
 import 'package:provider/provider.dart';
 import 'package:client/core/localization/localization_helper.dart';
 import 'package:client/core/utils/extensions.dart';
+import 'package:client/features/events/features/live_meeting/features/admin_panel/presentation/widgets/participant_email_search.dart';
+import 'package:client/features/events/features/live_meeting/features/admin_panel/presentation/widgets/smart_match_badge.dart';
 
 final fakeWaitingRoomObject = BreakoutRoom(
   roomId: breakoutsWaitingRoomId,
@@ -38,6 +40,21 @@ final fakeWaitingRoomObject = BreakoutRoom(
   flagStatus: BreakoutRoomFlagStatus.unflagged,
   creatorId: 'fake',
 );
+
+/// Waiting room: `participantIds` from Firestore plus presence-only users
+/// (union, assigned IDs first). Used by both the grid badge and detail roster
+/// so counts cannot diverge when assignment and heartbeat update at different times.
+List<String> _waitingRoomParticipantIdsUnion(
+  BreakoutRoom room,
+  List<Participant>? presentParticipants,
+) {
+  final presenceIds = (presentParticipants ?? []).map((p) => p.id);
+  final seen = <String>{};
+  return [
+    ...room.participantIds.where(seen.add),
+    ...presenceIds.where(seen.add),
+  ];
+}
 
 class AdminPanel extends StatefulWidget {
   final EdgeInsets padding;
@@ -57,6 +74,9 @@ class _AdminPanelState extends State<AdminPanel> {
   EventProvider get _eventProvider => EventProvider.watch(context);
 
   Widget _buildParticipantEntry(Participant participant) {
+    final isSmartMatch =
+        _eventProvider.event.breakoutRoomDefinition?.assignmentMethod ==
+            BreakoutAssignmentMethod.smartMatch;
     return Container(
       key: Key('participant-entry-${participant.id}'),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -68,6 +88,12 @@ class _AdminPanelState extends State<AdminPanel> {
               imageHeight: 26,
             ),
           ),
+          if (isSmartMatch) ...[
+            const SizedBox(width: 4),
+            SmartMatchBadge(
+              questions: participant.breakoutRoomSurveyQuestions,
+            ),
+          ],
           if (participant.id != Provider.of<UserService>(context).currentUserId)
             _ParticipantMenu(kickedUserId: participant.id),
         ],
@@ -92,7 +118,8 @@ class _AdminPanelState extends State<AdminPanel> {
               imageHeight: 32,
             ),
           ),
-          Spacer(),
+          SmartMatchBadgeForUser(userId: id),
+          const SizedBox(width: 4),
           if (!local)
             _ParticipantMenu(
               kickedUserId: participant.userId,
@@ -144,7 +171,11 @@ class _AdminPanelState extends State<AdminPanel> {
         );
         return _buildParticipantEntry(participant);
       },
-      query: firestoreEventService.eventParticipantsQuery(
+      // Use presentParticipantsQuery (isPresent == true) rather than the
+      // plain eventParticipantsQuery (status == active) so the live admin
+      // panel mirrors breakout-room semantics and excludes registered-but-
+      // absent ghost participants.
+      query: firestoreEventService.presentParticipantsQuery(
         event: EventProvider.watch(context).event,
       ),
       pageSize: 40,
@@ -221,13 +252,29 @@ class _AdminPanelState extends State<AdminPanel> {
   Widget build(BuildContext context) {
     return Padding(
       padding: widget.padding,
-      child: Column(
-        children: [
-          if (_provider.breakoutsActive)
-            ..._buildBreakoutList()
-          else
-            ..._buildDefaultParticipantList(),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxHeight = constraints.maxHeight;
+          final unboundedHeight = MediaQuery.sizeOf(context).height - 240;
+          final height = maxHeight.isFinite && maxHeight > 0
+              ? maxHeight
+              : (unboundedHeight < 320 ? 320.0 : unboundedHeight);
+          return SizedBox(
+            height: height,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                  child: ParticipantEmailSearch(),
+                ),
+                if (_provider.breakoutsActive)
+                  ..._buildBreakoutList()
+                else
+                  ..._buildDefaultParticipantList(),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -278,15 +325,18 @@ class _BreakoutRoomGridState extends State<BreakoutRoomGrid> {
                 ),
                 color: _showOnlyAlertedRooms
                     ? context.theme.colorScheme.scrim.withScrimOpacity
-                    : context.theme.colorScheme.onPrimary,
+                    : context.theme.colorScheme.surfaceContainerLowest,
               ),
               alignment: Alignment.center,
               child: HeightConstrainedText(
                 'All rooms',
                 style: TextStyle(
+                  // Each state pairs its fill with a matching foreground. The
+                  // selected half used onPrimary over ThemeData.primaryColor,
+                  // and both resolve to neutral800 under a dark theme.
                   color: _showOnlyAlertedRooms
-                      ? context.theme.colorScheme.onPrimary
-                      : Theme.of(context).primaryColor,
+                      ? context.theme.colorScheme.onPrimaryContainer
+                      : context.theme.colorScheme.onSurface,
                 ),
               ),
             ),
@@ -300,15 +350,15 @@ class _BreakoutRoomGridState extends State<BreakoutRoomGrid> {
                 ),
                 color: !_showOnlyAlertedRooms
                     ? context.theme.colorScheme.scrim.withScrimOpacity
-                    : context.theme.colorScheme.onPrimary,
+                    : context.theme.colorScheme.surfaceContainerLowest,
               ),
               alignment: Alignment.center,
               child: HeightConstrainedText(
                 'Alerts only',
                 style: TextStyle(
                   color: !_showOnlyAlertedRooms
-                      ? context.theme.colorScheme.onPrimary
-                      : Theme.of(context).primaryColor,
+                      ? context.theme.colorScheme.onPrimaryContainer
+                      : context.theme.colorScheme.onSurface,
                 ),
               ),
             ),
@@ -436,17 +486,16 @@ class _BreakoutRoomGridState extends State<BreakoutRoomGrid> {
             filterNeedsHelp: true,
           ),
           builder: (context, needHelpRooms) {
-            // If the waiting room has participants who are present there, that are also assigned
-            // there we want to show the waiting room in this list of rooms that need help so that
-            // an admin can reassign them.
+            // If the waiting room has any assigned participants we want to show it
+            // in the list of rooms that need help so an admin can reassign them.
+            // We use participantIds (the server-maintained assignment list) as the
+            // source of truth rather than the presence/heartbeat stream, because a
+            // late joiner may be assigned before they have sent their first heartbeat.
             //
             // If someone in the waiting room flagged the room as needing help it will already
             // be in the list of rooms that need help so we don't want to add it twice.
-            final usersAssignedToWaitingRoom =
-                waitingRoom?.participantIds.toSet() ?? {};
-            final waitingRoomIsActive = waitingRoomParticipants
-                    ?.any((p) => usersAssignedToWaitingRoom.contains(p.id)) ??
-                false;
+            final waitingRoomIsActive =
+                (waitingRoom?.participantIds.isNotEmpty) ?? false;
             final waitingRoomAlreadyFlaggedAsNeedHelp =
                 needHelpRooms?.any((r) => r.roomId == breakoutsWaitingRoomId) ??
                     false;
@@ -539,8 +588,10 @@ class _MeetingControlsMenuState extends State<_MeetingControlsMenu> {
     final liveMeetingProvider = LiveMeetingProvider.read(context);
     final agendaProvider = Provider.of<AgendaProvider>(context, listen: false);
     final isLocked = provider.event.isLocked;
+    final isEnded = provider.event.isEnded;
     return [
-      if (liveMeetingProvider.isHost == true || canModerateContent)
+      if ((liveMeetingProvider.isHost == true || canModerateContent) &&
+          !isEnded)
         PopupMenuItem<Function()>(
           value: () async {
             await alertOnError(
@@ -555,7 +606,32 @@ class _MeetingControlsMenuState extends State<_MeetingControlsMenu> {
             isLocked ? 'Unlock Meeting' : 'Lock Meeting',
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).primaryColor,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+      if ((liveMeetingProvider.isHost == true || canModerateContent) &&
+          !isEnded)
+        PopupMenuItem<Function()>(
+          value: () => alertOnError(context, () async {
+            final confirmed = await ConfirmDialog(
+              mainText:
+                  'This ends the meeting for everyone: it stops the recording, '
+                  'finalizes the files, and emails attendees. This can’t be undone.',
+              confirmText: 'End Meeting',
+              cancelText: context.l10n.cancel,
+            ).show(context: context);
+            if (!confirmed) return;
+            await firestoreEventService.updateEvent(
+              event: provider.event.copyWith(isEnded: true, isLocked: true),
+              keys: [Event.kFieldIsEnded, Event.kFieldIsLocked],
+            );
+          }),
+          child: HeightConstrainedText(
+            'End Meeting',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),
@@ -575,7 +651,7 @@ class _MeetingControlsMenuState extends State<_MeetingControlsMenu> {
             'Reset Guide',
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).primaryColor,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),
@@ -600,7 +676,7 @@ class _MeetingControlsMenuState extends State<_MeetingControlsMenu> {
             'Add Fake Participants',
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).primaryColor,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),
@@ -608,9 +684,10 @@ class _MeetingControlsMenuState extends State<_MeetingControlsMenu> {
   }
 
   Future<void> _showMoreMenu(List<PopupMenuEntry<Function()>> items) async {
-    final button = _menuKey.currentContext?.findRenderObject() as RenderBox;
-    final RenderBox overlay =
-        Navigator.of(context).overlay?.context.findRenderObject() as RenderBox;
+    final button = _menuKey.currentContext?.findRenderObject();
+    final overlay =
+        Navigator.of(context).overlay?.context.findRenderObject();
+    if (button is! RenderBox || overlay is! RenderBox) return;
     final RelativeRect position = RelativeRect.fromRect(
       Rect.fromPoints(
         button.localToGlobal(Offset.zero, ancestor: overlay),
@@ -676,7 +753,7 @@ class __ParticipantMenuState extends State<_ParticipantMenu> {
             'Mute',
             style: TextStyle(
               fontSize: 12,
-              color: Theme.of(context).primaryColor,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),
@@ -713,7 +790,7 @@ class __ParticipantMenuState extends State<_ParticipantMenu> {
           'Kick',
           style: TextStyle(
             fontSize: 12,
-            color: Theme.of(context).primaryColor,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
       ),
@@ -721,9 +798,10 @@ class __ParticipantMenuState extends State<_ParticipantMenu> {
   }
 
   Future<void> _showMoreMenu(List<PopupMenuEntry<Function()>> items) async {
-    final button = _menuKey.currentContext?.findRenderObject() as RenderBox;
-    final RenderBox overlay =
-        Navigator.of(context).overlay?.context.findRenderObject() as RenderBox;
+    final button = _menuKey.currentContext?.findRenderObject();
+    final overlay =
+        Navigator.of(context).overlay?.context.findRenderObject();
+    if (button is! RenderBox || overlay is! RenderBox) return;
     final RelativeRect position = RelativeRect.fromRect(
       Rect.fromPoints(
         button.localToGlobal(Offset.zero, ancestor: overlay),
@@ -764,15 +842,34 @@ class __ParticipantMenuState extends State<_ParticipantMenu> {
   }
 }
 
+/// How a [BreakoutRoomButton] reads.
+enum BreakoutRoomButtonStyle {
+  /// The admin panel's room list. "Current" means the room the admin is in.
+  roster,
+
+  /// Choosing a room to move someone into. "Current" means the room that
+  /// person is in now, and a room nobody is in is filled differently from one
+  /// with people in it, so an admin can see at a glance where there is space.
+  picker,
+}
+
 class BreakoutRoomButton extends StatefulWidget {
   final BreakoutRoom room;
   final Function()? onTap;
   final bool needsHelpOverride;
+  final BreakoutRoomButtonStyle style;
+
+  /// Which room counts as "current". Left null, that's the room the admin
+  /// themselves is in, which is the right answer for the roster and the wrong
+  /// one when picking a destination for somebody else.
+  final bool? isCurrentOverride;
 
   BreakoutRoomButton({
     required this.room,
     this.onTap,
     this.needsHelpOverride = false,
+    this.style = BreakoutRoomButtonStyle.roster,
+    this.isCurrentOverride,
   }) : super(key: Key('breakout-room-button-${room.roomId}'));
 
   @override
@@ -781,18 +878,28 @@ class BreakoutRoomButton extends StatefulWidget {
 
 class _BreakoutRoomButtonState extends State<BreakoutRoomButton> {
   late BehaviorSubjectWrapper<BreakoutRoom?> _roomStream;
+  late BehaviorSubjectWrapper<List<Participant>> _participantsStream;
 
   bool get isWaitingRoom => widget.room.roomId == breakoutsWaitingRoomId;
 
   @override
   void initState() {
     super.initState();
+    final event = EventProvider.read(context).event;
     final breakoutSessionId = LiveMeetingProvider.read(context)
         .liveMeeting!
         .currentBreakoutSession!
         .breakoutRoomSessionId;
     _roomStream = firestoreLiveMeetingService.breakoutRoomStream(
-      event: EventProvider.read(context).event,
+      event: event,
+      breakoutRoomSessionId: breakoutSessionId,
+      breakoutRoomId: widget.room.roomId,
+    );
+    // Use presence-based stream for the count so it reflects who is
+    // actually in the room, not who was originally assigned.
+    _participantsStream =
+        firestoreLiveMeetingService.breakoutRoomParticipantsStream(
+      event: event,
       breakoutRoomSessionId: breakoutSessionId,
       breakoutRoomId: widget.room.roomId,
     );
@@ -801,26 +908,34 @@ class _BreakoutRoomButtonState extends State<BreakoutRoomButton> {
   @override
   void dispose() {
     _roomStream.dispose();
+    _participantsStream.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use eventParticipantsStream to get all participants, then filter by participantIds
-    // This ensures we use participantIds (which is updated correctly on reassignment)
-    // as the source of truth, rather than currentBreakoutRoomId (which may be stale)
     return StreamBuilder<BreakoutRoom?>(
       stream: _roomStream.stream,
       builder: (context, roomSnapshot) {
-        // Use the latest room data from the stream, or fall back to widget.room
         final room = roomSnapshot.data ?? widget.room;
 
-        // During breakouts, eventParticipantsStream is empty, so we trust
-        // room.participantIds as the authoritative source maintained by the server
-        final participantCount = room.participantIds.length;
-
-        return Builder(
-          builder: (context) {
+        return StreamBuilder<List<Participant>>(
+          stream: _participantsStream.stream,
+          builder: (context, participantsSnapshot) {
+            // For regular breakout rooms: use the presence stream so the count
+            // reflects who is actually in the room right now.
+            // For the waiting room: same union as the detail roster (server list ∪
+            // presence) so tile badge and header stay aligned.
+            final participantCount = isWaitingRoom
+                ? _waitingRoomParticipantIdsUnion(
+                    room,
+                    participantsSnapshot.hasData
+                        ? participantsSnapshot.data
+                        : null,
+                  ).length
+                : (participantsSnapshot.hasData
+                    ? participantsSnapshot.data!.length
+                    : room.participantIds.length);
 
             final roomDisplayName = room.roomId == breakoutsWaitingRoomId
                 ? room.roomName
@@ -831,16 +946,33 @@ class _BreakoutRoomButtonState extends State<BreakoutRoomButton> {
                 (room.roomId == breakoutsWaitingRoomId && participantCount > 0);
 
             final liveMeetingProvider = LiveMeetingProvider.watch(context);
-            final isCurrentRoom =
-                liveMeetingProvider.currentBreakoutRoomId == room.roomId &&
-                    liveMeetingProvider.userLeftBreakouts == false;
+            final isCurrentRoom = widget.isCurrentOverride ??
+                (liveMeetingProvider.currentBreakoutRoomId == room.roomId &&
+                    liveMeetingProvider.userLeftBreakouts == false);
+            final isPicker = widget.style == BreakoutRoomButtonStyle.picker;
 
+            // Every state is a surface/onSurface pair, so the label always
+            // tracks whatever the tile is filled with.
+            //
+            // The default fill used to be `scrim` at 32% opacity, which isn't
+            // a colour so much as a wash over whatever is behind it: mid-grey
+            // (#A9A9A9) over the light panel, near-black (#1A1A1A) over the
+            // dark one. No one label colour can sit on both, and the two it
+            // used sat on neither -- neutral300 on the light fill is 1.6:1,
+            // and the count, drawn in onPrimary, is 2.2:1 in light and 1.2:1
+            // in dark. That last one is the unreadable "5 people".
             Color backgroundColor =
-                context.theme.colorScheme.scrim.withScrimOpacity;
-            if (isCurrentRoom) {
-              backgroundColor = context.theme.colorScheme.onPrimary;
-            } else if (needsHelp) {
+                context.theme.colorScheme.surfaceContainerHighest;
+            Color foregroundColor = context.theme.colorScheme.onSurface;
+            if (needsHelp) {
               backgroundColor = context.theme.colorScheme.error;
+              foregroundColor = context.theme.colorScheme.onError;
+            } else if (isCurrentRoom || (isPicker && participantCount > 0)) {
+              // Set apart by depth rather than by a wash: on the roster that
+              // marks the room you're in, and in the picker it marks a room
+              // with people in it as a live destination.
+              backgroundColor =
+                  context.theme.colorScheme.surfaceContainerLowest;
             }
 
             // Show timestamp only for non-waiting rooms that need help
@@ -856,20 +988,50 @@ class _BreakoutRoomButtonState extends State<BreakoutRoomButton> {
                 decoration: BoxDecoration(
                   color: backgroundColor,
                   borderRadius: BorderRadius.circular(10),
+                  // The current room shares its fill with any other occupied
+                  // room, so in the picker it needs an outline as well as the
+                  // badge below -- fill alone wouldn't tell them apart.
+                  border: isPicker && isCurrentRoom
+                      ? Border.all(
+                          color: context.theme.colorScheme.onSurface,
+                          width: 2,
+                        )
+                      : null,
                 ),
                 alignment: Alignment.center,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    if (isPicker && isCurrentRoom) ...[
+                      // Said in words as well as shown in the outline: the
+                      // outline alone carries this by appearance only.
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.theme.colorScheme.onSurface,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: HeightConstrainedText(
+                          'Current',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: context.theme.colorScheme.surface,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                    ],
                     HeightConstrainedText(
                       roomDisplayName.toUpperCase(),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
-                        color: isCurrentRoom
-                            ? Theme.of(context).primaryColor
-                            : context.theme.colorScheme.onPrimary,
+                        color: foregroundColor,
                       ),
                     ),
                     SizedBox(height: 10),
@@ -899,9 +1061,7 @@ class _BreakoutRoomButtonState extends State<BreakoutRoomButton> {
                               fontWeight: FontWeight.w500,
                               color: needsHelp
                                   ? context.theme.colorScheme.onErrorContainer
-                                  : (isCurrentRoom
-                                      ? context.theme.colorScheme.primary
-                                      : context.theme.colorScheme.onPrimary),
+                                  : foregroundColor,
                             ),
                           ),
                         ],
@@ -914,9 +1074,7 @@ class _BreakoutRoomButtonState extends State<BreakoutRoomButton> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w400,
-                          color: isCurrentRoom
-                              ? context.theme.colorScheme.error
-                              : context.theme.colorScheme.onError,
+                          color: foregroundColor,
                         ),
                       ),
                     ],
@@ -946,16 +1104,26 @@ class BreakoutRoomDetails extends StatefulWidget {
 
 class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
   late BehaviorSubjectWrapper<BreakoutRoom?> _breakoutRoomStream;
+  late BehaviorSubjectWrapper<List<Participant>> _participantsStream;
 
   @override
   void initState() {
     super.initState();
+    final event = EventProvider.read(context).event;
     final breakoutSessionId = LiveMeetingProvider.read(context)
         .liveMeeting!
         .currentBreakoutSession!
         .breakoutRoomSessionId;
     _breakoutRoomStream = firestoreLiveMeetingService.breakoutRoomStream(
-      event: EventProvider.read(context).event,
+      event: event,
+      breakoutRoomSessionId: breakoutSessionId,
+      breakoutRoomId: widget.roomId,
+    );
+    // Use presence-based stream so users who leave or disconnect
+    // are immediately removed rather than lingering as ghost participants.
+    _participantsStream =
+        firestoreLiveMeetingService.breakoutRoomParticipantsStream(
+      event: event,
       breakoutRoomSessionId: breakoutSessionId,
       breakoutRoomId: widget.roomId,
     );
@@ -964,6 +1132,7 @@ class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
   @override
   void dispose() {
     _breakoutRoomStream.dispose();
+    _participantsStream.dispose();
     super.dispose();
   }
 
@@ -993,6 +1162,7 @@ class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
               ),
             ),
           ),
+          SmartMatchBadgeForUser(userId: id),
           SizedBox(width: 6),
           ActionButton(
             color: Colors.transparent,
@@ -1008,6 +1178,7 @@ class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
                 ].contains(breakoutRoom.roomId)
                     ? null
                     : breakoutRoom.roomName,
+                currentRoomId: breakoutRoom.roomId,
               ).show();
               final reassignId = newRoomAssignment?.reassignId;
               if (reassignId == null || reassignId.trim().isEmpty) return;
@@ -1051,150 +1222,205 @@ class _BreakoutRoomDetailsState extends State<BreakoutRoomDetails> {
       entryFrom: '_BreakoutRoomDetailsState.build',
       stream: _breakoutRoomStream.stream,
       builder: (context, room) {
-        final localRoom = room!;
-        
-        // During breakouts, eventParticipantsStream is empty, so we trust
-        // room.participantIds as the authoritative source maintained by the server
-        final participantIds = localRoom.participantIds;
-        final participantCount = participantIds.length;
+        // room can be null when the Firestore document doesn't exist yet or
+        // when the BehaviorSubject emits a cached null to a new StreamBuilder
+        // subscriber. Guard here to avoid a null-check crash on `room!`.
+        if (room == null) return const SizedBox.shrink();
+        final localRoom = room;
 
         final roomDisplayName = localRoom.roomId == breakoutsWaitingRoomId
             ? localRoom.roomName
             : 'Room ${localRoom.roomName}';
 
-        final needsHelp =
-            localRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp ||
-                (localRoom.roomId == breakoutsWaitingRoomId &&
-                    participantCount > 0);
         final provider = LiveMeetingProvider.watch(context);
 
-        return Column(
-          children: [
-            CustomInkWell(
-              onTap: widget.goBack,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: needsHelp
-                      ? context.theme.colorScheme.error
-                      : context.theme.colorScheme.surfaceContainerLowest,
-                ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.chevron_left,
-                      size: 36,
+        return CustomStreamBuilder<List<Participant>>(
+          entryFrom: '_BreakoutRoomDetailsState.build',
+          stream: _participantsStream.stream,
+          builder: (context, presentParticipants) {
+            final presenceIds =
+                (presentParticipants ?? []).map((p) => p.id).toList();
+            // Non-waiting rooms: rely on heartbeat/presence only (no ghost IDs).
+            final List<String> participantIds;
+            if (localRoom.roomId == breakoutsWaitingRoomId) {
+              participantIds = _waitingRoomParticipantIdsUnion(
+                localRoom,
+                presentParticipants,
+              );
+            } else {
+              participantIds = presenceIds;
+            }
+            final participantCount = participantIds.length;
+
+            final needsHelp =
+                localRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp ||
+                    (localRoom.roomId == breakoutsWaitingRoomId &&
+                        participantCount > 0);
+
+            return Column(
+              children: [
+                CustomInkWell(
+                  onTap: widget.goBack,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
                       color: needsHelp
-                          ? context.theme.colorScheme.onError
-                          : context.theme.colorScheme.onSurface,
+                          ? context.theme.colorScheme.error
+                          : context.theme.colorScheme.surfaceContainerLowest,
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: HeightConstrainedText(
-                        roomDisplayName,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.theme.textTheme.titleLarge!.copyWith(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.chevron_left,
+                          size: 36,
                           color: needsHelp
                               ? context.theme.colorScheme.onError
                               : context.theme.colorScheme.onSurface,
                         ),
-                      ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: HeightConstrainedText(
+                            roomDisplayName,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.theme.textTheme.titleLarge!.copyWith(
+                              color: needsHelp
+                                  ? context.theme.colorScheme.onError
+                                  : context.theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        if (provider.currentBreakoutRoomId ==
+                                localRoom.roomId &&
+                            (!provider.userLeftBreakouts))
+                          ActionButton(
+                            color: needsHelp
+                                ? context.theme.colorScheme.errorContainer
+                                : null,
+                            textColor: needsHelp
+                                ? context.theme.colorScheme.onErrorContainer
+                                : null,
+                            onPressed: () async {
+                              final reassignUser =
+                                  provider.currentBreakoutRoomId ==
+                                      provider.assignedBreakoutRoomId;
+
+                              // Captured before any await: event.eventType is
+                              // constant for a session and context must not be
+                              // used across async gaps (use_build_context_synchronously).
+                              final isHostless =
+                                  EventProvider.read(context).event.eventType ==
+                                      EventType.hostless;
+
+                              await provider.leaveBreakoutRoom();
+
+                              // For hostless events only: update participantIds
+                              // AND navigate the admin into the waiting room so
+                              // they appear in breakoutRoomParticipantsStream.
+                              //
+                              // leaveBreakoutRoom() sets _userLeftBreakouts=true
+                              // which makes currentBreakoutRoomId return null,
+                              // preventing the admin from writing
+                              // currentBreakoutRoomId:'waiting-room' to Firestore
+                              // via the heartbeat. Without enterBreakoutRoom(),
+                              // the admin is invisible in the presence stream even
+                              // though their participantIds entry is correct.
+                              //
+                              // For hosted events, leaveBreakoutRoom() alone is
+                              // sufficient; there is no waiting-room document to
+                              // update and the admin manages rooms as a non-participant.
+                              if (reassignUser && isHostless) {
+                                await provider.reassignBreakoutRoom(
+                                  userId: userService.currentUserId!,
+                                  newRoomNumber: breakoutsWaitingRoomId,
+                                );
+                                // Navigate the admin's own view into the waiting
+                                // room. This resets _userLeftBreakouts, sets the
+                                // breakout-room override to 'waiting-room', and
+                                // triggers getBreakoutRoomFuture which writes
+                                // currentBreakoutRoomId:'waiting-room' to Firestore
+                                // — making the admin visible in the presence stream.
+                                provider.enterBreakoutRoom(
+                                  roomId: breakoutsWaitingRoomId,
+                                );
+                              }
+                            },
+                            text: 'Leave Room',
+                          )
+                        else
+                          ActionButton(
+                            onPressed: () {
+                              provider.enterBreakoutRoom(
+                                roomId: localRoom.roomId,
+                              );
+                            },
+                            color: needsHelp
+                                ? context.theme.colorScheme.errorContainer
+                                : null,
+                            textColor: needsHelp
+                                ? context.theme.colorScheme.onErrorContainer
+                                : null,
+                            text: 'Enter Room',
+                          ),
+                      ],
                     ),
-                    SizedBox(width: 4),
-                    if (provider.currentBreakoutRoomId == localRoom.roomId &&
-                        (!provider.userLeftBreakouts))
-                      ActionButton(
-                        color: needsHelp
-                            ? context.theme.colorScheme.errorContainer
-                            : null,
-                        textColor: needsHelp
-                            ? context.theme.colorScheme.onErrorContainer
-                            : null,
-                        onPressed: () async {
-                          final reassignUser =
-                              provider.currentBreakoutRoomId ==
-                                  provider.assignedBreakoutRoomId;
-
-                          provider.leaveBreakoutRoom();
-
-                          if (reassignUser) {
-                            await provider.reassignBreakoutRoom(
-                              userId: userService.currentUserId!,
-                              newRoomNumber: null,
-                            );
-                          }
-                        },
-                        text: 'Leave Room',
-                      )
-                    else
-                      ActionButton(
-                        onPressed: () {
-                          provider.enterBreakoutRoom(
-                            roomId: localRoom.roomId,
-                          );
-                        },
-                        color: needsHelp
-                            ? context.theme.colorScheme.errorContainer
-                            : null,
-                        textColor: needsHelp
-                            ? context.theme.colorScheme.onErrorContainer
-                            : null,
-                        text: 'Enter Room',
-                      ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            if (localRoom.flagStatus == BreakoutRoomFlagStatus.needsHelp) ...[
-              SizedBox(height: 6),
-              ActionButton(
-                type: ActionButtonType.outline,
-                onPressed: () async {
-                  final roomId = localRoom.roomId;
+                if (localRoom.flagStatus ==
+                    BreakoutRoomFlagStatus.needsHelp) ...[
+                  SizedBox(height: 6),
+                  ActionButton(
+                    type: ActionButtonType.outline,
+                    onPressed: () async {
+                      final roomId = localRoom.roomId;
 
-                  await alertOnError(
-                    context,
-                    () => cloudFunctionsLiveMeetingService
-                        .updateBreakoutRoomFlagStatus(
-                      request: UpdateBreakoutRoomFlagStatusRequest(
-                        eventPath: provider.eventPath,
-                        breakoutSessionId: provider
-                                .liveMeeting
-                                ?.currentBreakoutSession
-                                ?.breakoutRoomSessionId ??
-                            '',
-                        roomId: roomId,
-                        flagStatus: BreakoutRoomFlagStatus.unflagged,
-                      ),
-                    ),
-                  );
-                },
-                expand: true,
-                text: 'Cancel Help Needed',
-              ),
-            ],
-            SizedBox(height: 8),
-            if (participantCount == 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: HeightConstrainedText(context.l10n.noOneIsHereYet),
-              )
-            else
-              Expanded(
-                child: ListView(
-                  children: [
-                    for (final participantId in participantIds)
-                      _buildBreakoutRoomParticipant(
-                        participantId,
-                        localRoom,
+                      await alertOnError(
                         context,
-                      ),
-                  ],
-                ),
-              ),
-          ],
+                        () => cloudFunctionsLiveMeetingService
+                            .updateBreakoutRoomFlagStatus(
+                          request: UpdateBreakoutRoomFlagStatusRequest(
+                            eventPath: provider.eventPath,
+                            breakoutSessionId: provider
+                                    .liveMeeting
+                                    ?.currentBreakoutSession
+                                    ?.breakoutRoomSessionId ??
+                                '',
+                            roomId: roomId,
+                            flagStatus: BreakoutRoomFlagStatus.unflagged,
+                          ),
+                        ),
+                      );
+                    },
+                    expand: true,
+                    text: 'Cancel Help Needed',
+                  ),
+                ],
+                SizedBox(height: 8),
+                if (participantCount == 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: HeightConstrainedText(context.l10n.noOneIsHereYet),
+                  )
+                else
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final participantId in participantIds)
+                          _buildBreakoutRoomParticipant(
+                            participantId,
+                            localRoom,
+                            context,
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );

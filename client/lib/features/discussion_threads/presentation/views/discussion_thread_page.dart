@@ -514,8 +514,10 @@ class _DiscussionThreadPageState extends State<DiscussionThreadPage>
   @override
   void scrollToComments() {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      final context = _commentsSectionKey.currentContext;
+      if (context == null || !mounted) return;
       Scrollable.ensureVisible(
-        _commentsSectionKey.currentContext!,
+        context,
         duration: kTabScrollDuration,
       );
     });

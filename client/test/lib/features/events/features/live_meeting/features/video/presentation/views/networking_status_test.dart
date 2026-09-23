@@ -4,13 +4,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:client/features/events/features/live_meeting/features/video/presentation/views/networking_status.dart';
 
 void main() {
+  const testMessage =
+      'Your connection is spotty — you may experience audio/video issues';
+
   group('NetworkStatusAlert', () {
     testWidgets('mobile', (tester) async {
       onDismiss() {}
 
       await tester.pumpWidget(
         MaterialApp(
-          home: NetworkStatusAlert(isMobile: true, onDismiss: onDismiss),
+          home: NetworkStatusAlert(
+            isMobile: true,
+            message: testMessage,
+            onDismiss: onDismiss,
+          ),
         ),
       );
 
@@ -38,7 +45,11 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: NetworkStatusAlert(isMobile: false, onDismiss: onDismiss),
+          home: NetworkStatusAlert(
+            isMobile: false,
+            message: testMessage,
+            onDismiss: onDismiss,
+          ),
         ),
       );
 
@@ -82,7 +93,7 @@ void main() {
         find.descendant(
           of: find.byType(Row),
           matching: find.byWidgetPredicate(
-            (widget) => widget is Text && widget.data == 'Low Bandwidth',
+            (widget) => widget is Text && widget.data == 'Connection Issue',
           ),
         ),
         findsOneWidget,
@@ -96,7 +107,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: ExplanationText(onDismiss: onDismiss),
+          home: ExplanationText(message: testMessage, onDismiss: onDismiss),
         ),
       );
 
@@ -106,10 +117,7 @@ void main() {
           matching: find.descendant(
             of: find.byType(Expanded),
             matching: find.byWidgetPredicate(
-              (widget) =>
-                  widget is Text &&
-                  widget.data ==
-                      'Try turning off your camera for a smoother experience',
+              (widget) => widget is Text && widget.data == testMessage,
             ),
           ),
         ),
@@ -131,6 +139,17 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+  });
+
+  group('ReconnectingAlert', () {
+    testWidgets('shows spinner and reconnecting text', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(home: ReconnectingAlert(isMobile: false)),
+      );
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('Connection lost — reconnecting…'), findsOneWidget);
     });
   });
 }

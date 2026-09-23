@@ -8,6 +8,7 @@ import '../../utils/utils.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/event_proposal.dart';
+import 'package:data_models/events/live_meetings/live_meeting.dart';
 import 'package:data_models/community/membership.dart';
 import 'package:data_models/utils/utils.dart';
 
@@ -60,12 +61,24 @@ class VoteToKick extends OnCallMethod<VoteToKickRequest> {
           EventProposal.kFieldTargetUserId,
           isEqualTo: request.targetUserId,
         )
+        .where(
+          EventProposal.kFieldStatus,
+          isEqualTo: EnumToString.convertToString(EventProposalStatus.open),
+        )
         .limit(1)
         .get();
 
     final participantsSnapshot = await firestore
         .collection('${request.eventPath}/event-participants')
         .where("currentBreakoutRoomId", isEqualTo: liveMeetingId)
+        .where(
+          Participant.kFieldIsPresent,
+          isEqualTo: true,
+        )
+        .where(
+          Participant.kFieldStatus,
+          isEqualTo: EnumToString.convertToString(ParticipantStatus.active),
+        )
         .get();
     final participants = participantsSnapshot.documents
         .map(
@@ -178,6 +191,31 @@ class VoteToKick extends OnCallMethod<VoteToKickRequest> {
         roomId: roomId,
         userId: request.targetUserId,
       );
+
+      // Remove the kicked user from their current BreakoutRoom.participantIds
+      // so they don't leave a ghost entry in the waiting room (or any breakout
+      // room) that the admin presence indicator reads.
+      //
+      // Use an atomic arrayRemove rather than a read-modify-write to avoid the
+      // TOCTOU race that would exist against concurrent ReassignBreakoutRoom
+      // or simultaneous VoteToKick completions.
+      final pathParts = request.liveMeetingPath.split('/');
+      final breakoutRoomsIdx = pathParts.indexOf('breakout-rooms');
+      final currentRoomId = participant.currentBreakoutRoomId;
+      if (breakoutRoomsIdx >= 0 && !isNullOrEmpty(currentRoomId)) {
+        final breakoutRoomsCollPath =
+            pathParts.take(breakoutRoomsIdx + 1).join('/');
+        final kickedRoomPath = '$breakoutRoomsCollPath/$currentRoomId';
+        await firestore.document(kickedRoomPath).updateData(
+          UpdateData.fromMap({
+            BreakoutRoom.kFieldParticipantIds:
+                Firestore.fieldValues.arrayRemove([request.targetUserId]),
+          }),
+        );
+        print(
+          'Removed ${request.targetUserId} from participantIds of room $currentRoomId',
+        );
+      }
     }
   }
 }

@@ -273,7 +273,7 @@ class CustomFormBuilderChoiceChip<T> extends FormBuilderField<T> {
                           padding: EdgeInsets.all(0),
                           color: field.value == option.value
                               ? selectedColor
-                              : Colors.grey,
+                              : AppNeutralColors.of(context).neutral400,
                           dashPattern: field.value == option.value
                               ? const [1, 0]
                               : const [5, 5],

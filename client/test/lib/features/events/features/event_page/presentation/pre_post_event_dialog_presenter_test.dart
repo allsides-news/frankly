@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:client/features/events/data/services/firestore_event_service.dart';
+import 'package:client/features/events/features/event_page/data/models/pre_post_event_dialog_model.dart';
 import 'package:client/features/events/features/event_page/presentation/pre_post_event_dialog_presenter.dart';
 import 'package:client/features/user/data/services/user_service.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/pre_post_card.dart';
+import 'package:data_models/events/pre_post_survey.dart';
 import 'package:data_models/events/pre_post_url_params.dart';
 import 'package:mockito/mockito.dart';
 
@@ -28,6 +31,7 @@ void main() {
 
   setUp(() {
     presenter = PrePostEventDialogPresenter(
+      mockView,
       mockModel,
       helper: mockHelper,
       testResponsiveLayoutService: mockResponsiveLayoutService,
@@ -132,6 +136,91 @@ void main() {
       await presenter.launchSurvey(prePostUrls[0]);
 
       verify(mockHelper.launchUrl('surveyUrl', any)).called(1);
+    });
+  });
+
+  group('submitSurvey', () {
+    final MockFirestoreEventService mockFirestoreEventService =
+        MockFirestoreEventService();
+
+    final surveyQuestion = PrePostSurveyQuestion(
+      id: 'q1',
+      type: PrePostSurveyQuestionType.multipleChoice,
+      title: 'Question?',
+      options: [PrePostSurveyItem(id: 'o1', text: 'Answer')],
+    );
+
+    late PrePostEventDialogModel model;
+    late PrePostEventDialogPresenter presenterWithRealModel;
+
+    setUp(() {
+      GetIt.instance.registerSingleton<FirestoreEventService>(
+        mockFirestoreEventService,
+      );
+
+      model = PrePostEventDialogModel(
+        PrePostCard.newCard(PrePostCardType.preEvent)
+            .copyWith(surveyQuestions: [surveyQuestion]),
+        Event(
+          id: 'test-event-id',
+          collectionPath: 'eventCollectionPath',
+          creatorId: 'userId',
+          communityId: 'communityId',
+          templateId: 'templateId',
+          status: EventStatus.active,
+        ),
+      );
+      presenterWithRealModel = PrePostEventDialogPresenter(
+        mockView,
+        model,
+        helper: mockHelper,
+        testResponsiveLayoutService: mockResponsiveLayoutService,
+        userAdminDetailsProvider: mockUserAdminDetailsProvider,
+      );
+      presenterWithRealModel.selectSurveyOption(surveyQuestion, 'o1');
+    });
+
+    tearDown(() {
+      reset(mockFirestoreEventService);
+    });
+
+    test('successful save marks the survey submitted', () async {
+      when(
+        mockFirestoreEventService.savePrePostSurveyResponse(
+          event: anyNamed('event'),
+          prePostCardType: anyNamed('prePostCardType'),
+          answers: anyNamed('answers'),
+        ),
+      ).thenAnswer((_) async {});
+
+      expect(presenterWithRealModel.canDismiss, isFalse);
+
+      await presenterWithRealModel.submitSurvey();
+
+      expect(model.isSurveySubmitted, isTrue);
+      expect(presenterWithRealModel.canDismiss, isTrue);
+    });
+
+    test('failed save makes the dialog dismissible so the participant is not trapped',
+        () async {
+      when(
+        mockFirestoreEventService.savePrePostSurveyResponse(
+          event: anyNamed('event'),
+          prePostCardType: anyNamed('prePostCardType'),
+          answers: anyNamed('answers'),
+        ),
+      ).thenThrow(Exception('network error'));
+
+      expect(presenterWithRealModel.canDismiss, isFalse);
+
+      await expectLater(
+        presenterWithRealModel.submitSurvey(),
+        throwsException,
+      );
+
+      expect(model.isSurveySubmitted, isFalse);
+      expect(model.surveySubmitFailed, isTrue);
+      expect(presenterWithRealModel.canDismiss, isTrue);
     });
   });
 }

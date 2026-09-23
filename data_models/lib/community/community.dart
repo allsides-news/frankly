@@ -205,6 +205,10 @@ class CommunitySettings with _$CommunitySettings {
   static const kFieldEnablePlatformSelection = 'enablePlatformSelection';
   static const kFieldMultiplePeopleOnStage = 'multiplePeopleOnStage';
   static const kFieldRequireApprovalToJoin = 'requireApprovalToJoin';
+  static const kFieldShowAttendeeCountToNonAdmins =
+      'showAttendeeCountToNonAdmins';
+  static const kFieldShowPostRegistrationAttendeeCount =
+      'showPostRegistrationAttendeeCount';
 
   const factory CommunitySettings({
     @Default(true) bool allowDonations,
@@ -220,6 +224,8 @@ class CommunitySettings with _$CommunitySettings {
     @Default(true) bool enablePlatformSelection,
     @Default(false) bool enableUpdatedLiveMeetingMobile,
     @Default(true) bool enableAVCheck,
+    @Default(true) bool showAttendeeCountToNonAdmins,
+    @Default(true) bool showPostRegistrationAttendeeCount,
   }) = _CommunitySettings;
 
   factory CommunitySettings.fromJson(Map<String, dynamic> json) =>

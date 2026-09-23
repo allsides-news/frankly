@@ -49,6 +49,8 @@ class RecordingQueue {
     String? eventId,
     String? filePrefix,
     String? recordingStatePath,
+    String? screenSharerUserId,
+    int? screenShareAgoraUid,
   }) async {
     // Check if this room is already queued or being processed
     final isAlreadyQueued = _queue.any((task) => task.roomId == roomId);
@@ -64,6 +66,8 @@ class RecordingQueue {
       eventId: eventId,
       filePrefix: filePrefix,
       recordingStatePath: recordingStatePath,
+      screenSharerUserId: screenSharerUserId,
+      screenShareAgoraUid: screenShareAgoraUid,
       completer: Completer<void>(),
     );
     
@@ -86,31 +90,41 @@ class RecordingQueue {
     print('[RecordingQueue] Starting queue processing (${_queue.length} tasks)');
     
     try {
-      while (_queue.isNotEmpty) {
-        // Take a batch of tasks
-        final batchSize = min(maxConcurrentRecordings, _queue.length);
-        final batch = _queue.take(batchSize).toList();
-        _queue.removeRange(0, batchSize);
-        
-        print('[RecordingQueue] Processing batch of $batchSize recordings (${_queue.length} remaining)');
-        
-        // Process batch concurrently
-        await Future.wait(
-          batch.map((task) => _processTask(task)),
-        );
-        
-        // Delay between batches to avoid sustained rate limit hits
-        if (_queue.isNotEmpty) {
-          await Future.delayed(batchDelay);
+      // Outer loop: concurrent GetBreakoutRoomJoinInfo calls can enqueue tasks
+      // after an inner drain thinks the queue is empty but before _isProcessing
+      // is cleared. A yield lets those callbacks run; we only exit when the queue
+      // stays empty after yielding (avoids stranded tasks and silent no-ops).
+      do {
+        while (_queue.isNotEmpty) {
+          final batchSize = min(maxConcurrentRecordings, _queue.length);
+          final batch = _queue.take(batchSize).toList();
+          _queue.removeRange(0, batchSize);
+
+          print('[RecordingQueue] Processing batch of $batchSize recordings (${_queue.length} remaining)');
+
+          await Future.wait(
+            batch.map((task) => _processTask(task)),
+          );
+
+          if (_queue.isNotEmpty) {
+            await Future.delayed(batchDelay);
+          }
         }
-      }
-      
+        await Future<void>.delayed(Duration.zero);
+      } while (_queue.isNotEmpty);
+
       print('[RecordingQueue] Queue processing complete');
     } catch (e, stackTrace) {
       print('[RecordingQueue] Error processing queue: $e');
       print('Stack trace: $stackTrace');
     } finally {
       _isProcessing = false;
+      // Stranded work can remain after a batch error (catch above) or rare races.
+      // Restart is intentional on that path too; _processQueue's synchronous
+      // `if (_isProcessing) return` avoids double-run now that the flag is false.
+      if (_queue.isNotEmpty) {
+        unawaited(_processQueue());
+      }
     }
   }
   
@@ -148,6 +162,8 @@ class RecordingQueue {
           eventId: task.eventId,
           filePrefix: task.filePrefix,
           recordingStatePath: task.recordingStatePath,
+          screenSharerUserId: task.screenSharerUserId,
+          screenShareAgoraUid: task.screenShareAgoraUid,
         );
         
         print('[RecordingQueue] Successfully started recording for room ${task.roomId} (attempt ${task.attempts})');
@@ -194,6 +210,8 @@ class _RecordingTask {
   final String? eventId;
   final String? filePrefix;
   final String? recordingStatePath;
+  final String? screenSharerUserId;
+  final int? screenShareAgoraUid;
   final Completer<void> completer;
   int attempts = 0;
   
@@ -202,6 +220,8 @@ class _RecordingTask {
     this.eventId,
     this.filePrefix,
     this.recordingStatePath,
+    this.screenSharerUserId,
+    this.screenShareAgoraUid,
     required this.completer,
   });
 }

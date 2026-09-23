@@ -354,8 +354,8 @@ class _CreateCommunityDialogState extends State<_CreateCommunityDialog> {
         if (widget.showTitle) ...[
           HeightConstrainedText(
             widget.isCreateCommunity
-                ? 'Create your Community'
-                : 'Edit your Community',
+                ? 'Create your Space'
+                : 'Edit your Space',
             style: AppTextStyle.eyebrow.copyWith(fontSize: 40),
           ),
           SizedBox(height: 30),
@@ -434,7 +434,12 @@ class _CreateCommunityDialogState extends State<_CreateCommunityDialog> {
       onPressed: () => alertOnError(context, _submitFunction),
       text: widget.submitText ?? submitText,
       expand: widget.compact,
-      color: Theme.of(context).primaryColor,
+      // ActionButton defaults its label to onPrimary, which pairs with
+      // colorScheme.primary -- not with ThemeData.primaryColor, which
+      // resolves to colorScheme.surface under a dark theme. Both halves
+      // landed on neutral800, leaving an invisible button with an invisible
+      // label.
+      color: context.theme.colorScheme.primary,
     );
     if (widget.compact) {
       return button;

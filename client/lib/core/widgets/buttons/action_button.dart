@@ -24,7 +24,10 @@ class SubmitNotifier {
       _listeners.remove(listener);
 
   Future<void> submit() async {
-    for (final listener in _listeners) {
+    // Copy first: a listener that navigates away disposes its ActionButton,
+    // which removeListener()s this list mid-iteration (Sentry JN).
+    final listeners = List<Future<void> Function()>.of(_listeners);
+    for (final listener in listeners) {
       await listener();
     }
   }
@@ -109,8 +112,8 @@ class _ActionButtonState extends State<ActionButton> {
 
   @override
   void dispose() {
-    super.dispose();
     widget.controller?.removeListener(_runAction);
+    super.dispose();
   }
 
   Future<void> _runAction() async {

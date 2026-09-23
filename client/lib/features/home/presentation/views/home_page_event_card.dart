@@ -43,8 +43,12 @@ class _HomePageEventCardState extends State<HomePageEventCard> {
         ).eventPage(
           templateId: event.templateId,
           eventId: event.id,
+          eventTitle: event.title,
         ),
       );
+
+  bool get _isRegistered =>
+      widget.participants.contains(userService.currentUserId);
 
   @override
   Widget build(BuildContext context) {
@@ -57,19 +61,37 @@ class _HomePageEventCardState extends State<HomePageEventCard> {
         borderRadius: BorderRadius.circular(10),
         child: Container(
           height: responsiveLayoutService.isMobile(context) ? 130 : 118,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: context.theme.colorScheme.surfaceContainerLowest,
             borderRadius: BorderRadius.circular(10),
             boxShadow: const [AppDecoration.lightBoxShadow],
           ),
-          child: Row(
+          child: Stack(
             children: [
-              SizedBox(width: 10),
-              _buildTimeSection(),
-              SizedBox(width: 10),
-              _buildImage(),
-              SizedBox(width: 10),
-              _buildRightSideOfCard(),
+              Row(
+                children: [
+                  SizedBox(width: 10),
+                  _buildTimeSection(),
+                  SizedBox(width: 10),
+                  _buildImage(),
+                  SizedBox(width: 10),
+                  _buildRightSideOfCard(),
+                ],
+              ),
+              if (_isRegistered)
+                Positioned(
+                  top: 0,
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 6,
+                    // Tailwind neutral-800. Inlined rather than referencing
+                    // AppNeutralColors, which doesn't exist on this branch
+                    // yet (introduced in PR #195, not merged).
+                    color: const Color(0xFF262626),
+                  ),
+                ),
             ],
           ),
         ),
@@ -130,8 +152,11 @@ class _HomePageEventCardState extends State<HomePageEventCard> {
                       event: widget.event,
                       numberOfIconsToShow: _maxParticipantsShown,
                       showParticipantCount: userDataService
-                          .getMembership(widget.event.communityId)
-                          .isMod,
+                              .getMembership(widget.event.communityId)
+                              .isMod ||
+                          (widget.community?.settingsMigration
+                                  .showAttendeeCountToNonAdmins ??
+                              false),
                     ),
                   ),
                   if (widget.community != null)

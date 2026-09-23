@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:client/features/events/features/event_page/presentation/widgets/add_more_button.dart';
 import 'package:client/features/events/features/event_page/presentation/widgets/circle_save_check_button.dart';
 import 'package:client/features/events/features/event_page/presentation/views/pre_post_card_widget_contract.dart';
+import 'package:client/features/events/features/event_page/presentation/views/pre_post_survey_questions_editor.dart';
+import 'package:client/features/events/features/event_page/presentation/views/pre_post_survey_questions_view.dart';
 import 'package:client/features/events/features/event_page/data/models/pre_post_card_widget_model.dart';
 import 'package:client/features/events/features/event_page/presentation/pre_post_card_widget_presenter.dart';
 import 'package:client/core/utils/error_utils.dart';
@@ -233,6 +235,24 @@ class _PrePostCardWidgetPageState extends State<PrePostCardWidgetPage>
               maxLines: 10,
             ),
           ],
+        ),
+        SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              HeightConstrainedText(
+                'Add survey questions participants should answer $beforeAfter the event',
+                style: context.theme.textTheme.titleMedium,
+              ),
+              SizedBox(height: 30),
+              PrePostSurveyQuestionsEditor(
+                questions: _model.prePostCard.surveyQuestions,
+                presenter: _presenter,
+              ),
+            ],
+          ),
         ),
         SizedBox(height: 20),
         Container(
@@ -564,6 +584,12 @@ class _PrePostCardWidgetPageState extends State<PrePostCardWidgetPage>
             style: context.theme.textTheme.titleMedium,
           ),
           SizedBox(height: 20),
+          if (_model.prePostCard.hasSurveyQuestions) ...[
+            PrePostSurveyQuestionsView(
+              questions: _model.prePostCard.surveyQuestions,
+            ),
+            SizedBox(height: 20),
+          ],
           if (prePostUrls.isNotEmpty)
             Wrap(
               spacing: 20,

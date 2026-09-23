@@ -68,8 +68,18 @@ class _DonateWidgetState extends State<DonateWidget> {
       ),
     );
 
-    GetIt.instance<StripeClientService>()
-        .redirectToCheckout(sessionId: response.sessionId);
+    try {
+      await GetIt.instance<StripeClientService>()
+          .redirectToCheckout(sessionId: response.sessionId);
+    } catch (e, s) {
+      loggingService.log(e, logType: LogType.error);
+      loggingService.log(s, logType: LogType.error);
+      if (!context.mounted) return;
+      await showAlert(
+        context,
+        appLocalizationService.getLocalization().somethingWentWrongTryAgain,
+      );
+    }
   }
 
   Widget _buildExitButton() {

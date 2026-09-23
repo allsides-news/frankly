@@ -21,7 +21,12 @@ class TroubleshootIssuesButton extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        HeightConstrainedText(context.l10n.avIssues),
+        HeightConstrainedText(
+          context.l10n.avIssues,
+          style: AppTextStyle.body.copyWith(
+            color: linkColor ?? context.theme.colorScheme.onPrimary,
+          ),
+        ),
         SizedBox(width: 8),
         CustomInkWell(
           onTap: () => launchUrl(Uri.parse(_kTroubleshootingGuideUrl)),
@@ -29,6 +34,7 @@ class TroubleshootIssuesButton extends StatelessWidget {
             context.l10n.troubleshoot,
             style: AppTextStyle.body.copyWith(
               decoration: TextDecoration.underline,
+              decorationColor: linkColor ?? context.theme.colorScheme.primary,
               color: linkColor ?? context.theme.colorScheme.primary,
             ),
           ),

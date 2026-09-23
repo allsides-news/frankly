@@ -47,7 +47,11 @@ class _NetworkingStatusState extends State<NetworkingStatus>
           nothing: SizedBox.shrink(),
           networkStatusAlert: NetworkStatusAlert(
             isMobile: responsiveLayoutService.isMobile(context),
+            message: _presenter.getMessage(),
             onDismiss: () => _presenter.dismissLowNetworkQualityMessage(),
+          ),
+          reconnectingAlert: ReconnectingAlert(
+            isMobile: responsiveLayoutService.isMobile(context),
           ),
         );
 
@@ -64,18 +68,22 @@ class _NetworkingStatusState extends State<NetworkingStatus>
 
   @override
   void updateView() {
-    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 }
 
 @visibleForTesting
 class NetworkStatusAlert extends StatelessWidget {
   final bool isMobile;
+  final String message;
   final Function() onDismiss;
 
   const NetworkStatusAlert({
     Key? key,
     required this.isMobile,
+    required this.message,
     required this.onDismiss,
   }) : super(key: key);
   @override
@@ -111,7 +119,7 @@ class NetworkStatusAlert extends StatelessWidget {
       children: [
         LowBandwidth(),
         SizedBox(width: 10),
-        ExplanationText(onDismiss: onDismiss),
+        ExplanationText(message: message, onDismiss: onDismiss),
       ],
     );
   }
@@ -122,9 +130,67 @@ class NetworkStatusAlert extends StatelessWidget {
         LowBandwidth(),
         SizedBox(width: 10),
         Flexible(
-          child: ExplanationText(onDismiss: onDismiss),
+          child: ExplanationText(message: message, onDismiss: onDismiss),
         ),
       ],
+    );
+  }
+}
+
+/// Non-dismissible banner shown while the Agora connection has dropped and
+/// the SDK is re-establishing it — replaces a silently frozen room.
+@visibleForTesting
+class ReconnectingAlert extends StatelessWidget {
+  final bool isMobile;
+
+  const ReconnectingAlert({Key? key, required this.isMobile})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 20.0),
+        child: Row(
+          children: [
+            Spacer(),
+            Expanded(
+              flex: 4,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: context.theme.colorScheme.errorContainer,
+                ),
+                padding: EdgeInsets.all(isMobile ? 10 : 20),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: context.theme.colorScheme.error,
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        'Connection lost — reconnecting…',
+                        style: AppTextStyle.subhead.copyWith(
+                          color: context.theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Spacer(),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -144,7 +210,7 @@ class LowBandwidth extends StatelessWidget {
         ),
         SizedBox(width: 10),
         Text(
-          'Low Bandwidth',
+          'Connection Issue',
           style: AppTextStyle.subhead
               .copyWith(color: context.theme.colorScheme.error),
         ),
@@ -155,10 +221,12 @@ class LowBandwidth extends StatelessWidget {
 
 @visibleForTesting
 class ExplanationText extends StatelessWidget {
+  final String message;
   final void Function() onDismiss;
 
   const ExplanationText({
     Key? key,
+    required this.message,
     required this.onDismiss,
   }) : super(key: key);
 
@@ -169,7 +237,7 @@ class ExplanationText extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            'Try turning off your camera for a smoother experience',
+            message,
             style: AppTextStyle.subhead
                 .copyWith(color: context.theme.colorScheme.onSurfaceVariant),
           ),

@@ -7,6 +7,7 @@ import 'package:client/features/events/features/live_meeting/data/providers/live
 import 'package:client/features/events/features/live_meeting/features/meeting_agenda/data/providers/meeting_agenda_provider.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/utils/visible_exception.dart';
+import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
 import 'package:data_models/events/event.dart';
@@ -121,7 +122,45 @@ class MeetingGuideCardStore with ChangeNotifier {
     if (notify) notifyListeners();
   }
 
+  /// Where hand raises live when no agenda item is running.
+  ///
+  /// A raised hand means "I'd like to speak", which is true between items,
+  /// after the agenda finishes, and in a breakout with no agenda at all --
+  /// none of which depend on an agenda item existing. Storage is keyed by one
+  /// anyway, and the security rules match `{agendaItemId}` as a bare wildcard
+  /// without checking that it names a real item, so a sentinel id gives those
+  /// hands somewhere to live without a rules change.
+  static const String kMeetingWideScopeId = meetingWideAgendaItemId;
+
+  /// The scope hand raises are read from and written to right now.
+  String get handRaiseScopeId =>
+      currentAgendaModelItemId ?? kMeetingWideScopeId;
+
   bool getHandIsRaised(String userId) => getHandRaisedTime(userId) != null;
+
+  bool get isMyHandRaised {
+    final userId = userService.currentUserId;
+    return userId != null && getHandIsRaised(userId);
+  }
+
+  /// Raise or lower the current user's hand.
+  ///
+  /// Lives here rather than at each control: the agenda card, the mobile
+  /// control bar and the desktop control bar all offer this, and the write --
+  /// which scope, which path, which direction -- is the same from all three.
+  Future<void> toggleHandRaise() async {
+    final userId = userService.currentUserId;
+    if (userId == null) return;
+    await firestoreMeetingGuideService.toggleHandRaise(
+      agendaItemId: handRaiseScopeId,
+      userId: userId,
+      // Breakout-scoped whenever you're in one: activeLiveMeetingPath points
+      // at the room's own live meeting, so a hand raised in a breakout is
+      // written and read under that room and is invisible outside it.
+      liveMeetingPath: agendaProvider.liveMeetingPath,
+      isHandRaised: !getHandIsRaised(userId),
+    );
+  }
   DateTime? getHandRaisedTime(String userId) {
     return participantAgendaItemDetails
         ?.firstWhereOrNull((a) => a.userId == userId)
@@ -133,21 +172,29 @@ class MeetingGuideCardStore with ChangeNotifier {
   /// As the agenda item changes, this stream exposes how users have interacted with the meeting
   /// guide card.
   void _loadParticipantAgendaItemDetails() {
-    final localCurrentAgendaModelItemId = currentAgendaModelItemId;
-    if (localCurrentAgendaModelItemId != null &&
-        _participantAgendaItemDetailsId != localCurrentAgendaModelItemId) {
+    final scopeId = handRaiseScopeId;
+    // Used to bail out when there was no agenda item, which left nothing
+    // subscribed and nowhere for a hand raise to be read back from.
+    if (_participantAgendaItemDetailsId != scopeId) {
       _resetParticipantAgendaItemDetails();
       _participantAgendaItemDetailsStream = wrapInBehaviorSubject(
         firestoreMeetingGuideService.participantAgendaItemDetailsStream(
           liveMeetingPath: agendaProvider.liveMeetingPath,
-          agendaItemId: localCurrentAgendaModelItemId,
+          agendaItemId: scopeId,
         ),
       );
       _participantAgendaItemDetailsSubscription =
-          _participantAgendaItemDetailsStream!.listen((_) => notifyListeners());
-      _participantAgendaItemDetailsId = localCurrentAgendaModelItemId;
-    } else if (localCurrentAgendaModelItemId == null) {
-      _resetParticipantAgendaItemDetails();
+          _participantAgendaItemDetailsStream!.listen(
+        (_) => notifyListeners(),
+        onError: (Object error, StackTrace stackTrace) {
+          logStreamErrorUnlessPermissionDenied(
+            'MeetingGuideCardStore participant agenda details stream error',
+            error,
+            stackTrace,
+          );
+        },
+      );
+      _participantAgendaItemDetailsId = scopeId;
     }
   }
 

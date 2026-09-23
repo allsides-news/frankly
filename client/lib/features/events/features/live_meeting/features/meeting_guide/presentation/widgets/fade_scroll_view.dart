@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:client/styles/styles.dart';
 
-/// A scrolling view that shows a faded white gradient on the bottom of the view if there is
-/// content to scroll to in that direction
+/// A scrolling view whose content fades out at the bottom while there is more
+/// to scroll to.
+///
+/// The fade is a mask on the content's own alpha, not a colour painted over
+/// it. Overlaying a colour only disappears where that colour happens to match
+/// what's behind: the agenda card draws markdown blocks with their own
+/// backgrounds, and the mobile sheet's surface differs from the desktop
+/// card's, so any fixed colour read as a grey wash somewhere.
 class FadeScrollView extends StatefulWidget {
   final Widget child;
   final double maxFadeExtent;
@@ -45,42 +50,39 @@ class _FadeScrollViewState extends State<FadeScrollView> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Scrollbar(
-          controller: _controller,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 10),
-            controller: _controller,
-            child: widget.child,
-          ),
-        ),
-        if (widget.maxFadeExtent > 0)
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: MouseRegion(
-                opaque: false,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.deferToChild,
-                  child: Container(
-                    height: _fadeHeight,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          context.theme.colorScheme.surfaceContainerLowest,
-                          Colors.transparent,
-                        ],
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
+    final scrollView = Scrollbar(
+      controller: _controller,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 10),
+        controller: _controller,
+        child: widget.child,
+      ),
+    );
+
+    if (widget.maxFadeExtent <= 0) return scrollView;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight;
+        final fade = _fadeHeight;
+        // Nothing left to scroll to, or nothing to measure the fade against.
+        if (fade <= 0 || !height.isFinite || height <= 0) return scrollView;
+
+        final fadeStart = ((height - fade) / height).clamp(0.0, 1.0);
+
+        return ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (rect) => LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            // Opaque until the fade begins, then ramps to fully transparent,
+            // so the content dissolves into whatever is behind it.
+            colors: const [Colors.white, Colors.white, Colors.transparent],
+            stops: [0.0, fadeStart, 1.0],
+          ).createShader(rect),
+          child: scrollView,
+        );
+      },
     );
   }
 }

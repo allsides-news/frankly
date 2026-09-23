@@ -26,11 +26,7 @@ Future<T?> showCustomDialog<T>({
     barrierColor: barrierColor,
     barrierDismissible: isDismissible,
     builder: (context) {
-      if (provider._isOnIframePage) {
-        return CustomPointerInterceptor(child: content);
-      } else {
-        return content;
-      }
+      return CustomPointerInterceptor(child: content);
     },
   );
   provider.decrementDialogCount();
@@ -39,6 +35,9 @@ Future<T?> showCustomDialog<T>({
 
 class DialogProvider with ChangeNotifier {
   int _numDialogs = 0;
+  // Kept for callers that still flag iframe pages. Dialogs always intercept
+  // now: meeting HtmlElementViews steal taps the same way iframes do.
+  // ignore: unused_field
   bool _isOnIframePage = false;
 
   bool get isShowingDialog => _numDialogs > 0;

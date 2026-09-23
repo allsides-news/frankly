@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_text_field.dart';
-import 'package:client/styles/app_asset.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 
@@ -56,7 +54,12 @@ class _TimeInputFormState extends State<TimeInputForm> {
         ),
         if (widget.isClockShowing) ...[
           SizedBox(width: 8),
-          ProxiedImage(null, asset: AppAsset.clock(), width: 20, height: 20),
+          // Material icon rather than media/clock.png, so it can be coloured.
+          Icon(
+            Icons.schedule,
+            size: 20,
+            color: context.theme.colorScheme.onSurfaceVariant,
+          ),
         ],
       ],
     );

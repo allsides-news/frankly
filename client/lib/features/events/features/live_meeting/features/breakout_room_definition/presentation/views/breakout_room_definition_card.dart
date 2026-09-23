@@ -1,4 +1,3 @@
-import 'package:client/features/community/utils/community_theme_utils.dart.dart';
 import 'package:flutter/material.dart' hide ReorderableList;
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:flutter_reorderable_list/flutter_reorderable_list.dart';
@@ -95,21 +94,21 @@ class _BreakoutRoomDefinitionCardState
                           )
                         : null,
                   ),
-                  // if (hasSmartMatchingCapability)
-                  ActionButton(
-                    text: context.l10n.smartMatch,
-                    type:
-                        _assignmentMethod == BreakoutAssignmentMethod.smartMatch
-                            ? ActionButtonType.filled
-                            : ActionButtonType.outline,
-                    onPressed: () =>
-                        _assignmentMethod != BreakoutAssignmentMethod.smartMatch
-                            ? _presenter.updateAssignmentMethod(
-                                assignmentMethod:
-                                    BreakoutAssignmentMethod.smartMatch,
-                              )
-                            : null,
-                  ),
+                  if (hasSmartMatchingCapability)
+                    ActionButton(
+                      text: context.l10n.smartMatch,
+                      type:
+                          _assignmentMethod == BreakoutAssignmentMethod.smartMatch
+                              ? ActionButtonType.filled
+                              : ActionButtonType.outline,
+                      onPressed: () =>
+                          _assignmentMethod != BreakoutAssignmentMethod.smartMatch
+                              ? _presenter.updateAssignmentMethod(
+                                  assignmentMethod:
+                                      BreakoutAssignmentMethod.smartMatch,
+                                )
+                              : null,
+                    ),
                   if (_enableBreakoutCategory)
                     ActionButton(
                       text: context.l10n.byCategory,
@@ -391,9 +390,7 @@ class _QuestionCardState extends State<QuestionCard> {
                   padding: const EdgeInsets.only(left: 8),
                   child: Icon(
                     Icons.reorder,
-                    color: Theme.of(context).isDark
-                        ? Colors.white
-                        : Theme.of(context).primaryColor,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ),

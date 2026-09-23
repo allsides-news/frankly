@@ -1,3 +1,4 @@
+import 'package:data_models/utils/event_slug.dart';
 import 'package:beamer/beamer.dart';
 import 'package:flutter/material.dart';
 import 'package:client/core/localization/localization_helper.dart';
@@ -45,11 +46,21 @@ bool listStartsWith(List<String> source, List<String> comparison) {
 bool listEndsWith(List<String> source, List<String> comparison) =>
     listStartsWith(source.reversed.toList(), comparison.reversed.toList());
 
+/// Adds `status=joined` to [params], or returns null when it is already present
+/// so Beamer is not notified for a no-op.
+Map<String, String>? queryParametersWithJoinedStatus(
+  Map<String, String> params,
+) {
+  if (params['status'] == 'joined') return null;
+  return {...params, 'status': 'joined'};
+}
+
 void updateQueryParameterToJoinEvent() {
-  final params = Map<String, String>.from(
-    (routerDelegate.currentBeamLocation.state as BeamState).queryParameters,
+  final current = routerDelegate.currentBeamLocation.state as BeamState;
+  final updatedParams = queryParametersWithJoinedStatus(
+    Map<String, String>.from(current.queryParameters),
   );
-  final updatedParams = params..addEntries([MapEntry('status', 'joined')]);
+  if (updatedParams == null) return;
   routerDelegate.currentBeamLocation.update(
     (state) => (state as BeamState).copyWith(queryParameters: updatedParams),
   );
@@ -186,6 +197,7 @@ class CommunityLocation extends BeamLocation<BeamState> {
       '/resources',
       '/discuss/upcoming',
       '/discuss/:templateId',
+      '/discuss/:eventSlug/:templateId/:$eventIdParameter',
       '/discuss/:templateId/:$eventIdParameter',
       '/posts',
       '/post/:discussionThreadId',
@@ -210,6 +222,26 @@ class CommunityLocation extends BeamLocation<BeamState> {
         isCreateEventFabVisible: isCreateEventFabVisible,
         content: child,
       ),
+    );
+  }
+
+  BeamPage _getEventBeamPage({
+    required BeamState state,
+    required String displayId,
+  }) {
+    final segments = state.uri.pathSegments;
+    final templateId = segments[segments.length - 2];
+    final eventId = segments.last;
+
+    return _getCommunityBeamPage(
+      key: 'community-$displayId-template-$templateId-$eventId',
+      displayId: displayId,
+      child: EventPage(
+        templateId: templateId,
+        eventId: eventId,
+        cancel: state.queryParameters['cancel'] == 'true',
+        uid: state.queryParameters['uid'],
+      ).create(),
     );
   }
 
@@ -271,17 +303,16 @@ class CommunityLocation extends BeamLocation<BeamState> {
           child: TemplatePage.create(templateId: templateId ?? ''),
         )
       else if (state.pathPatternSegments.contains('discuss') &&
-          state.pathPatternSegments.length == 5)
-        _getCommunityBeamPage(
-          key:
-              'community-$displayId-template-$templateId-${state.pathParameters['eventId']}',
+          state.pathPatternSegments.length == 6)
+        _getEventBeamPage(
+          state: state,
           displayId: displayId,
-          child: EventPage(
-            templateId: templateId!,
-            eventId: state.pathParameters['eventId']!,
-            cancel: state.queryParameters['cancel'] == 'true',
-            uid: state.queryParameters['uid'],
-          ).create(),
+        )
+      else if (state.pathPatternSegments.contains('discuss') &&
+          state.pathPatternSegments.length == 5)
+        _getEventBeamPage(
+          state: state,
+          displayId: displayId,
         )
       // [community, :displayId, posts]
       else if (state.pathPatternSegments.contains('posts') &&
@@ -300,10 +331,13 @@ class CommunityLocation extends BeamLocation<BeamState> {
               'community-$displayId-discussionThread-${state.pathParameters['discussionThreadId']}',
           displayId: displayId,
           fillViewport: true,
-          child: DiscussionThreadPage(
-            discussionThreadId: state.pathParameters['discussionThreadId']!,
-            scrollToComments: false,
-          ),
+          child: state.pathParameters['discussionThreadId']?.isNotEmpty == true
+              ? DiscussionThreadPage(
+                  discussionThreadId:
+                      state.pathParameters['discussionThreadId']!,
+                  scrollToComments: false,
+                )
+              : DiscussionThreadsPage(),
         ),
     ];
   }
@@ -363,10 +397,14 @@ class CommunityPageRoutes {
   CommunityLocation eventPage({
     required String templateId,
     required String eventId,
-  }) =>
-      _getLocation(
-        path: '$prefix/discuss/$templateId/$eventId',
-      );
+    String? eventTitle,
+  }) {
+    final eventSlug = eventTitleToSlug(eventTitle);
+
+    return _getLocation(
+      path: '$prefix/discuss/$eventSlug/$templateId/$eventId',
+    );
+  }
 
   CommunityLocation _getLocation({
     required String path,
@@ -406,7 +444,9 @@ class CheckCurrentLocation {
       _currentPath == 'space/:displayId/post/:discussionThreadId';
 
   static bool get isEventPage =>
-      _currentPath == 'space/:displayId/discuss/:templateId/:eventId';
+      _currentPath == 'space/:displayId/discuss/:templateId/:eventId' ||
+      _currentPath ==
+          'space/:displayId/discuss/:eventSlug/:templateId/:eventId';
 
   static bool get isTemplatePage =>
       _currentPath == 'space/:displayId/discuss/:templateId';

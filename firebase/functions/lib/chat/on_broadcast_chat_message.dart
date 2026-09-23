@@ -2,11 +2,10 @@ import 'dart:async';
 
 import 'package:firebase_admin_interop/firebase_admin_interop.dart';
 import 'package:firebase_functions_interop/firebase_functions_interop.dart'
-    show EventContext, Change, RuntimeOptions;
+    show EventContext, Change;
 import '../on_firestore_function.dart';
 import '../utils/infra/firestore_event_function.dart';
 import '../utils/infra/firestore_utils.dart';
-import '../utils/infra/on_firestore_helper.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 
 /// Firestore trigger for main meeting chat messages with broadcast: true

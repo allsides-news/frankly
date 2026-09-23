@@ -83,7 +83,7 @@ class _AnnouncementsState extends State<Announcements> {
                   padding: const EdgeInsets.all(6),
                   child: Icon(
                     Icons.delete,
-                    color: Theme.of(context).primaryColor,
+                    color: Theme.of(context).colorScheme.primary,
                     size: 20,
                   ),
                 ),
@@ -97,7 +97,7 @@ class _AnnouncementsState extends State<Announcements> {
             style: TextStyle(
               fontSize: 11,
               fontStyle: FontStyle.italic,
-              color: Theme.of(context).primaryColor,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),

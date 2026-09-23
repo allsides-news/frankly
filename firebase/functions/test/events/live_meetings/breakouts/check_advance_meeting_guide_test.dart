@@ -1,3 +1,4 @@
+import 'package:firebase_admin_interop/firebase_admin_interop.dart' hide EventType;
 import 'package:firebase_functions_interop/firebase_functions_interop.dart';
 import 'package:get_it/get_it.dart';
 import 'package:functions/events/live_meetings/breakouts/check_advance_meeting_guide.dart';
@@ -132,6 +133,165 @@ void main() {
       createdMeeting.events[1].event,
       equals(LiveMeetingEventType.finishMeeting),
     );
+  });
+
+  test(
+      'Agenda advances on reconnect re-check when existing Firestore votes meet threshold',
+      () async {
+    // Regression test for: when a participant drops from WiFi and rejoins
+    // without using the "Leave Meeting" CTA, onParticipantConnected fires a
+    // checkReadyToAdvance call with NO userReadyAgendaId. The cloud function
+    // must re-evaluate existing Firestore votes against the updated participant
+    // list and advance the agenda if the threshold is met — even though no new
+    // vote is being cast in this call.
+    var event = Event(
+      id: 'reconnect-advance-test',
+      status: EventStatus.active,
+      communityId: communityId,
+      templateId: templateId,
+      creatorId: adminUserId,
+      nullableEventType: EventType.hosted,
+      collectionPath: '',
+      agendaItems: [
+        AgendaItem(
+          id: 'topic-1',
+          title: 'Topic 1',
+          content: 'Discuss topic 1',
+        ),
+      ],
+    );
+    event = await eventTestUtils.createEvent(
+      event: event,
+      userId: adminUserId,
+    );
+
+    await eventTestUtils.joinEventMultiple(
+      communityId: communityId,
+      templateId: templateId,
+      eventId: event.id,
+      participantIds: ['aaa', 'bbb', 'ccc', 'ddd', 'eee', 'fff', 'ggg', 'hhh'],
+    );
+
+    await liveMeetingTestUtils.addMeetingEvent(
+      liveMeetingPath: liveMeetingTestUtils.getLiveMeetingPath(event),
+      meetingEvent: LiveMeetingEvent(
+        agendaItem: event.agendaItems.first.id,
+        event: LiveMeetingEventType.agendaItemStarted,
+      ),
+    );
+
+    await liveMeetingTestUtils.initiateBreakoutSession(
+      event: event,
+      breakoutSessionId: breakoutSessionId,
+      userId: adminUserId,
+    );
+
+    final breakoutRoom = await liveMeetingTestUtils.getBreakoutRoom(
+      event: event,
+      breakoutSessionId: breakoutSessionId,
+      roomName: '1',
+    );
+
+    final breakoutLiveMeetingPath =
+        liveMeetingTestUtils.getBreakoutLiveMeetingPath(
+      breakoutRoomId: breakoutRoom.roomId,
+      event: event,
+      breakoutSessionId: breakoutSessionId,
+    );
+
+    final agendaItemId = event.agendaItems.first.id;
+
+    // Explicitly advance the breakout room's own live-meeting to agenda item
+    // 'topic-1'. Without this, _getCurrentAgendaItemId falls back to
+    // startMeetingAgendaItemId ('start') and the cloud function queries the
+    // wrong participant-details sub-collection, finding no votes.
+    await liveMeetingTestUtils.addMeetingEvent(
+      liveMeetingPath: breakoutLiveMeetingPath,
+      meetingEvent: LiveMeetingEvent(
+        agendaItem: agendaItemId,
+        event: LiveMeetingEventType.agendaItemStarted,
+      ),
+    );
+
+    // Simulate two participants having already voted (stored in Firestore).
+    // This mirrors the state after those users clicked "Next" while a third
+    // participant (ddd) was disconnected from WiFi.
+    for (final userId in ['aaa', 'bbb']) {
+      await firestore
+          .document(
+            '$breakoutLiveMeetingPath/participant-agenda-item-details'
+            '/$agendaItemId/participant-details/$userId',
+          )
+          .setData(
+            DocumentData.fromMap(
+              firestoreUtils.toFirestoreJson(
+                ParticipantAgendaItemDetails(
+                  userId: userId,
+                  agendaItemId: agendaItemId,
+                  readyToAdvance: true,
+                ).toJson(),
+              ),
+            ),
+            SetOptions(merge: true),
+          );
+    }
+
+    final guideAdvancer = CheckAdvanceMeetingGuide();
+
+    // Snapshot aaa's doc as written by test setup. The setup omits meetingId
+    // (null). _markReady would write meetingId = breakoutRoomId (non-null), so
+    // meetingId being unchanged after the reconnect call proves _markReady was
+    // never invoked — i.e. the document was genuinely untouched.
+    final aaaDocPath = '$breakoutLiveMeetingPath/participant-agenda-item-details'
+        '/$agendaItemId/participant-details/aaa';
+    final beforeSnap = await firestore.document(aaaDocPath).get();
+    final beforeDetails = ParticipantAgendaItemDetails.fromJson(
+      firestoreUtils.fromFirestoreJson(beforeSnap.data.toMap()),
+    );
+    expect(beforeDetails.meetingId, isNull,
+        reason: 'test setup should not set meetingId');
+
+    // Simulate the re-check triggered by onParticipantConnected when ddd
+    // reconnects. No userReadyAgendaId means no new vote is cast — only
+    // existing Firestore votes are re-evaluated against the updated (larger)
+    // participant list that now includes ddd.
+    final reconnectReq = CheckAdvanceMeetingGuideRequest(
+      eventPath: event.fullPath,
+      presentIds: ['aaa', 'bbb', 'ccc', 'ddd'],
+      userReadyAgendaId: null,
+      breakoutRoomId: breakoutRoom.roomId,
+      breakoutSessionId: breakoutSessionId,
+    );
+
+    // Call as aaa — the client that detected ddd's reconnect fires this check.
+    await guideAdvancer.action(
+      reconnectReq,
+      CallableContext('aaa', null, 'fakeInstanceId'),
+    );
+
+    // aaa and bbb (2 out of 4) already voted → 2 >= 4/2 = 2 → should advance.
+    final meetingSnap =
+        await firestore.document(breakoutLiveMeetingPath).get();
+    final updatedMeeting = LiveMeeting.fromJson(
+      firestoreUtils.fromFirestoreJson(meetingSnap.data.toMap()),
+    );
+    expect(updatedMeeting.events.length, equals(2));
+    expect(
+      updatedMeeting.events[1].event,
+      equals(LiveMeetingEventType.finishMeeting),
+    );
+
+    // Verify the re-check did NOT mutate aaa's participant-details document.
+    // readyToAdvance must still be true, and meetingId must remain null
+    // (unchanged from setup) — if _markReady had fired it would have set
+    // meetingId to the breakout room ID.
+    final afterSnap = await firestore.document(aaaDocPath).get();
+    final afterDetails = ParticipantAgendaItemDetails.fromJson(
+      firestoreUtils.fromFirestoreJson(afterSnap.data.toMap()),
+    );
+    expect(afterDetails.readyToAdvance, isTrue);
+    expect(afterDetails.meetingId, equals(beforeDetails.meetingId),
+        reason: '_markReady must not have run (meetingId would be non-null)');
   });
 
   test('Agenda is not advanced when less than half the participants are ready',

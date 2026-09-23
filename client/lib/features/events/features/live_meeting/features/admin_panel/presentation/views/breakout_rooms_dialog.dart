@@ -167,8 +167,12 @@ class __BreakoutRoomsDialogState extends State<BreakoutRoomsDialog> {
           () => _startBreakouts(BreakoutAssignmentMethod.targetPerRoom),
         ),
         text: context.l10n.randomlyAssign,
-        color: context.theme.colorScheme.onPrimary,
-        textColor: Theme.of(context).primaryColor,
+        // A light chip with dark text. It used onPrimary over the legacy
+        // ThemeData.primaryColor, which resolves to colorScheme.surface under
+        // a dark theme -- so both halves landed on neutral800 and the label
+        // disappeared into its own button.
+        color: context.theme.colorScheme.surfaceContainerLowest,
+        textColor: context.theme.colorScheme.onSurface,
       ),
       SizedBox(height: 12),
       if (eventProvider.isLiveStream) ...[
@@ -179,7 +183,7 @@ class __BreakoutRoomsDialogState extends State<BreakoutRoomsDialog> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[700],
+              color: AppNeutralColors.of(context).neutral600,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -197,8 +201,8 @@ class __BreakoutRoomsDialogState extends State<BreakoutRoomsDialog> {
           () => _startBreakouts(BreakoutAssignmentMethod.smartMatch),
         ),
         text: context.l10n.smartMatchParticipants,
-        color: context.theme.colorScheme.onPrimary,
-        textColor: Theme.of(context).primaryColor,
+        color: context.theme.colorScheme.surfaceContainerLowest,
+        textColor: context.theme.colorScheme.onSurface,
       ),
       SizedBox(height: 12),
       HeightConstrainedText(context.l10n.or),
@@ -289,7 +293,7 @@ class __BreakoutRoomsDialogState extends State<BreakoutRoomsDialog> {
                   alignment: Alignment.topLeft,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor,
+                      color: Theme.of(context).colorScheme.primary,
                       borderRadius: BorderRadius.only(
                         bottomRight: Radius.circular(4),
                       ),

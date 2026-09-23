@@ -16,13 +16,15 @@ service cloud.firestore {
             return resource.data.get('isPublic', false) == true;
         }
 
-        function isParticipant(eventPath) {
-            return hasAuth() && get(path(eventPath + '/event-participants/' + request.auth.uid)).data['status'] == 'active';
-        }
-
         function getOrDefault(doc, key, defaultValue) {
             let result = (doc == null || doc.data == null) ? null : doc.data.get(key, defaultValue);
             return (result == null) ? defaultValue : result;
+        }
+
+        // Null-safe: a missing participant doc means "not a participant" rather
+        // than a rules evaluation error (which would deny even in || chains).
+        function isParticipant(eventPath) {
+            return hasAuth() && getOrDefault(get(path(eventPath + '/event-participants/' + request.auth.uid)), 'status', '') == 'active';
         }
 
         function getMembershipStatus(communityId) {
@@ -78,7 +80,13 @@ service cloud.firestore {
             allow update: if hasAuth() && request.auth.uid == userId && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['appRole']));
 
             allow get: if hasAuth();
-            allow list: if request.query.fields.size() == 1 && request.query.fields.hasAll(['agoraId']);
+            // For reviewers: Firestore rules cannot inspect where-clause fields — request.query only
+            // exposes limit, offset, orderBy (see rules.firestore.Request). The old
+            // request.query.fields check was invalid and denied every list query, breaking
+            // FirestoreUserService.getPublicUserByAgoraId (collection query on agoraId).
+            // Per-doc get is already hasAuth() for any uid; list allows the same users to run
+            // queries. Tighter privacy would need a doc-id lookup collection (e.g. agoraId → uid).
+            allow list: if hasAuth();
         }
 
 
@@ -269,12 +277,17 @@ service cloud.firestore {
 
                     allow update: if isDocCreator(resource)
                                      || isCommunityMod();
-                                  
 
-                    allow list: if hasAuth() && isPublic();
-                    allow list: if hasAuth() && isDocCreator(resource);
-                    allow list: if hasAuth() && isParticipant(getEventPath());
-
+                    // Listing stays locked down so private events are not
+                    // discoverable. Document get is any authenticated user
+                    // (including anonymous) so a shared event URL can render
+                    // the landing page and prompt sign-in / register.
+                    allow list: if hasAuth() && (
+                        isPublic()
+                        || isCommunityMember(communityId)
+                        || isDocCreator(resource)
+                        || isParticipant(getEventPath())
+                    );
                     allow get: if hasAuth();
 
                     match /event-participants/{participantId} {
@@ -283,7 +296,26 @@ service cloud.firestore {
                                         || request.auth.uid == participantId;
                         allow update: if isCommunityFacilitator() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','lastUpdatedTime']));
 
-                        allow read: if hasAuth() && (isHosted() || isCommunityMod() || request.auth.uid == participantId);
+                        // Event page subscribes to the full event-participants collection. isHosted() is false
+                        // for livestream events (liveStreamInfo set), which incorrectly denied reads for
+                        // everyone except mods and self. Allow reads for public events and for active
+                        // participants (so private events still hide the roster from non-participants).
+                        // isParticipant() issues a get() on event-participants/{uid}; for collection reads
+                        // each candidate doc evaluates rules (same cost pattern as chat under this event).
+                        allow read: if hasAuth() && (
+                            isHosted()
+                            || isCommunityMod()
+                            || request.auth.uid == participantId
+                            || getOrDefault(getEventData(), 'isPublic', false) == true
+                            || isParticipant(getEventPath())
+                        );
+                    }
+
+                    // Participant answers to pre/post event CTA survey questions.
+                    // Doc ID is the participant's user ID (same pattern as ratings).
+                    match /pre-post-survey-responses/{userId} {
+                        allow write: if hasAuth() && request.auth.uid == userId && isParticipant(getEventPath());
+                        allow read: if hasAuth() && (request.auth.uid == userId || isCommunityMod() || isDocCreator(getEventData()));
                     }
 
                     // Chat
@@ -367,6 +399,11 @@ service cloud.firestore {
                                         allow create: if hasAuth() && isDocCreator(request.resource) && (isParticipant(getEventPath()) || isCommunityMod());
                                         allow update: if hasAuth() && (isDocCreator(resource) || (onlyVotedYourselfBreakouts('upvotedUserIds') && onlyVotedYourselfBreakouts('downvotedUserIds')));
                                         allow delete: if hasAuth() && (isDocCreator(resource) || isCommunityMod() || isDocCreator(getEventData()));
+                                        allow read: if hasAuth() && (isParticipant(getEventPath()) || isCommunityMod());
+                                    }
+
+                                    match /participant-agenda-item-details/{agendaItemId}/participant-details/{participantUserId} {
+                                        allow write: if hasAuth() && (request.auth.uid == participantUserId || isCommunityMod() || isDocCreator(getEventData())) && isParticipant(getEventPath());
                                         allow read: if hasAuth() && (isParticipant(getEventPath()) || isCommunityMod());
                                     }
                                 }

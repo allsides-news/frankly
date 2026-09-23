@@ -4,54 +4,65 @@ import 'package:client/features/events/features/live_meeting/features/video/pres
 import '../../../../../../../../../test_utils.dart';
 
 void main() {
+  // ColorfulMeter renders its ring at `_kRingFraction` (0.72) of the
+  // computed available size, so it can overlap the bottom of the ring with
+  // the time pill instead of reserving separate space below it.
+  const ringFraction = 0.72;
+
   Finder getSizedBoxFinder(double width, double height) {
-    return find.descendant(
-      of: find.byType(Align),
-      matching: find.byWidgetPredicate(
-        (widget) =>
-            widget is SizedBox &&
-            widget.width == width &&
-            widget.height == height,
-      ),
+    return find.byWidgetPredicate(
+      (widget) =>
+          widget is SizedBox &&
+          widget.width == width &&
+          widget.height == height,
     );
   }
 
-  testWidgets('regular', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: ColorfulMeter(value: 0)));
+  const pillColor = Colors.black;
 
-    expect(getSizedBoxFinder(800, 800), findsOneWidget);
+  testWidgets('regular', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(home: ColorfulMeter(value: 0, pillColor: pillColor)),
+    );
+
+    expect(getSizedBoxFinder(800 * ringFraction, 800 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets('regular, size larger than max width', (tester) async {
     TestUtils.updateScreenSize(tester, 600, 900);
-    await tester
-        .pumpWidget(MaterialApp(home: ColorfulMeter(size: 750, value: 0)));
+    await tester.pumpWidget(MaterialApp(
+        home: ColorfulMeter(size: 750, value: 0, pillColor: pillColor)));
 
-    expect(getSizedBoxFinder(600, 600), findsOneWidget);
+    expect(getSizedBoxFinder(600 * ringFraction, 600 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets('regular, size larger than max height', (tester) async {
     TestUtils.updateScreenSize(tester, 600, 900);
-    await tester
-        .pumpWidget(MaterialApp(home: ColorfulMeter(size: 1000, value: 0)));
+    await tester.pumpWidget(MaterialApp(
+        home: ColorfulMeter(size: 1000, value: 0, pillColor: pillColor)));
 
-    expect(getSizedBoxFinder(600, 600), findsOneWidget);
+    expect(getSizedBoxFinder(600 * ringFraction, 600 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets('regular, size lower than max width', (tester) async {
     TestUtils.updateScreenSize(tester, 600, 900);
-    await tester
-        .pumpWidget(MaterialApp(home: ColorfulMeter(size: 500, value: 0)));
+    await tester.pumpWidget(MaterialApp(
+        home: ColorfulMeter(size: 500, value: 0, pillColor: pillColor)));
 
-    expect(getSizedBoxFinder(500, 500), findsOneWidget);
+    expect(getSizedBoxFinder(500 * ringFraction, 500 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets('regular, size lower than max height', (tester) async {
     TestUtils.updateScreenSize(tester, 600, 900);
-    await tester
-        .pumpWidget(MaterialApp(home: ColorfulMeter(size: 700, value: 0)));
+    await tester.pumpWidget(MaterialApp(
+        home: ColorfulMeter(size: 700, value: 0, pillColor: pillColor)));
 
-    expect(getSizedBoxFinder(600, 600), findsOneWidget);
+    expect(getSizedBoxFinder(600 * ringFraction, 600 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets(
@@ -61,16 +72,17 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Row(
-          children: const [
-            Spacer(),
-            Expanded(child: ColorfulMeter(value: 0)),
-            Spacer(),
+          children: [
+            const Spacer(),
+            Expanded(child: ColorfulMeter(value: 0, pillColor: pillColor)),
+            const Spacer(),
           ],
         ),
       ),
     );
 
-    expect(getSizedBoxFinder(300, 300), findsOneWidget);
+    expect(getSizedBoxFinder(300 * ringFraction, 300 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets(
@@ -80,16 +92,17 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Row(
-          children: const [
-            Spacer(),
-            Expanded(child: ColorfulMeter(value: 0)),
-            Spacer(),
+          children: [
+            const Spacer(),
+            Expanded(child: ColorfulMeter(value: 0, pillColor: pillColor)),
+            const Spacer(),
           ],
         ),
       ),
     );
 
-    expect(getSizedBoxFinder(200, 200), findsOneWidget);
+    expect(getSizedBoxFinder(200 * ringFraction, 200 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets(
@@ -100,16 +113,17 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Column(
-          children: const [
-            Spacer(),
-            Expanded(child: ColorfulMeter(value: 0.5)),
-            Spacer(),
+          children: [
+            const Spacer(),
+            Expanded(child: ColorfulMeter(value: 0.5, pillColor: pillColor)),
+            const Spacer(),
           ],
         ),
       ),
     );
 
-    expect(getSizedBoxFinder(900, 900), findsOneWidget);
+    expect(getSizedBoxFinder(900 * ringFraction, 900 * ringFraction),
+        findsOneWidget);
   });
 
   testWidgets(
@@ -120,25 +134,28 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Column(
-          children: const [
-            Spacer(),
-            Expanded(child: ColorfulMeter(value: 0.5)),
-            Spacer(),
+          children: [
+            const Spacer(),
+            Expanded(child: ColorfulMeter(value: 0.5, pillColor: pillColor)),
+            const Spacer(),
           ],
         ),
       ),
     );
 
-    expect(getSizedBoxFinder(600, 600), findsOneWidget);
+    expect(getSizedBoxFinder(600 * ringFraction, 600 * ringFraction),
+        findsOneWidget);
   });
 
   group('assertion, value between -1 and 1.', () {
     Future<void> testAssertion(double value, bool doesPass) async {
       test('Value $value', () {
         if (doesPass) {
-          expect(() => ColorfulMeter(value: value), returnsNormally);
+          expect(() => ColorfulMeter(value: value, pillColor: pillColor),
+              returnsNormally);
         } else {
-          expect(() => ColorfulMeter(value: value), throwsAssertionError);
+          expect(() => ColorfulMeter(value: value, pillColor: pillColor),
+              throwsAssertionError);
         }
       });
     }

@@ -233,13 +233,22 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
         if (description != null && description.isNotEmpty) ...[
           Text(
             'Description',
-            style: context.theme.textTheme.titleMedium,
+            style: bumpFontSize(
+              context.theme.textTheme.titleMedium,
+              2,
+              defaultFontSize: 16,
+            ),
           ),
           SizedBox(height: 8),
           HtmlContent(
             description,
-            style: context.theme.textTheme.bodyMedium!
-                .copyWith(color: context.theme.colorScheme.onSurfaceVariant),
+            style: bumpFontSize(
+              context.theme.textTheme.bodyMedium,
+              2,
+              defaultFontSize: 14,
+            )!.copyWith(
+              color: context.theme.colorScheme.onSurfaceVariant,
+            ),
           ),
           SizedBox(height: 30),
         ],
@@ -267,7 +276,7 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
         ],
         ...[
           HeightConstrainedText(
-            'More Upcoming Events',
+            'More Upcoming Events in this Space',
             style: context.theme.textTheme.titleMedium,
           ),
           SizedBox(height: 8),
@@ -283,11 +292,12 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
     final width = MediaQuery.of(context).size.width;
     final int maxContainerDisplayCount;
     if (width < 450) {
+      maxContainerDisplayCount = 3;
+    } else if (width < 660) {
+      // Cards were overflowing in this range (~450-660px).
       maxContainerDisplayCount = 4;
-    } else if (width < 550
-        // Condition to handle the case when in low desktop resolutions and there is not enough space to show all cards
-        ||
-        (width > 1000 && width < 1120)) {
+    } else if (width > 1000 && width < 1120) {
+      // Condition to handle the case when in low desktop resolutions and there is not enough space to show all cards
       maxContainerDisplayCount = 5;
     } else {
       maxContainerDisplayCount = 6;
@@ -318,7 +328,7 @@ class _EventTabsDefinitionState extends State<EventTabsDefinition> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             HeightConstrainedText(
-              'More from ${community.name}',
+              'More Templates in ${community.name}',
               style: context.theme.textTheme.titleMedium,
             ),
             SizedBox(height: 8),

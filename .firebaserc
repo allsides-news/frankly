@@ -2,6 +2,13 @@
   "projects": {
     "default": "dev"
   },
-  "etags": {},
+  "targets": {},
+  "etags": {
+    "allsides-roundtables": {
+      "extensionInstances": {
+        "firestore-send-email": "f8ba83e3a96f8a7d3dc1a8555401d96eae6467922b09179ba1299a78a29607ed"
+      }
+    }
+  },
   "dataconnectEmulatorConfig": {}
 }

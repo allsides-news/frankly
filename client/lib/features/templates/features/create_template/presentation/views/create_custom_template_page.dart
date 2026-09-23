@@ -144,7 +144,7 @@ class __CreateCustomTemplatePageState extends State<_CreateCustomTemplatePage> {
           child: ActionButton(
             onPressed: _getButtonFunction,
             text: buttonTitle,
-            color: Theme.of(context).primaryColor,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
       ],

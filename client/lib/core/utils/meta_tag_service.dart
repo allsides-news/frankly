@@ -1,4 +1,3 @@
-import 'dart:js_util' as js_util;
 import 'package:universal_html/html.dart' as html;
 
 /// Service for dynamically updating Open Graph and Twitter Card meta tags
@@ -25,6 +24,34 @@ class MetaTagService {
     }
     return url;
   }
+
+  /// Transforms a Cloudinary image URL to OG-optimal dimensions (1200×630).
+  ///
+  /// Inserts `w_1200,h_630,c_fill,q_auto,f_jpg` after `/upload/` so Cloudinary
+  /// returns a properly-sized image instead of the raw uploaded asset.
+  /// Returns the original URL unchanged for non-Cloudinary URLs or URLs that
+  /// already carry any transform parameters (detected by the `[a-z]_` prefix
+  /// pattern common to all Cloudinary transform segments).
+  static String _toOgImageUrl(String url) {
+    const uploadSegment = '/upload/';
+    if (!url.contains('res.cloudinary.com') || !url.contains(uploadSegment)) {
+      return url;
+    }
+    const transform = 'w_1200,h_630,c_fill,q_auto,f_jpg';
+    final idx = url.indexOf(uploadSegment) + uploadSegment.length;
+    final remainder = url.substring(idx);
+    // Any Cloudinary transform segment starts with a single lowercase letter
+    // followed by an underscore (e.g. w_, h_, c_, f_, q_, b_, r_, e_, l_…).
+    // NOTE: Public IDs that happen to start with a single letter + underscore
+    // (e.g. `a_photo.jpg`, `e_event_banner.jpg`) will also match this heuristic
+    // and bypass the transform. This is an accepted trade-off; rename such
+    // assets if OG transforms need to be applied to them.
+    if (RegExp(r'^[a-z]_').hasMatch(remainder)) {
+      return url;
+    }
+    return '${url.substring(0, idx)}$transform/${url.substring(idx)}';
+  }
+
   static const String defaultTitle = 'AllSides Roundtables';
   static const String defaultDescription = 'Enabling constructive dialogue.';
   static const String defaultImageUrl =
@@ -51,9 +78,13 @@ class MetaTagService {
 
     if (imageWidth != null) {
       _updateMetaTag('og:image:width', imageWidth.toString());
+    } else {
+      _removeMetaTag('og:image:width');
     }
     if (imageHeight != null) {
       _updateMetaTag('og:image:height', imageHeight.toString());
+    } else {
+      _removeMetaTag('og:image:height');
     }
 
     // Update Twitter Card tags
@@ -74,13 +105,17 @@ class MetaTagService {
   }) {
     final title = '$communityName | $defaultTitle';
     final description = communityDescription ?? defaultDescription;
-    final imageUrl = communityImageUrl ?? defaultImageUrl;
+    final rawImageUrl = communityImageUrl ?? defaultImageUrl;
+    final imageUrl = _toOgImageUrl(rawImageUrl);
+    final wasTransformed = imageUrl != rawImageUrl;
 
     updateMetaTags(
       title: title,
       description: description,
       imageUrl: imageUrl,
       url: communityUrl,
+      imageWidth: wasTransformed ? 1200 : null,
+      imageHeight: wasTransformed ? 630 : null,
     );
   }
 
@@ -94,13 +129,17 @@ class MetaTagService {
   }) {
     final title = '$eventTitle | $communityName | $defaultTitle';
     final description = eventDescription ?? defaultDescription;
-    final imageUrl = eventImageUrl ?? defaultImageUrl;
+    final rawImageUrl = eventImageUrl ?? defaultImageUrl;
+    final imageUrl = _toOgImageUrl(rawImageUrl);
+    final wasTransformed = imageUrl != rawImageUrl;
 
     updateMetaTags(
       title: title,
       description: description,
       imageUrl: imageUrl,
       url: eventUrl,
+      imageWidth: wasTransformed ? 1200 : null,
+      imageHeight: wasTransformed ? 630 : null,
     );
   }
 
@@ -112,6 +151,16 @@ class MetaTagService {
       imageUrl: defaultImageUrl,
       url: defaultUrl,
     );
+  }
+
+  /// Removes a meta tag from the DOM by property name, if it exists.
+  /// Used to clear dimension tags when navigating to a page where dimensions
+  /// are unknown, preventing stale values from a prior page being reported.
+  static void _removeMetaTag(String property) {
+    final tag = html.document.querySelector(
+      'meta[property="$property"]',
+    ) as html.MetaElement?;
+    tag?.remove();
   }
 
   /// Helper method to update or create a meta tag
@@ -148,7 +197,7 @@ class MetaTagService {
       // Create new meta tag if it doesn't exist
       metaTag = html.MetaElement();
       if (isProperty) {
-        js_util.setProperty(metaTag, 'property', property);
+        metaTag.setAttribute('property', property);
       } else {
         metaTag.name = property;
       }

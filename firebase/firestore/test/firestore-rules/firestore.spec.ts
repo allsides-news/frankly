@@ -171,6 +171,28 @@ describe("Firestore security rules", async () => {
       );
       await firebase.assertSucceeds(userDocRef.delete());
     });
+
+    it("authorized, list query by agoraId (getPublicUserByAgoraId)", async () => {
+      await communityRulesHelper.getDocumentRef(dbAdmin).set({
+        agoraId: 424242,
+        id: "alice",
+      });
+      const other = getAuthedFirestore("bob");
+      const q = other
+        .collection(collection)
+        .where("agoraId", "==", 424242);
+      await firebase.assertSucceeds(q.get());
+    });
+
+    it("not authorized, list query by agoraId", async () => {
+      await communityRulesHelper.getDocumentRef(dbAdmin).set({
+        agoraId: 424243,
+        id: "alice",
+      });
+      const anon = getAuthedFirestore(undefined);
+      const q = anon.collection(collection).where("agoraId", "==", 424243);
+      await firebase.assertFails(q.get());
+    });
   });
 
   describe("/privateUserData/{userId}", () => {
@@ -897,6 +919,20 @@ describe("Firestore security rules", async () => {
                   break;
                 case Membership.facilitator:
                 case Membership.member:
+                  await firebase.assertFails(userColRef.add(originalDataMap));
+                  await firebase.assertSucceeds(
+                    userColRef.add({
+                      [fieldCreatorId]: "bob",
+                      someKey: "someValue",
+                    })
+                  );
+                  await firebase.assertSucceeds(userDocRef.get());
+                  await firebase.assertFails(
+                    userDocRef.set(originalDataMap, { merge: true })
+                  );
+                  await firebase.assertFails(userDocRef.update(updateDataMap));
+                  await firebase.assertFails(userDocRef.delete());
+                  break;
                 case Membership.nonmember:
                 case Membership.attendee:
                   await firebase.assertFails(userColRef.add(originalDataMap));
@@ -906,6 +942,8 @@ describe("Firestore security rules", async () => {
                       someKey: "someValue",
                     })
                   );
+                  // Shared event URLs load via document get, which any
+                  // authenticated user may do (including anonymous auth).
                   await firebase.assertSucceeds(userDocRef.get());
                   await firebase.assertFails(
                     userDocRef.set(originalDataMap, { merge: true })
@@ -1154,6 +1192,140 @@ describe("Firestore security rules", async () => {
               await firebase.assertFails(userDocRef.set(originalDataMap));
               await firebase.assertFails(userDocRef.update(updateDataMap));
               await firebase.assertFails(userDocRef.delete());
+            });
+
+            it("public livestream: member can read another user's participant doc", async () => {
+              const eventsHelper = new CommunityRulesHelper(dbAdmin, [
+                { collection: collectionCommunity, document: "communityId" },
+                { collection: "templates", document: "templateId" },
+                { collection: "events", document: "eventId" },
+              ]);
+              await eventsHelper.getDocumentRef(dbAdmin).set({
+                isPublic: true,
+                eventType: "livestream",
+                liveStreamInfo: { playbackUrl: "https://example.com" },
+                communityId: "communityId",
+              });
+
+              const participantsCol = dbAdmin
+                .collection("community")
+                .doc("communityId")
+                .collection("templates")
+                .doc("templateId")
+                .collection("events")
+                .doc("eventId")
+                .collection("event-participants");
+
+              await participantsCol.doc("alice").set({
+                id: "alice",
+                status: "active",
+              });
+              await participantsCol.doc("bob").set({
+                id: "bob",
+                status: "active",
+              });
+
+              await communityRulesHelper.createMembership("bob", Membership.member);
+
+              const bobDb = getAuthedFirestore("bob");
+              const aliceParticipantRef = bobDb
+                .collection("community")
+                .doc("communityId")
+                .collection("templates")
+                .doc("templateId")
+                .collection("events")
+                .doc("eventId")
+                .collection("event-participants")
+                .doc("alice");
+
+              await firebase.assertSucceeds(aliceParticipantRef.get());
+            });
+
+            it("private livestream: non-participant member cannot read another user's participant doc", async () => {
+              const eventsHelper = new CommunityRulesHelper(dbAdmin, [
+                { collection: collectionCommunity, document: "communityId" },
+                { collection: "templates", document: "templateId" },
+                { collection: "events", document: "eventId" },
+              ]);
+              await eventsHelper.getDocumentRef(dbAdmin).set({
+                isPublic: false,
+                eventType: "livestream",
+                liveStreamInfo: { playbackUrl: "https://example.com" },
+                communityId: "communityId",
+              });
+
+              await dbAdmin
+                .collection("community")
+                .doc("communityId")
+                .collection("templates")
+                .doc("templateId")
+                .collection("events")
+                .doc("eventId")
+                .collection("event-participants")
+                .doc("alice")
+                .set({ id: "alice", status: "active" });
+
+              await communityRulesHelper.createMembership("bob", Membership.member);
+
+              const bobDb = getAuthedFirestore("bob");
+              const aliceParticipantRef = bobDb
+                .collection("community")
+                .doc("communityId")
+                .collection("templates")
+                .doc("templateId")
+                .collection("events")
+                .doc("eventId")
+                .collection("event-participants")
+                .doc("alice");
+
+              await firebase.assertFails(aliceParticipantRef.get());
+            });
+
+            it("private livestream: active participant can read another user's participant doc", async () => {
+              const eventsHelper = new CommunityRulesHelper(dbAdmin, [
+                { collection: collectionCommunity, document: "communityId" },
+                { collection: "templates", document: "templateId" },
+                { collection: "events", document: "eventId" },
+              ]);
+              await eventsHelper.getDocumentRef(dbAdmin).set({
+                isPublic: false,
+                eventType: "livestream",
+                liveStreamInfo: { playbackUrl: "https://example.com" },
+                communityId: "communityId",
+              });
+
+              const participantsCol = dbAdmin
+                .collection("community")
+                .doc("communityId")
+                .collection("templates")
+                .doc("templateId")
+                .collection("events")
+                .doc("eventId")
+                .collection("event-participants");
+
+              await participantsCol.doc("alice").set({
+                id: "alice",
+                status: "active",
+              });
+              await participantsCol.doc("bob").set({
+                id: "bob",
+                status: "active",
+              });
+
+              await communityRulesHelper.createMembership("bob", Membership.member);
+
+              const bobDb = getAuthedFirestore("bob");
+              const aliceParticipantRef = bobDb
+                .collection("community")
+                .doc("communityId")
+                .collection("templates")
+                .doc("templateId")
+                .collection("events")
+                .doc("eventId")
+                .collection("event-participants")
+                .doc("alice");
+
+              await firebase.assertSucceeds(aliceParticipantRef.get());
             });
           });
 

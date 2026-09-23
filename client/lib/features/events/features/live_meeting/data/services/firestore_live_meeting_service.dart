@@ -238,7 +238,9 @@ class FirestoreLiveMeetingService {
       breakoutSessionId: breakoutSessionId,
     );
 
-    final doc = await firestoreDatabase.firestore.doc(docPath).get();
+    final doc = await getDocumentRetryingUnavailable(
+      firestoreDatabase.firestore.doc(docPath),
+    );
 
     return BreakoutRoomSession.fromJson(fromFirestoreJson(doc.data()!));
   }
@@ -253,10 +255,16 @@ class FirestoreLiveMeetingService {
       templateId: event.templateId,
       eventId: event.id,
     );
+    // The isPresent filter is essential here: without it, participants from
+    // previous breakout sessions (especially the waiting room, which always
+    // has the same constant ID) accumulate and inflate the count.
+    // The composite index (currentBreakoutRoomId, isPresent, status) on
+    // event-participants COLLECTION covers this query.
     return wrapInBehaviorSubject(
       eventRef
           .collection('event-participants')
           .where('currentBreakoutRoomId', isEqualTo: breakoutRoomId)
+          .where('isPresent', isEqualTo: true)
           .snapshots(includeMetadataChanges: true)
           .asyncMap(
             (snapshot) => FirestoreEventService.convertParticipantListAsync(
@@ -294,6 +302,9 @@ class FirestoreLiveMeetingService {
     required bool isPresent,
     String? currentBreakoutRoomId,
   }) async {
+    final userId = userService.currentUserId;
+    if (userId == null || userId.isEmpty) return;
+
     final participantRef = firestoreEventService
         .eventReference(
           communityId: event.communityId,
@@ -301,7 +312,7 @@ class FirestoreLiveMeetingService {
           eventId: event.id,
         )
         .collection('event-participants')
-        .doc(userService.currentUserId);
+        .doc(userId);
 
     final presenceUpdate = jsonSubset(
       [
@@ -314,7 +325,7 @@ class FirestoreLiveMeetingService {
       ],
       toFirestoreJson(
         Participant(
-          id: userService.currentUserId!,
+          id: userId,
           isPresent: isPresent,
           membershipStatus:
               userDataService.getMembership(event.communityId).status ??
@@ -337,6 +348,9 @@ class FirestoreLiveMeetingService {
     required Event event,
     required String breakoutSessionId,
   }) async {
+    final userId = userService.currentUserId;
+    if (userId == null || userId.isEmpty) return;
+
     final participantRef = firestoreEventService
         .eventReference(
           communityId: event.communityId,
@@ -344,14 +358,14 @@ class FirestoreLiveMeetingService {
           eventId: event.id,
         )
         .collection('event-participants')
-        .doc(userService.currentUserId);
+        .doc(userId);
 
     await participantRef.set(
       jsonSubset(
         [Participant.kAvailableForBreakoutSessionId],
         toFirestoreJson(
           Participant(
-            id: userService.currentUserId!,
+            id: userId,
             availableForBreakoutSessionId: breakoutSessionId,
           ).toJson(),
         ),
@@ -365,8 +379,9 @@ class FirestoreLiveMeetingService {
     required LiveMeeting liveMeeting,
     required Iterable<String> keys,
   }) async {
+    final data = jsonSubset(keys, toFirestoreJson(liveMeeting.toJson()));
     await firestoreDatabase.firestore.doc(liveMeetingPath).set(
-          jsonSubset(keys, toFirestoreJson(liveMeeting.toJson())),
+          data,
           SetOptions(merge: true),
         );
   }
@@ -427,7 +442,7 @@ class FirestoreLiveMeetingService {
       '${getLiveMeetingPath(event)}/ratings/${userService.currentUserId}',
     );
 
-    final doc = await ratingPathRef.get();
+    final doc = await getDocumentRetryingUnavailable(ratingPathRef);
     final docData = doc.data();
 
     if (docData == null) return null;
@@ -488,4 +503,74 @@ class FirestoreLiveMeetingService {
           SetOptions(merge: true),
         );
   }
+
+  /// Users who were assigned to a real breakout room (not waiting room).
+  ///
+  /// Assignment implies event attendance: assign_to_breakouts only rosters
+  /// participants who are active AND present / marked available for the
+  /// session at assignment time, and reassignment is an explicit mid-event
+  /// request — an absent registrant can never appear in participantIds or
+  /// originalParticipantIdsAssignment. A user assigned but gone before
+  /// entering their room still attended the EVENT (which is what the CSV's
+  /// 'attended' column measures); marking them FALSE would wrongly target
+  /// them with didn't-attend outreach.
+  Future<BreakoutAttendanceSnapshot> getBreakoutAttendance({
+    required Event event,
+  }) async {
+    final liveMeetingPath = getLiveMeetingPath(event);
+    final liveMeetingDoc = await getDocumentRetryingUnavailable(
+      firestoreDatabase.firestore.doc(liveMeetingPath),
+    );
+
+    final attendeeIds = <String>{};
+    var hasRealBreakoutRooms = false;
+
+    final sessionsSnap = await firestoreDatabase.firestore
+        .collection('$liveMeetingPath/breakout-room-sessions')
+        .get();
+
+    for (final sessionDoc in sessionsSnap.docs) {
+      final roomsSnap = await firestoreDatabase.firestore
+          .collection('${sessionDoc.reference.path}/breakout-rooms')
+          .get();
+
+      for (final roomDoc in roomsSnap.docs) {
+        final data = roomDoc.data();
+        final roomId = (data['roomId'] as String?) ?? roomDoc.id;
+        if (roomId == breakoutsWaitingRoomId || roomId == reassignNewRoomId) {
+          continue;
+        }
+        hasRealBreakoutRooms = true;
+
+        for (final field in [
+          'participantIds',
+          'originalParticipantIdsAssignment',
+        ]) {
+          final ids = data[field];
+          if (ids is! List) continue;
+          for (final id in ids) {
+            if (id is String && id.isNotEmpty) attendeeIds.add(id);
+          }
+        }
+      }
+    }
+
+    return BreakoutAttendanceSnapshot(
+      attendeeIds: attendeeIds,
+      hasRealBreakoutRooms: hasRealBreakoutRooms,
+      liveMeetingExists: liveMeetingDoc.exists,
+    );
+  }
+}
+
+class BreakoutAttendanceSnapshot {
+  final Set<String> attendeeIds;
+  final bool hasRealBreakoutRooms;
+  final bool liveMeetingExists;
+
+  const BreakoutAttendanceSnapshot({
+    required this.attendeeIds,
+    required this.hasRealBreakoutRooms,
+    required this.liveMeetingExists,
+  });
 }

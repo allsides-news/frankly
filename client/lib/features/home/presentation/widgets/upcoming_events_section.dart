@@ -1,11 +1,11 @@
 // import 'dart:math';
 
+import 'package:client/core/widgets/section_heading.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/user/data/providers/my_events_page_provider.dart';
 import 'package:client/features/events/presentation/widgets/event_button.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
 import 'package:client/styles/styles.dart';
-import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/events/event.dart';
 import 'package:provider/provider.dart';
 import 'package:client/core/localization/localization_helper.dart';
@@ -45,13 +45,7 @@ class _UpcomingEventsSectionState extends State<UpcomingEventsSection> {
     );
   }
 
-  Widget _buildTitle() => Align(
-        alignment: Alignment.centerLeft,
-        child: HeightConstrainedText(
-          context.l10n.myUpcomingEvents,
-          style: AppTextStyle.headline3.copyWith(fontSize: 22),
-        ),
-      );
+  Widget _buildTitle() => SectionHeading(context.l10n.myUpcomingEvents);
 
   Widget _buildUpcomingEvents() {
     return CustomStreamBuilder<List<Event>>(

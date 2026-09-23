@@ -160,15 +160,15 @@ class EventEmails {
     final emailLogsCollection = firestore.collection(
       'community/${eventLocal.communityId}/templates/${eventLocal.templateId}/events/${eventLocal.id}/email-logs',
     );
+
+    // Non-transactional bulk pre-filter (handles historical auto-ID log records
+    // and avoids unnecessary Auth lookups for already-emailed users).
     final emailLogsQuery = await emailLogsCollection.get();
     final emailLogs = emailLogsQuery.documents.map(
       (d) => EventEmailLog.fromJson(
         firestoreUtils.fromFirestoreJson(d.data.toMap()),
       ),
     );
-
-    // Making sure we don't send more than one email. If email log already exists - we remove
-    // user from the list of users whom email should be sent to.
     for (final log in emailLogs.where(
       (logEntry) =>
           logEntry.eventEmailType == emailType && logEntry.sendId == sendId,
@@ -195,12 +195,39 @@ class EventEmails {
       path: 'community/${eventLocal.communityId}',
       constructor: (map) => Community.fromJson(map),
     );
-    final template = await firestoreUtils.getFirestoreObject(
-      transaction: transaction,
-      path:
-          'community/${eventLocal.communityId}/templates/${eventLocal.templateId}',
-      constructor: (map) => Template.fromJson(map),
-    );
+    
+    // Load the template within the transaction (read phase). If it's missing
+    // (events on the synthetic default 'misc' template which has no Firestore
+    // doc, or on a template that was since deleted), fall back to an
+    // in-memory template: it's only used for email content (title/image
+    // fallbacks and calendar links). Deliberately NOT persisted - a created
+    // doc would surface in the Space's template pickers named after whichever
+    // event happened to send the first email.
+    final templatePath =
+        'community/${eventLocal.communityId}/templates/${eventLocal.templateId}';
+    final templateDocRef = firestore.document(templatePath);
+
+    Template template;
+    final templateDoc = await transaction.get(templateDocRef);
+    if (templateDoc.exists) {
+      template = Template.fromJson(
+        firestoreUtils.fromFirestoreJson(templateDoc.data.toMap()),
+      );
+    } else {
+      print(
+        'Template ${eventLocal.templateId} missing - using in-memory fallback',
+      );
+      template = Template(
+        id: eventLocal.templateId,
+        collectionPath: 'community/${eventLocal.communityId}/templates',
+        title: eventLocal.title ?? 'Event',
+        creatorId: eventLocal.creatorId,
+        isOfficial: false,
+        status: TemplateStatus.active,
+        agendaItems: [],
+        createdDate: DateTime.now(),
+      );
+    }
 
     final capabilities = await subscriptionPlanUtil
         .calculateCapabilities(eventLocal.communityId);
@@ -209,8 +236,27 @@ class EventEmails {
         functions.config.get('app.no_reply_email') as String? ??
             'no-reply@allsides.com';
 
-    // Send out emails
+    // Firestore transactions require all reads before any writes. Hoist all
+    // transactional log-doc reads into a single pass so the write pass below
+    // never calls transaction.get() after a transaction.set/create.
+    final sendIdKey = sendId.isEmpty ? '__empty__' : sendId;
+    final logDocRefs = <String, admin_interop.DocumentReference>{};
+    final alreadySent = <String>{};
     for (final user in lookedUpUsers) {
+      final ref = emailLogsCollection
+          .document('${user.uid}_${emailType.name}_$sendIdKey');
+      logDocRefs[user.uid] = ref;
+      final snap = await transaction.get(ref);
+      if (snap.exists) alreadySent.add(user.uid);
+    }
+
+    // Send out emails (writes only — all reads are complete)
+    for (final user in lookedUpUsers) {
+      if (alreadySent.contains(user.uid)) {
+        print('Skipping ${user.uid} — email log already committed');
+        continue;
+      }
+
       print('Sending $emailType email to user: ${user.uid}');
       await sendEmailClient.sendEmail(
         SendGridEmail(
@@ -230,9 +276,8 @@ class EventEmails {
         transaction: transaction,
       );
 
-      // Record that we already sent these reminders so we don't do it again
       transaction.set(
-        emailLogsCollection.document(),
+        logDocRefs[user.uid]!,
         admin_interop.DocumentData.fromMap(
           firestoreUtils.toFirestoreJson(
             EventEmailLog(

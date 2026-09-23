@@ -37,7 +37,8 @@ class FirestoreUserService {
         .collection(publicUser)
         .where('agoraId', isEqualTo: agoraId)
         .get();
-    final data = querySnapshot.docs.firstOrNull;
+    final docs = querySnapshot.docs;
+    final data = docs.isEmpty ? null : docs.first;
     if (data == null) {
       return null;
     }

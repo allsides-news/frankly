@@ -3,15 +3,16 @@ import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:client/core/widgets/constrained_body.dart';
 import 'package:client/styles/styles.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:client/features/community/features/create_community/presentation/views/create_community_dialog.dart';
 import 'package:client/features/community/data/providers/community_permissions_provider.dart';
 import 'package:client/features/events/features/create_event/presentation/views/create_event_dialog.dart';
 import 'package:client/features/templates/features/create_template/presentation/views/create_template_dialog.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
+import 'package:client/features/community/utils/community_theme_utils.dart.dart';
 import 'package:client/core/widgets/buttons/app_clickable_widget.dart';
 import 'package:client/features/community/presentation/widgets/community_icon_or_logo.dart';
 import 'package:client/core/widgets/proxied_image.dart';
-import 'package:client/features/community/presentation/widgets/community_membership_button.dart';
 import 'package:client/core/widgets/navbar/community_announcements.dart';
 import 'package:client/core/widgets/navbar/nav_bar/nav_bar_contract.dart';
 import 'package:client/core/widgets/navbar/nav_bar/nav_bar_model.dart';
@@ -28,10 +29,14 @@ import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/services.dart';
 import 'package:client/features/user/data/services/user_service.dart';
 import 'package:client/styles/app_asset.dart';
+import 'package:client/styles/roundtables_logo.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/community/community.dart';
 import 'package:provider/provider.dart';
 import 'package:client/core/utils/extensions.dart';
+import 'package:client/core/widgets/navbar/nav_bar/space_pill_metrics.dart';
+
+export 'package:client/core/widgets/navbar/nav_bar/space_pill_metrics.dart';
 
 class NavBar extends StatefulWidget {
   NavBar() : super(key: Key('navBar'));
@@ -96,7 +101,7 @@ class NavBarState extends State<NavBar> implements NavBarView {
           alignment: Alignment.center,
           child: _buildHeaderContent(),
         ),
-        Divider(height: 1, color: context.theme.colorScheme.outline),
+        Divider(height: 1, color: AppNeutralColors.of(context).neutral300),
       ],
     );
   }
@@ -106,235 +111,398 @@ class NavBarState extends State<NavBar> implements NavBarView {
     setState(() {});
   }
 
-  /// Create a semantically-wrapped button with label for the community membership button
-  Widget _buildMembershipButton(Community currentCommunity) {
-    return Semantics(
-      label: context.l10n.followCommunityButton,
-      identifier: 'follow_community_button',
-      button: true,
-      child: CommunityMembershipButton(
-        currentCommunity,
-      ),
-    );
-  }
-
   Widget _buildHeaderContent() {
-    final canViewCommunityLinks = _presenter.canViewCommunityLinks();
     final isOnCommunityPage = _presenter.isCommunityLocation();
     final currentCommunity = context.watch<NavBarProvider>().currentCommunity;
     final showBottomNavBar = _presenter.showBottomNavBar(context);
     final isMobile = _presenter.isMobile(context);
+    final isInsideSpace = isOnCommunityPage && currentCommunity != null;
 
     return ConstrainedBody(
-      padding: EdgeInsets.only(left: 20, right: 10),
+      padding: EdgeInsets.only(left: 10, right: 10),
       child: SizedBox(
         height: AppSize.kNavBarHeight,
         child: Row(
           children: [
-            ..._buildLeftSideOfNav(currentCommunity, isOnCommunityPage),
-            if (!showBottomNavBar &&
-                isOnCommunityPage &&
-                currentCommunity != null)
-              ..._buildCenterOfNav(currentCommunity)
-            else if (!isOnCommunityPage)
+            // Burger sits at the far left, next to the platform logo, so it
+            // reads as platform-level navigation rather than a user menu.
+            _buildMenuButton(),
+            _buildPlatformLogo(isMobile: isMobile),
+            // The Space-specific nav only exists while inside a Space --
+            // outside one (e.g. the My Spaces page) this whole pill is absent.
+            // Expanded+Align (rather than a Spacer next to a Flexible pill,
+            // which would cap the pill at half the free width) right-aligns
+            // the pill at its natural size while still handing it a bounded
+            // width to ellipsize the Space name against when space is tight.
+            if (isInsideSpace)
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: kSpacePillMargin,
+                    ),
+                    child: _buildSpacePill(currentCommunity, isMobile: isMobile),
+                  ),
+                ),
+              )
+            else
               Spacer(),
-            if (currentCommunity != null &&
-                canViewCommunityLinks &&
-                isOnCommunityPage &&
-                !isMobile)
-              AnnouncementsIcon(communityId: currentCommunity.id),
-            ..._buildRightSideOfNav(currentCommunity),
+            // On mobile the user avatar lives in the bottom nav bar instead,
+            // which is why the mobile nav ends at the Space pill. Event pages
+            // are no exception on desktop -- the profile menu stays reachable.
+            if (!showBottomNavBar) ProfileOrLogin(showMenuAboveIcon: false),
           ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildLeftSideOfNav(
-    Community? currentCommunity,
-    bool isOnCommunityPage,
-  ) {
-    final canViewCommunityLinks = _presenter.canViewCommunityLinks();
-    final isMobile = _presenter.isMobile(context);
-    final showCommunityMembershipButton = !canViewCommunityLinks && !isMobile;
-
-    return [
-      CurrentCommunityIconOrLogo(community: currentCommunity, darkLogo: true),
-      if (currentCommunity != null && isOnCommunityPage && !isMobile) ...[
-        Expanded(
-          flex: showCommunityMembershipButton ? 0 : 1,
-          child: ActionButton(
-            type: ActionButtonType.text,
-            onPressed: () => routerDelegate.beamTo(
-              CommunityPageRoutes(
-                communityDisplayId: currentCommunity.displayId,
-              ).communityHome,
-            ),
-            expand: !showCommunityMembershipButton,
-            maxTextWidth: 180,
-            maxLines: 2,
-            contentAlign: ActionButtonContentAlignment.start,
-            textStyle: context.theme.textTheme.titleMedium,
-            text: currentCommunity.name ?? Environment.appName,
-          ),
+  /// Opens the platform sidebar. Paired with the logo on the left, per the
+  /// same "this is the platform, not you" grouping.
+  Widget _buildMenuButton() {
+    return Semantics(
+      button: true,
+      label: context.l10n.showSidebarButton,
+      child: IconButton(
+        onPressed: () => Scaffold.of(context).openDrawer(),
+        icon: Icon(
+          Icons.menu,
+          size: 34,
+          color: context.theme.colorScheme.secondary,
         ),
-        if (showCommunityMembershipButton) ...[
-          SizedBox(width: 16),
-          Expanded(
-            child: _buildMembershipButton(currentCommunity),
-          ),
-        ] else
-          Spacer(),
-      ],
-    ];
+      ),
+    );
   }
 
-  List<Widget> _buildRightSideOfNav(Community? currentCommunity) {
-    final canViewCommunityLinks = _presenter.canViewCommunityLinks();
-    final isCommunityLocation = _presenter.isCommunityLocation();
-    final showBottomNav = _presenter.showBottomNavBar(context);
-    final isMobile = _presenter.isMobile(context);
-    final isAdminButtonVisible = _presenter.isAdminButtonVisible();
+  /// The AllSides Roundtables logo -- always the platform mark, never the
+  /// current Space's, and always a link back to My Spaces. Mobile drops the
+  /// wordmark and keeps just the icon to leave room for the Space pill.
+  Widget _buildPlatformLogo({required bool isMobile}) {
+    // The mark alone reads smaller than the full lockup at the same height,
+    // so mobile keeps 34 while desktop's wordmark sits at 0.75x that.
+    const markHeight = 34.0;
+    const wordmarkHeight = markHeight * 0.75;
 
-    return [
-      if (!showBottomNav)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: ProfileOrLogin(
-            showMenuAboveIcon: false,
+    return Semantics(
+      button: true,
+      label: context.l10n.franklyLogo,
+      child: AppClickableWidget(
+        isIcon: false,
+        onTap: () => routerDelegate.beamTo(HomeLocation()),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: RoundtablesLogo(
+            height: isMobile ? markHeight : wordmarkHeight,
+            markOnly: isMobile,
           ),
-        )
-      else ...[
-        if (currentCommunity != null && isCommunityLocation) ...[
-          ..._buildRightSideNavIcons(currentCommunity, canViewCommunityLinks),
+        ),
+      ),
+    );
+  }
+
+  /// The Space-scoped nav: the Space's own avatar and name, its section
+  /// links, and its announcements bell, grouped into one bordered stadium so
+  /// they read as belonging to the Space rather than to the platform.
+  /// How much gap the pill can afford between its icons.
+  ///
+  /// The icon set is fixed but the width isn't: a Space with Posts enabled on
+  /// a 360pt phone has to fit one more icon than a Space without. Spending
+  /// whatever is spare, down to a floor, keeps the tap targets as generous as
+  /// the screen allows instead of overflowing at one size and looking cramped
+  /// at another.
+  double _spacePillIconGap(double maxWidth, int iconCount) {
+    if (iconCount == 0) return SelectableNavigationIcon.defaultDenseGap;
+
+    final fixed = kSpacePillPadding * 2 +
+        kSpacePillBorderWidth * 2 +
+        kSpaceLogoSize +
+        kSpacePillLogoGap +
+        kSpacePillIconSize * iconCount;
+
+    return ((maxWidth - fixed) / iconCount).clamp(
+      SelectableNavigationIcon.minDenseGap,
+      SelectableNavigationIcon.defaultDenseGap,
+    );
+  }
+
+  Widget _buildSpacePill(Community community, {required bool isMobile}) {
+    final canViewCommunityLinks = _presenter.canViewCommunityLinks();
+
+    // The nav bar is rendered outside CustomScaffold's Space child theme, so
+    // it can't pick these up from the ambient ColorScheme -- it resolves them
+    // from the Space itself.
+    final brand = SpaceBrandColors.resolve(
+      lightColor: community.themeLightColor,
+      darkColor: community.themeDarkColor,
+      brightness: Theme.of(context).brightness,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final iconGap = isMobile
+            ? _spacePillIconGap(
+                constraints.maxWidth,
+                _spaceNavItems(community).length +
+                    (canViewCommunityLinks ? 1 : 0),
+              )
+            : SelectableNavigationIcon.defaultDenseGap;
+
+        return _buildSpacePillBody(
+          community,
+          isMobile: isMobile,
+          brand: brand,
+          canViewCommunityLinks: canViewCommunityLinks,
+          iconGap: iconGap,
+        );
+      },
+    );
+  }
+
+  Widget _buildSpacePillBody(
+    Community community, {
+    required bool isMobile,
+    required SpaceBrandColors? brand,
+    required bool canViewCommunityLinks,
+    required double iconGap,
+  }) {
+    final pill = Container(
+      // Fixed height so the pill can't be stretched taller by whichever child
+      // happens to have the largest minimum size -- that's what was padding
+      // the nav out vertically.
+      height: kSpacePillHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(kSpacePillRadius),
+        border: Border.all(
+          // A branded pill draws its edge from its own foreground rather than
+          // the neutral hairline, which reads as a foreign seam against a
+          // colour. Not the brand background: that is what fills the pill, so
+          // it made the border invisible -- and a Space whose brand background
+          // is near-white then had no edge and no contrast against the nav,
+          // leaving nothing to show the pill was there at all.
+          //
+          // At full strength, not faded. The picker validates the two brand
+          // colours against each other at 4.5:1, so the foreground clears
+          // WCAG's 3:1 for non-text contrast on any pair a Space can save.
+          // Fading it forfeits that guarantee: 25% alpha lands at 1.65:1 on
+          // the #EFEFEF/#222222 preset, and no single alpha is safe across
+          // the range the picker allows -- the worst case needs 0.78.
+          color: brand?.foreground ?? AppNeutralColors.of(context).neutral300,
+          width: kSpacePillBorderWidth,
+        ),
+        color: brand?.background ??
+            context.theme.colorScheme.surfaceContainerLowest,
+      ),
+      // Equal on all four sides, so the gap around the Space logo is the same
+      // above/below as it is to the left.
+      padding: const EdgeInsets.all(kSpacePillPadding),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isMobile)
+            _buildSpaceHomeButton(community, isMobile: true)
+          else
+            // Flexible here (a direct child of this Row) lets the Space name
+            // ellipsize when the pill runs out of room, instead of overflowing.
+            Flexible(
+              child: _buildSpaceHomeButton(community, isMobile: false),
+            ),
+          // Evens the logo-to-first-icon gap out against the gaps between the
+          // icons themselves, which come from their own equal padding.
+          if (isMobile) SizedBox(width: kSpacePillLogoGap),
+          ..._buildSpaceNavItems(
+            community,
+            isMobile: isMobile,
+            denseGap: iconGap,
+          ),
+          // Announcements stay gated on the same permission as before, but
+          // are now shown on mobile too rather than desktop-only.
+          if (canViewCommunityLinks)
+            AnnouncementsIcon(
+              communityId: community.id,
+              // Matches the section icons beside it instead of the larger
+              // standalone default.
+              iconSize: isMobile ? kSpacePillIconSize : null,
+              width: isMobile ? kSpacePillIconSize + iconGap : null,
+            ),
         ],
-      ],
-      if (isMobile) Spacer(),
-      if (isAdminButtonVisible) _buildAdminButton(),
-      Padding(
-        padding: const EdgeInsets.only(left: 8.0),
-        child: Semantics(
-          button: true,
-          label: context.l10n.showSidebarButton,
-          child: IconButton(
-            onPressed: () => Scaffold.of(context).openEndDrawer(),
-            icon: Icon(
-              Icons.menu,
-              size: 34,
-              color: context.theme.colorScheme.secondary,
+      ),
+    );
+
+    if (brand == null) return pill;
+
+    // The pill's contents already read onSurface/onSurfaceVariant, so
+    // remapping just those two inside this subtree recolours the name, the
+    // section links and the bell against the brand fill without every one of
+    // them needing to know about Space colours.
+    return Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: Theme.of(context).colorScheme.copyWith(
+              onSurface: brand.foreground,
+              onSurfaceVariant: brand.foreground.withValues(alpha: 0.7),
             ),
-          ),
-        ),
       ),
-    ];
+      child: pill,
+    );
   }
 
-  List<Widget> _buildRightSideNavIcons(
-    Community community,
-    bool canViewCommunityLinks,
-  ) {
-    final enableDiscussionThreads =
+  void _goToSpaceHome(Community community) {
+    routerDelegate.beamTo(
+      CommunityPageRoutes(communityDisplayId: community.displayId)
+          .communityHome,
+    );
+  }
+
+  /// The Space logo and its name, as a single button back to the Space home.
+  /// Mobile has no room for the name, so it's the logo alone.
+  Widget _buildSpaceHomeButton(
+    Community community, {
+    required bool isMobile,
+  }) {
+    final logo = CommunityCircleIcon(
+      community,
+      isTooltipShown: false,
+      backgroundColor: Colors.transparent,
+      imageHeight: kSpaceLogoSize,
+      borderRadius: kSpaceLogoRadius,
+    );
+
+    return AppClickableWidget(
+      isIcon: false,
+      // The pill sets its own spacing, and this widget's default 8px inset
+      // would both squash the logo out of square and overflow the row.
+      padding: EdgeInsets.zero,
+      borderRadius: kSpaceLogoRadius,
+      tooltipMessage: isMobile ? (community.name ?? '') : null,
+      onTap: () => _goToSpaceHome(community),
+      child: isMobile
+          ? logo
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                logo,
+                SizedBox(width: 10),
+                Flexible(
+                  child: ConstrainedBox(
+                    // Caps the name's width; a tighter incoming constraint
+                    // wins, and the Text ellipsizes rather than overflowing.
+                    constraints: BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      community.name ?? Environment.appName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      // Using GoogleFonts.geist directly (not .copyWith on the
+                      // theme style) so the Semibold font file actually gets
+                      // loaded -- google_fonts only lazy-loads weights
+                      // requested this way.
+                      style: GoogleFonts.geist(
+                        textStyle: context.theme.textTheme.titleMedium,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+              ],
+            ),
+    );
+  }
+
+  /// The enabled sections, as data. Split out from [_buildSpaceNavItems] so
+  /// the pill can count them before it lays anything out -- how much gap it
+  /// can afford depends on how many icons it has to fit.
+  List<_SpaceNavItem> _spaceNavItems(Community community) {
+    final communityDisplayId = community.displayId;
+    final enableDiscussionThreads = kShowDiscussionThreadsNav &&
         community.settingsMigration.enableDiscussionThreads;
+    final showResources = Provider.of<NavBarProvider>(context).showResources;
 
-    if (!canViewCommunityLinks) {
-      return [
-        SizedBox(width: 20),
-        _buildMembershipButton(community),
-      ];
-    }
-    return [
-      SizedBox(width: 20),
-      SelectableNavigationIcon(
-        iconData: Icons.calendar_month_rounded,
-        isSelected: CheckCurrentLocation.isCommunitySchedulePage,
-        iconSize: 32,
-        onTap: () => routerDelegate.beamTo(
-          CommunityPageRoutes(communityDisplayId: community.displayId)
-              .eventsPage,
-        ),
-      ),
-      if (enableDiscussionThreads) ...[
-        SizedBox(width: 20),
-        SelectableNavigationIcon(
-          iconData: Icons.forum_outlined,
-          isSelected: CheckCurrentLocation.isDiscussionThreadsPage,
-          iconSize: 32,
-          onTap: () => routerDelegate.beamTo(
-            CommunityPageRoutes(
-              communityDisplayId: CommunityProvider.read(context).displayId,
-            ).discussionThreadsPage,
-          ),
-        ),
-      ],
-      SizedBox(width: 10),
-      if (Provider.of<NavBarProvider>(context).showResources) ...[
-        SizedBox(width: 10),
-        SelectableNavigationIcon(
-          iconData: Icons.assignment_outlined,
-          isSelected: CheckCurrentLocation.isCommunityResourcesPage,
-          iconSize: 32,
-          onTap: () => routerDelegate.beamTo(
-            CommunityPageRoutes(communityDisplayId: community.displayId)
-                .resourcesPage,
-          ),
-        ),
-        SizedBox(width: 4),
-      ],
-    ];
-  }
-
-  List<Widget> _buildCenterOfNav(Community currentCommunity) {
-    final communityDisplayId = currentCommunity.displayId;
-    final enableDiscussionThreads =
-        currentCommunity.settingsMigration.enableDiscussionThreads;
-    return [
-      _SelectableNavigationButton(
+    final items = <_SpaceNavItem>[
+      _SpaceNavItem(
         title: context.l10n.events,
+        icon: Icons.calendar_month_outlined,
+        isSelected: CheckCurrentLocation.isCommunitySchedulePage,
         onTap: () => routerDelegate.beamTo(
           CommunityPageRoutes(communityDisplayId: communityDisplayId)
               .eventsPage,
         ),
-        isSelected: CheckCurrentLocation.isCommunitySchedulePage,
       ),
       if (enableDiscussionThreads)
-        _SelectableNavigationButton(
+        _SpaceNavItem(
           title: context.l10n.posts,
+          icon: Icons.forum_outlined,
+          isSelected: CheckCurrentLocation.isDiscussionThreadsPage,
           onTap: () => routerDelegate.beamTo(
             CommunityPageRoutes(communityDisplayId: communityDisplayId)
                 .discussionThreadsPage,
           ),
-          isSelected: CheckCurrentLocation.isDiscussionThreadsPage,
         ),
-      if (Provider.of<NavBarProvider>(context).showResources)
-        _SelectableNavigationButton(
+      if (showResources)
+        _SpaceNavItem(
           title: context.l10n.resources,
+          // Resources are always links -- community_resources.dart taps
+          // straight through to resource.url.
+          icon: Icons.link_outlined,
+          isSelected: CheckCurrentLocation.isCommunityResourcesPage,
           onTap: () => routerDelegate.beamTo(
             CommunityPageRoutes(communityDisplayId: communityDisplayId)
                 .resourcesPage,
           ),
-          isSelected: CheckCurrentLocation.isCommunityResourcesPage,
         ),
-      _SelectableNavigationButton(
+      _SpaceNavItem(
         title: context.l10n.templates,
+        // Stacked documents. A bordered list was too close to the dots in
+        // the calendar icon beside it. (The mortarboard this replaces is
+        // still used by the prerequisite-template badge, where it means
+        // something else.)
+        icon: Icons.file_copy_outlined,
+        isSelected: CheckCurrentLocation.isCommunityTemplatesPage,
         onTap: () => routerDelegate.beamTo(
           CommunityPageRoutes(communityDisplayId: communityDisplayId)
               .browseTemplatesPage,
         ),
-        isSelected: CheckCurrentLocation.isCommunityTemplatesPage,
       ),
+    ];
+
+    return items;
+  }
+
+  /// One entry per enabled section, as text on desktop and as an icon on
+  /// mobile. Both platforms show the same set, so a Space's sections don't
+  /// silently disappear on a phone.
+  List<Widget> _buildSpaceNavItems(
+    Community community, {
+    required bool isMobile,
+    required double denseGap,
+  }) {
+    return [
+      for (final item in _spaceNavItems(community))
+        if (isMobile)
+          // Dense: the default 48px tap box per icon overflowed the pill on
+          // narrow screens once Templates joined the set.
+          SelectableNavigationIcon(
+            iconData: item.icon,
+            label: item.title,
+            isSelected: item.isSelected,
+            iconSize: kSpacePillIconSize,
+            dense: true,
+            denseGap: denseGap,
+            onTap: item.onTap,
+          )
+        else
+          _SelectableNavigationButton(
+            title: item.title,
+            onTap: item.onTap,
+            isSelected: item.isSelected,
+          ),
     ];
   }
 
-  Widget _buildAdminButton() {
-    return SelectableNavigationIcon(
-      key: _model.adminButtonKey,
-      iconData: Icons.settings_outlined,
-      iconSize: 30,
-      onTap: () => _goToAdminPage(),
-      isSelected: CheckCurrentLocation.isCommunityAdminPage,
-    );
-  }
-
+  /// Foreground here is onPrimaryContainer, not onPrimary: this bar is painted
+  /// with primaryContainer, and in the dark scheme onPrimary and
+  /// primaryContainer are both neutral800 -- identical, so the text vanished.
   Widget _buildOnboardingOverviewTooltip(OnboardingStep onboardingStep) {
     _presenter.updateAdminButtonXPosition();
 
@@ -367,7 +535,7 @@ class NavBarState extends State<NavBar> implements NavBarView {
                       child: StepProgressIndicator(
                         completedStepCount: completedStepCount,
                         totalSteps: totalSteps,
-                        backgroundColor: context.theme.colorScheme.onPrimary,
+                        backgroundColor: context.theme.colorScheme.onPrimaryContainer,
                         progressColor:
                             context.theme.colorScheme.primaryFixedDim,
                       ),
@@ -376,7 +544,7 @@ class NavBarState extends State<NavBar> implements NavBarView {
                     Text(
                       '$completedStepCount/$totalSteps',
                       style: AppTextStyle.body
-                          .copyWith(color: context.theme.colorScheme.onPrimary),
+                          .copyWith(color: context.theme.colorScheme.onPrimaryContainer),
                     ),
                     SizedBox(width: 20),
                     AppClickableWidget(
@@ -407,7 +575,7 @@ class NavBarState extends State<NavBar> implements NavBarView {
                           Text(
                             onboardingStep.title,
                             style: AppTextStyle.bodyMedium.copyWith(
-                              color: context.theme.colorScheme.onPrimary,
+                              color: context.theme.colorScheme.onPrimaryContainer,
                             ),
                           ),
                         ],
@@ -417,13 +585,13 @@ class NavBarState extends State<NavBar> implements NavBarView {
                           Text(
                             onboardingStep.sectionTitle,
                             style: AppTextStyle.bodyMedium.copyWith(
-                              color: context.theme.colorScheme.onPrimary,
+                              color: context.theme.colorScheme.onPrimaryContainer,
                             ),
                           ),
                           SizedBox(width: 4),
                           Icon(
                             Icons.arrow_forward_ios,
-                            color: context.theme.colorScheme.onPrimary,
+                            color: context.theme.colorScheme.onPrimaryContainer,
                             size: 12,
                           ),
                         ],
@@ -479,20 +647,20 @@ class NavBarState extends State<NavBar> implements NavBarView {
                         Text(
                           onboardingStep.title,
                           style: AppTextStyle.bodyMedium.copyWith(
-                            color: context.theme.colorScheme.onPrimary,
+                            color: context.theme.colorScheme.onPrimaryContainer,
                           ),
                         ),
                         SizedBox(width: 10),
                         Text(
                           onboardingStep.sectionTitle,
                           style: AppTextStyle.bodyMedium.copyWith(
-                            color: context.theme.colorScheme.onPrimary,
+                            color: context.theme.colorScheme.onPrimaryContainer,
                           ),
                         ),
                         SizedBox(width: 5),
                         Icon(
                           Icons.arrow_forward_ios,
-                          color: context.theme.colorScheme.onPrimary,
+                          color: context.theme.colorScheme.onPrimaryContainer,
                           size: 12,
                         ),
                       ],
@@ -504,7 +672,7 @@ class NavBarState extends State<NavBar> implements NavBarView {
                     child: StepProgressIndicator(
                       completedStepCount: completedStepCount,
                       totalSteps: totalSteps,
-                      backgroundColor: context.theme.colorScheme.onPrimary,
+                      backgroundColor: context.theme.colorScheme.onPrimaryContainer,
                       progressColor: context.theme.colorScheme.primaryFixedDim,
                     ),
                   ),
@@ -512,7 +680,7 @@ class NavBarState extends State<NavBar> implements NavBarView {
                   Text(
                     '$completedStepCount/$totalSteps',
                     style: AppTextStyle.body
-                        .copyWith(color: context.theme.colorScheme.onPrimary),
+                        .copyWith(color: context.theme.colorScheme.onPrimaryContainer),
                   ),
                   SizedBox(width: 20),
                   AppClickableWidget(
@@ -581,6 +749,30 @@ class NavBarState extends State<NavBar> implements NavBarView {
   }
 }
 
+/// One section of the Space pill, rendered as text on desktop and as an icon
+/// on mobile.
+class _SpaceNavItem {
+  final String title;
+
+  /// One outlined glyph per section, in a single family.
+  ///
+  /// No filled-when-selected variant: Material's "Rounded" family is a corner
+  /// treatment rather than a fill, so stroke-built shapes like `link` look
+  /// virtually identical either way. Selection is already carried by the
+  /// icon's colour and the indicator bar under it.
+  final IconData icon;
+
+  final bool isSelected;
+  final void Function() onTap;
+
+  const _SpaceNavItem({
+    required this.title,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+}
+
 class _SelectableNavigationButton extends StatelessWidget {
   final void Function() onTap;
   final bool isSelected;
@@ -598,6 +790,11 @@ class _SelectableNavigationButton extends StatelessWidget {
     return ActionButton(
       type: ActionButtonType.text,
       onPressed: onTap,
+      // Without these the button's default 96x50 minimum size would set the
+      // pill's height and spread the links far apart.
+      height: kSpaceLogoSize,
+      minWidth: 0,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Container(
         decoration: isSelected
             ? BoxDecoration(
@@ -610,8 +807,12 @@ class _SelectableNavigationButton extends StatelessWidget {
               )
             : null,
         child: HeightConstrainedText(
-          title,
-          style: context.theme.textTheme.titleMedium!.copyWith(
+          // Uppercased for the nav treatment rather than in the l10n string,
+          // so the same string stays sentence-case everywhere else it's used.
+          title.toUpperCase(),
+          style: context.theme.textTheme.labelLarge!.copyWith(
+            letterSpacing: 0.6,
+            fontWeight: FontWeight.w500,
             color: isSelected
                 ? context.theme.colorScheme.onSurface
                 : context.theme.colorScheme.onSurfaceVariant,

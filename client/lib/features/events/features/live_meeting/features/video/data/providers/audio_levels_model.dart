@@ -1,13 +1,14 @@
 import 'dart:async';
+import 'dart:js_interop';
 
+import 'package:client/core/utils/js_interop_bridge.dart';
+import 'package:client/features/events/features/live_meeting/features/video/data/providers/audio_level_volume.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/events/features/live_meeting/features/video/data/providers/conference_room.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/services.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:universal_html/html.dart' as html;
-import 'package:universal_html/js.dart' as js;
-import 'package:universal_html/js_util.dart' as js_util;
 
 /// Handles listening to media streams from all participants and determining who the dominant speaker
 /// is.
@@ -79,11 +80,11 @@ class ParticipantAudioLevel {
 
   ParticipantAudioLevel copyWith({
     bool? isSpeaking,
-    double? volume,
+    num? volume,
   }) =>
       ParticipantAudioLevel(
         isSpeaking: isSpeaking ?? this.isSpeaking,
-        volume: volume ?? this.volume,
+        volume: volume?.toDouble() ?? this.volume,
       );
 
   @override
@@ -97,8 +98,8 @@ class ParticipantAudioLevelTracker {
 
   final _audioLevelStream = BehaviorSubject<ParticipantAudioLevel>();
 
-  late Object _harker;
-  late StreamSubscription _streamSubscription;
+  JSAny? _harker;
+  StreamSubscription? _streamSubscription;
 
   ParticipantAudioLevelTracker({
     required this.trackName,
@@ -112,44 +113,59 @@ class ParticipantAudioLevelTracker {
     _streamSubscription = _audioLevelStream.listen((_) => onUpdate());
 
     loggingService.log('Getting harker for $trackName');
-    _harker = js_util.callMethod(html.window, 'hark', [
-      mediaStream,
-      js_util.jsify({'play': false, 'interval': 250}),
-    ]);
+    try {
+      final harker = jsCallMethod(html.window as JSObject, 'hark', [
+        mediaStream as JSObject,
+        jsJsify({'play': false, 'interval': 250}),
+      ]);
+      if (harker == null) {
+        loggingService.log('hark() returned null for $trackName');
+        return;
+      }
+      _harker = harker;
 
-    loggingService.log('Done setting up harker for $trackName');
+      loggingService.log('Done setting up harker for $trackName');
 
-    js_util.callMethod(_harker, 'on', [
-      'speaking',
-      js.allowInterop(() {
-        final currentAudioLevel =
-            _audioLevelStream.valueOrNull ?? ParticipantAudioLevel();
-        _audioLevelStream.add(currentAudioLevel.copyWith(isSpeaking: true));
-      }),
-    ]);
+      jsCallMethod(harker, 'on', [
+        'speaking'.toJS,
+        jsInteropVoid(() {
+          final currentAudioLevel =
+              _audioLevelStream.valueOrNull ?? ParticipantAudioLevel();
+          _audioLevelStream.add(currentAudioLevel.copyWith(isSpeaking: true));
+        }),
+      ]);
 
-    js_util.callMethod(_harker, 'on', [
-      'stopped_speaking',
-      js.allowInterop(() {
-        final currentAudioLevel =
-            _audioLevelStream.valueOrNull ?? ParticipantAudioLevel();
-        _audioLevelStream.add(currentAudioLevel.copyWith(isSpeaking: false));
-      }),
-    ]);
+      jsCallMethod(harker, 'on', [
+        'stopped_speaking'.toJS,
+        jsInteropVoid(() {
+          final currentAudioLevel =
+              _audioLevelStream.valueOrNull ?? ParticipantAudioLevel();
+          _audioLevelStream.add(currentAudioLevel.copyWith(isSpeaking: false));
+        }),
+      ]);
 
-    js_util.callMethod(_harker, 'on', [
-      'volume_change',
-      js.allowInterop((volume, _) {
-        final currentAudioLevel =
-            _audioLevelStream.valueOrNull ?? ParticipantAudioLevel();
-        _audioLevelStream.add(currentAudioLevel.copyWith(volume: volume));
-      }),
-    ]);
+      jsCallMethod(harker, 'on', [
+        'volume_change'.toJS,
+        jsInteropDynamicPair((volume, _) {
+          final parsedVolume = harkVolumeToDouble(volume);
+          if (parsedVolume == null) return;
+          final currentAudioLevel =
+              _audioLevelStream.valueOrNull ?? ParticipantAudioLevel();
+          _audioLevelStream
+              .add(currentAudioLevel.copyWith(volume: parsedVolume));
+        }),
+      ]);
+    } catch (e, st) {
+      loggingService.log('hark setup failed for $trackName: $e\n$st');
+    }
   }
 
   void dispose() {
-    js_util.callMethod(_harker, 'stop', []);
-    _streamSubscription.cancel();
+    final harker = _harker;
+    if (harker != null) {
+      jsCallMethod(harker, 'stop', []);
+    }
+    _streamSubscription?.cancel();
     _audioLevelStream.close();
   }
 }

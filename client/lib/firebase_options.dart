@@ -53,7 +53,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: '',
+    apiKey: 'AIzaSyDUwwfF_Fv9MGhTyyAmsA-6_DqinYTNJwo',
     appId: '1:283462208611:web:a02ca4e5d8640d73bb3c56',
     messagingSenderId: '283462208611',
     projectId: 'allsides-roundtables',

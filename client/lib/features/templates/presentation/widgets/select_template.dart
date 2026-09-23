@@ -201,7 +201,7 @@ class _SelectTemplateState extends State<SelectTemplate> {
             'Error in loading templates',
             logType: LogType.error,
             error: snapshot.error,
-            stackTrace: (snapshot.error as Error).stackTrace,
+            stackTrace: snapshot.stackTrace,
           );
 
           return Text(context.l10n.thereWasAnErrorLoadingEventTemplates);
@@ -266,10 +266,28 @@ class TemplateCard extends StatelessWidget {
                   template.image,
                 ),
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: context.theme.colorScheme.primary,
-                  backgroundBlendMode: BlendMode.multiply,
+              // Template art is arbitrary -- white logos and dark photos both
+              // appear -- so neither the scrim nor the label can follow the
+              // theme. This was primary at 50% under BlendMode.multiply, which
+              // barely darkens anything once primary is light, leaving a dark
+              // onPrimary label sitting unreadable on white artwork.
+              //
+              // Weighted to the bottom so the label gets its contrast without
+              // the whole image being dimmed.
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: const [
+                        Color(0xCC000000),
+                        Color(0x66000000),
+                        Color(0x00000000),
+                      ],
+                      stops: const [0.0, 0.45, 1.0],
+                    ),
+                  ),
                 ),
               ),
               Container(
@@ -282,9 +300,9 @@ class TemplateCard extends StatelessWidget {
                   template.title ?? '',
                   maxLines: 4,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     height: 1.3,
-                    color: context.theme.colorScheme.onPrimary,
+                    color: AppNeutralColors.neutral50,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

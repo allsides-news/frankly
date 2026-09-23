@@ -3,15 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_guide/data/providers/meeting_guide_card_store.dart';
-import 'package:client/features/events/features/live_meeting/features/meeting_guide/presentation/widgets/raising_hand.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_agenda/data/providers/meeting_agenda_provider.dart';
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/widgets/buttons/action_button.dart';
-import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
 import 'package:client/features/user/data/services/user_data_service.dart';
-import 'package:client/styles/app_asset.dart';
 import 'package:client/styles/styles.dart';
 import 'package:data_models/events/live_meetings/meeting_guide.dart';
 import 'package:provider/provider.dart';
@@ -56,9 +53,7 @@ class _MeetingGuideMinimizedCardState extends State<MeetingGuideMinimizedCard>
 
     final participantAgendaItemDetailsStream =
         _presenter.getParticipantAgendaItemDetailsStream();
-    final agendaItem = _presenter.getCurrentItem();
     final currentItemId = _presenter.getCurrentAgendaModelItemId();
-    final isHandRaised = _presenter.isHandRaised();
     final isMeetingFinished = _presenter.isMeetingFinished();
 
     final showNextButton =
@@ -75,14 +70,6 @@ class _MeetingGuideMinimizedCardState extends State<MeetingGuideMinimizedCard>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (agendaItem != null)
-            Padding(
-              padding: spacerPadding,
-              child: RaisingHandToggle(
-                isHandRaised: isHandRaised,
-                isCardMinimized: true,
-              ),
-            ),
           if (currentItemId != null && showNextButton)
             CustomStreamBuilder<List<ParticipantAgendaItemDetails>>(
               entryFrom: '_MeetingGuideMinimizedCardState.build',
@@ -111,12 +98,12 @@ class _MeetingGuideMinimizedCardState extends State<MeetingGuideMinimizedCard>
               onPressed: widget.onExpandCard,
               color: context.theme.colorScheme.surfaceContainerLowest,
               padding: EdgeInsets.zero,
-              child: ProxiedImage(
-                null,
-                asset: AppAsset.kMaximizePng,
-                height: 23,
-                width: 22,
-                loadingColor: Colors.transparent,
+              // Was media/maximize.png, whose navy is baked in and reads as
+              // near-black on this panel under a dark theme.
+              child: Icon(
+                Icons.open_in_full,
+                size: 20,
+                color: context.theme.colorScheme.onSurface,
               ),
             ),
           ),
@@ -158,12 +145,11 @@ class _ForwardButton extends HookWidget {
       }),
       color: context.theme.colorScheme.surfaceContainerLowest,
       padding: EdgeInsets.zero,
-      child: ProxiedImage(
-        null,
-        asset: AppAsset.kMoveForwardPng,
-        height: 22,
-        width: 22,
-        loadingColor: Colors.transparent,
+      // Was media/arrow_forward.png; same baked-in navy as the expand icon.
+      child: Icon(
+        Icons.arrow_forward,
+        size: 20,
+        color: context.theme.colorScheme.onSurface,
       ),
     );
   }

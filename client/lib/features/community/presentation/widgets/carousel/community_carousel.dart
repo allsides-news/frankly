@@ -262,6 +262,7 @@ class _CommunityCarouselState extends State<CommunityCarousel>
         ).eventPage(
           templateId: _selectedEvent!.templateId,
           eventId: _selectedEvent!.id,
+          eventTitle: _selectedEvent!.title,
         ),
       );
     } else {
@@ -324,6 +325,7 @@ class _CommunityCarouselState extends State<CommunityCarousel>
     if (index == 0) {
       return AboutCommunityCarouselTab(
         community: widget.community,
+        carouselSize: _carouselSize,
       );
     } else if (index < widget.featuredEvents.length + 1) {
       return FeaturedEventCarouselTab(
@@ -433,7 +435,7 @@ class _CommunityCarouselState extends State<CommunityCarousel>
           child: Container(
             height: 5,
             decoration: BoxDecoration(
-              color: Colors.grey,
+              color: AppNeutralColors.of(context).neutral400,
               borderRadius: BorderRadius.circular(3),
             ),
           ),
@@ -449,7 +451,7 @@ class _CommunityCarouselState extends State<CommunityCarousel>
                 height: 5,
                 width: width,
                 decoration: BoxDecoration(
-                  color: Colors.grey,
+                  color: AppNeutralColors.of(context).neutral400,
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),

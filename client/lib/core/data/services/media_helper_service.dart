@@ -4,8 +4,9 @@ import 'dart:convert';
 import 'package:client/config/environment.dart';
 import 'package:client/services.dart';
 import 'package:universal_html/html.dart' as html;
-import 'package:universal_html/js.dart' as js;
-import 'package:universal_html/js_util.dart' as js_util;
+
+import 'package:client/core/data/services/media_helper_cloudinary_stub.dart'
+    if (dart.library.html) 'package:client/core/data/services/media_helper_cloudinary_web.dart';
 
 class MediaHelperService {
   static const defaultMediaPreset = Environment.cloudinaryDefaultPreset;
@@ -64,7 +65,7 @@ class MediaHelperService {
   }) {
     final completer = Completer<String?>();
 
-    final parameters = {
+    final Map<String, Object?> parameters = {
       'cloudName': Environment.cloudinaryCloudName,
       'uploadPreset': uploadPreset,
       // Only picking from files or via inputting URL
@@ -79,9 +80,7 @@ class MediaHelperService {
       // Close picker straight after image is uploaded
       'singleUploadAutoClose': true,
     };
-    js_util.callMethod(html.window, 'pickMedia', [
-      js_util.jsify(parameters),
-      js.allowInterop((error, result) {
+    callWindowPickMedia(html.window, parameters, (error, result) {
         loggingService
             .log('Image Picker result Error: $error, Result: $result');
         if (completer.isCompleted) {
@@ -96,13 +95,14 @@ class MediaHelperService {
             // We are expecting this format
             //{"info":{"files":[{"id":"uw-file3","batchId":"uw-batch2","name":"nyan-cat-4k.gif","size":0,"type":"","imageDimensions":[],"status":"success","progress":100,"done":true,"failed":false,"aborted":false,"paused":false,"partOfBatch":false,"publicId":"","preparedParams":{},"camera":false,"coordinatesResize":false,"delayedPreCalls":false,"publicIdCounter":-1,"isFetch":true,"statusText":"success","uploadInfo":{"asset_id":"2448ddf3f766f70f1e477313671fb488","public_id":"nyan-cat-4k_epljbh","version":1636362311,"version_id":"8afdf8293dc8211de2be1315b37d1ab2","signature":"77e182747682e38c8bfc3543357cefb617a8bb2c","width":220,"height":124,"format":"gif","resource_type":"image","created_at":"2021-11-08T09:05:11Z","tags":[],"pages":24,"bytes":35477,"type":"upload","etag":"5e7895f961693adc6b76729f12fdecd3","placeholder":false,"url":"http://res.cloudinary.com/community/image/upload/v1636362311/nyan-cat-4k_epljbh.gif","secure_url":"https://res.cloudinary.com/community/image/upload/v1636362311/nyan-cat-4k_epljbh.gif","access_mode":"public","existing":false,"original_filename":"nyan-cat-4k","path":"v1636362311/nyan-cat-4k_epljbh.gif","thumbnail_url":"https://res.cloudinary.com/community/image/upload/c_limit,h_60,w_90/v1636362311/nyan-cat-4k_epljbh.jpg"}}]},"event":"queues-end","uw_event":true,"data":{"type":"uw_event","widgetId":"widget_9","event":"queues-end","info":{"files":[{"id":"uw-file3","batchId":"uw-batch2","name":"nyan-cat-4k.gif","size":0,"type":"","imageDimensions":[],"status":"success","progress":100,"done":true,"failed":false,"aborted":false,"paused":false,"partOfBatch":false,"publicId":"","preparedParams":{},"camera":false,"coordinatesResize":false,"delayedPreCalls":false,"publicIdCounter":-1,"isFetch":true,"statusText":"success","uploadInfo":{"asset_id":"2448ddf3f766f70f1e477313671fb488","public_id":"nyan-cat-4k_epljbh","version":1636362311,"version_id":"8afdf8293dc8211de2be1315b37d1ab2","signature":"77e182747682e38c8bfc3543357cefb617a8bb2c","width":220,"height":124,"format":"gif","resource_type":"image","created_at":"2021-11-08T09:05:11Z","tags":[],"pages":24,"bytes":35477,"type":"upload","etag":"5e7895f961693adc6b76729f12fdecd3","placeholder":false,"url":"http://res.cloudinary.com/community/image/upload/v1636362311/nyan-cat-4k_epljbh.gif","secure_url":"https://res.cloudinary.com/community/image/upload/v1636362311/nyan-cat-4k_epljbh.gif","access_mode":"public","existing":false,"original_filename":"nyan-cat-4k","path":"v1636362311/nyan-cat-4k_epljbh.gif","thumbnail_url":"https://res.cloudinary.com/community/image/upload/c_limit,h_60,w_90/v1636362311/nyan-cat-4k_epljbh.jpg"}}]}}}
             // More info here https://cloudinary.com/documentation/upload_widget_reference#events
-            final parsedResult = jsonDecode(result) as Map<String, dynamic>;
+            final parsedResult =
+                jsonDecode(result as String) as Map<String, dynamic>;
             final event = parsedResult['event'];
 
             // https://cloudinary.com/documentation/upload_widget_reference#success
             if (event == 'success') {
               // Taking successfully uploaded video URL
-              final url = parsedResult['info']['url'];
+              final url = parsedResult['info']['url'] as String?;
               completer.complete(tryTransformVideoUrlToMp4(url));
             } else if (event == 'close') {
               completer.complete(null);
@@ -111,8 +111,7 @@ class MediaHelperService {
             completer.completeError(error);
           }
         }
-      }),
-    ]);
+    });
 
     return completer.future;
   }

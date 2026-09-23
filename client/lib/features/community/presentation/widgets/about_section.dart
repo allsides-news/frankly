@@ -1,3 +1,4 @@
+import 'package:client/core/widgets/section_heading.dart';
 import 'package:flutter/material.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
@@ -34,15 +35,18 @@ class _AboutWidgetState extends State<CommunityHomeAboutSection> {
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = context.theme.textTheme.bodyMedium;
-    final titleStyle = context.theme.textTheme.titleMedium;
+    final textStyle = bumpFontSize(
+      context.theme.textTheme.bodyMedium,
+      2,
+      defaultFontSize: 14,
+    );
     final hasLongDescription = widget.community.description != null &&
         widget.community.description!.length > maxDescriptionLength;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        HeightConstrainedText(context.l10n.aboutUs, style: titleStyle),
+        SectionHeading(context.l10n.aboutUs),
         SizedBox(height: 10),
         if (isNullOrEmpty(widget.community.description))
           Text(

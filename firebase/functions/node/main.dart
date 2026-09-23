@@ -10,8 +10,12 @@ import 'package:functions/events/live_meetings/breakouts/check_assign_to_breakou
 import 'package:functions/events/live_meetings/breakouts/check_hostless_go_to_breakouts.dart';
 import 'package:functions/community/create_announcement.dart';
 import 'package:functions/events/create_event.dart';
+import 'package:functions/events/create_event_api.dart';
+import 'package:functions/events/event_rsvp_api.dart';
+import 'package:functions/events/query_events_api.dart';
 import 'package:functions/admin/payments/create_donation_checkout_session.dart';
 import 'package:functions/community/create_community.dart';
+import 'package:functions/community/create_community_api.dart';
 import 'package:functions/events/live_meetings/create_live_stream.dart';
 import 'package:functions/admin/payments/create_stripe_connected_account.dart';
 import 'package:functions/admin/payments/create_subscription_checkout_session.dart';
@@ -42,6 +46,8 @@ import 'package:functions/events/notifications/send_event_message.dart';
 import 'package:functions/utils/server_timestamp.dart';
 import 'package:functions/events/live_meetings/toggle_like_dislike_on_meeting_user_suggestion.dart';
 import 'package:functions/events/live_meetings/kick_participant.dart';
+import 'package:functions/events/lookup_event_participant_by_email.dart';
+import 'package:functions/events/resend_event_emails.dart';
 import 'package:functions/community/unsubscribe_from_community_notifications.dart';
 import 'package:functions/events/live_meetings/breakouts/update_breakout_room_flag_status.dart';
 import 'package:functions/community/update_community.dart';
@@ -49,7 +55,6 @@ import 'package:functions/community/update_membership.dart';
 import 'package:functions/admin/payments/update_stripe_subscription_plan.dart';
 import 'package:functions/events/live_meetings/vote_to_kick.dart';
 import 'package:functions/events/live_meetings/update_presence_status.dart';
-import 'package:functions/events/on_event.dart';
 import 'package:functions/discussion_threads/on_discussion_thread.dart';
 import 'package:functions/discussion_threads/on_discussion_thread_comment.dart';
 import 'package:functions/community/on_community.dart';
@@ -59,11 +64,13 @@ import 'package:functions/templates/on_template.dart';
 import 'package:functions/chat/on_broadcast_chat_message.dart';
 import 'package:functions/events/calendar/calendar_feed_ics.dart';
 import 'package:functions/events/calendar/calendar_feed_rss.dart';
+import 'package:functions/events/calendar/calendar_feed_json.dart';
 import 'package:functions/events/live_meetings/breakouts/check_assign_to_breakouts_server.dart';
 import 'package:functions/events/live_meetings/breakouts/check_hostless_go_to_breakouts_server.dart';
 import 'package:functions/events/notifications/email_event_reminder.dart';
 import 'package:functions/utils/infra/extend_cloud_task_scheduler.dart';
 import 'package:functions/events/live_meetings/mux_webhooks.dart';
+import 'package:functions/events/live_meetings/on_live_meeting.dart';
 import 'package:functions/utils/share_link.dart';
 import 'package:functions/admin/payments/stripe_connected_account_webhooks.dart';
 import 'package:functions/admin/payments/stripe_webhooks.dart';
@@ -109,6 +116,8 @@ final _onCallFunctions = <CloudFunction>[
   ServerTimestamp(),
   ToggleLikeDislikeOnMeetingUserSuggestion(),
   KickParticipant(),
+  LookupEventParticipantByEmail(),
+  ResendEventEmails(),
   UnsubscribeFromCommunityNotifications(),
   UpdateBreakoutRoomFlagStatus(),
   UpdateCommunity(),
@@ -120,7 +129,12 @@ final _onCallFunctions = <CloudFunction>[
 
 final _onRequestFunctions = <CloudFunction>[
   CalendarFeedIcs(),
+  CreateCommunityApi(),
+  CreateEventApi(),
+  EventRsvpApi(),
+  QueryEventsApi(),
   CalendarFeedRss(),
+  CalendarFeedJson(),
   CheckAssignToBreakoutsServer(),
   CheckHostlessGoToBreakoutsServer(),
   EmailEventReminder(),
@@ -146,6 +160,7 @@ final _cloudFunctions = <CloudFunction>[
 
 final _eventFunctions = <FirestoreEventFunction>[
   OnEvent(),
+  OnLiveMeeting(),
   OnDiscussionThread(),
   OnDiscussionThreadComment(),
   OnCommunity(),
@@ -165,8 +180,9 @@ void _registerServices() {
 }
 
 void _registerJsFunctions() {
-  functions['downloadRecording'] =
-      require('../js/download-recordings.js');
+  functions['downloadRecording'] = require('../js/download-recordings.js');
+  functions['downloadTranscription'] =
+      require('../js/download-transcription.js');
   functions['deleteRecordingJob'] = require('../js/delete-recording-job.js');
   functions['imageProxy'] = require('../js/image-proxy.js');
 }

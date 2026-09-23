@@ -32,90 +32,80 @@ class _FakeParticipantsDialogState extends State<FakeParticipantsDialog> {
         TextEditingController(text: widget.fakeParticipantCount.toString());
   }
 
-  Widget _buildBreakoutRoomChooser() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        HeightConstrainedText(
-          context.l10n.fakeParticipantCount,
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(
-          width: 60,
-          child: CustomTextField(
-            controller: _textController,
-          ),
-        ),
-        ActionButton(
-          onPressed: () => Navigator.of(context).pop(_textController.text),
-          text: 'Save',
-          textColor: Theme.of(context).primaryColor,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMainContent() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          alignment: Alignment.topLeft,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor,
-              borderRadius: BorderRadius.only(
-                bottomRight: Radius.circular(4),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Text(
-              'Fake Participants',
-              style: TextStyle(
-                color: context.theme.colorScheme.onPrimary,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(height: 24),
-        _buildBreakoutRoomChooser(),
-        SizedBox(height: 24),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Matches SignInDialog: the same surface, radius and hairline border every
+    // other dialog uses. This one had grown its own look -- a bright blue
+    // 2px frame and its title in a filled tab hanging off the top-left corner.
     return Dialog(
       backgroundColor: context.theme.colorScheme.surfaceContainerLowest,
       shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: Color(0xFF5568FF),
-          width: 2,
+          color: AppNeutralColors.of(context).neutral300,
         ),
-        borderRadius: BorderRadius.circular(6),
       ),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 500),
-        child: Stack(
-          children: [
-            _buildMainContent(),
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: IconButton(
-                  icon: Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                  padding: EdgeInsets.zero,
+        constraints: BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildTitleRow(context),
+              SizedBox(height: 16),
+              _buildCountField(context),
+              SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ActionButton(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_textController.text),
+                  text: 'Save',
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTitleRow(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: HeightConstrainedText(
+            'Fake Participants',
+            style: context.theme.textTheme.titleLarge,
+          ),
+        ),
+        IconButton(
+          icon: Icon(Icons.close),
+          color: context.theme.colorScheme.onSurfaceVariant,
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCountField(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: HeightConstrainedText(context.l10n.fakeParticipantCount),
+        ),
+        SizedBox(width: 16),
+        SizedBox(
+          width: 80,
+          child: CustomTextField(
+            controller: _textController,
+            keyboardType: TextInputType.number,
+          ),
+        ),
+      ],
     );
   }
 }

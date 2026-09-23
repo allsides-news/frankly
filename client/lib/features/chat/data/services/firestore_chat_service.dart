@@ -95,13 +95,11 @@ class FirestoreChatService {
 }
 
 T showTime<T>(T Function() action, String description) {
-  const enable = false;
-  if (enable) {
+  if (kDebugMode) {
     final timer = Stopwatch()..start();
     final temp = action();
     loggingService.log('$description: ${timer.elapsedMilliseconds}');
     return temp;
-  } else {
-    return action();
   }
+  return action();
 }

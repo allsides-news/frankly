@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:client/services.dart';
+import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/features/events/features/event_page/data/providers/event_provider.dart';
 import 'package:client/core/utils/persistent_f_toast_utils.dart';
 import 'package:data_models/events/event.dart';
@@ -83,6 +84,16 @@ class WaitingRoomNotificationService {
             checkBreakoutWaitingRoomCount(0, []);
           }
         },
+        onError: (e, s) {
+          // Don't cancel the subscription on transient Firestore errors
+          // (e.g. WebChannel 400s during reconnection). The stream will
+          // resume delivering updates once Firestore reconnects.
+          loggingService.log(
+            'WaitingRoomNotificationService: stream error (will continue): $e',
+            logType: LogType.warning,
+          );
+        },
+        cancelOnError: false,
       );
     }
   }
@@ -374,6 +385,17 @@ class WaitingRoomNotificationService {
     _userDismissedNotification = false;
     _lastParticipantIds = [];
     _lastNotificationMessage = null;
+  }
+
+  /// Call this after a competing persistent toast (e.g. a kick notification)
+  /// has been dismissed. It clears any stale "already shown" state and
+  /// re-subscribes to the waiting-room stream so an up-to-date notification
+  /// fires immediately if there are participants waiting.
+  void resetAndRestart() {
+    _hasShownNotification = false;
+    _userDismissedNotification = false;
+    _lastNotificationMessage = null;
+    restartMonitoring();
   }
 
   /// Helper method to compare two lists for equality

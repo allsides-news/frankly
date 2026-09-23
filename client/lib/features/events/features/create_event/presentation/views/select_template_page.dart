@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:client/core/localization/localization_helper.dart';
 import 'package:client/features/events/features/create_event/data/providers/create_event_dialog_model.dart';
 import 'package:client/features/events/features/create_event/presentation/widgets/select_template.dart';
 import 'package:client/features/templates/features/create_template/presentation/views/create_template_dialog.dart';
@@ -52,9 +53,12 @@ class _SelectTemplatePageState extends State<SelectTemplatePage> {
             if (canSkip)
               ActionButton(
                 onPressed: () => provider.goNext(),
-                color: Theme.of(context).primaryColor,
+                // colorScheme.primary, not the legacy ThemeData.primaryColor
+                // (never configured here): only the former is guaranteed to
+                // pair with onPrimary.
+                color: context.theme.colorScheme.primary,
                 textColor: context.theme.colorScheme.onPrimary,
-                text: 'Skip',
+                text: context.l10n.noCommunityAssociation,
               ),
             Spacer(),
             ActionButton(

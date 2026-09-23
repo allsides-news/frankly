@@ -417,7 +417,7 @@ class _MeetingGuideCardItemWordCloudState
                       .removeWordCloudResponse(currentResponses[index]),
                 );
               },
-              backgroundColor: Colors.grey[300],
+              backgroundColor: AppNeutralColors.of(context).neutral200,
               elevation: 2,
             );
           },

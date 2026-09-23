@@ -93,7 +93,7 @@ class _HostlessMeetingInfoState extends State<HostlessMeetingInfo> {
                           child: Text(
                             unreadMessages.toString(),
                             style: TextStyle(
-                              color: Theme.of(context).primaryColor,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -120,30 +120,37 @@ class _HostlessMeetingInfoState extends State<HostlessMeetingInfo> {
     if (!canViewCounts) return SizedBox.shrink();
     
     final liveMeetingProvider = Provider.of<LiveMeetingProvider>(context);
-    final participants = max(
-      liveMeetingProvider.conferenceRoom?.participants.length ??
-          liveMeetingProvider.eventProvider.presentParticipantCount,
-      1,
-    );
+    // Join/leave notify ConferenceRoom, not LiveMeetingProvider. Rebuild
+    // only the count so chat TextFields stay outside that subtree.
+    return AnimatedBuilder(
+      animation: liveMeetingProvider.conferenceRoomNotifier,
+      builder: (context, _) {
+        final participants = max(
+          liveMeetingProvider.conferenceRoom?.participants.length ??
+              liveMeetingProvider.eventProvider.presentParticipantCount,
+          1,
+        );
 
-    return Padding(
-      padding: const EdgeInsets.all(6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.account_circle,
-            color: context.theme.colorScheme.onSurfaceVariant,
+        return Padding(
+          padding: const EdgeInsets.all(6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.account_circle,
+                color: context.theme.colorScheme.onSurfaceVariant,
+              ),
+              SizedBox(width: 6),
+              Flexible(
+                child: HeightConstrainedText(
+                  NumberFormat.decimalPattern().format(participants),
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 6),
-          Flexible(
-            child: HeightConstrainedText(
-              NumberFormat.decimalPattern().format(participants),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

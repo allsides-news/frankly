@@ -23,6 +23,7 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="apple-mobile-web-app-title" content="AllSides Roundtables" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
@@ -39,11 +40,29 @@
 
   <meta name="google-signin-client_id" content="__GOOGLE_ID__" />
 
-  <link href="https://vjs.zencdn.net/7.10.2/video-js.css" rel="stylesheet" />
+  <!-- Non-blocking: applied once loaded, no render delay -->
+  <link href="https://vjs.zencdn.net/7.10.2/video-js.css" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://vjs.zencdn.net/7.10.2/video-js.css" rel="stylesheet" /></noscript>
 
   <style>
     .firebase-emulator-warning {
       display: none;
+    }
+
+    /* Shown immediately — before any JS or Flutter loads */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      z-index: 9999;
+      transition: opacity 0.3s ease;
+    }
+    #loading-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
     }
   </style>
 
@@ -52,33 +71,106 @@
 </head>
 
 <body>
-  <!-- This script installs service_worker.js to provide PWA functionality to
-       application. For more information, see:
-       https://developers.google.com/web/fundamentals/primers/service-workers -->
-  <!--script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('flutter_service_worker.js');
-      });
-    }
-  </script-->
+  <!-- Visible instantly — before any script or Flutter asset is downloaded -->
+  <div id="loading-screen" aria-label="Loading" role="status">
+    <svg width="150" height="163" viewBox="0 0 1175 1275" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <style>
+        /* Selectors scoped to #loading-screen to prevent leaking into the document stylesheet */
+        #loading-screen svg { overflow: visible; }
+        @keyframes kf_Vector_transform_0 {
+          0% { animation-timing-function: cubic-bezier(1, 0, 0.448, 1); transform: translateX(177px) translateY(327.426px) translate(186.055px, 355.195px) rotate(0rad) scaleX(1) scaleY(1) translate(-186.055px, -355.195px); }
+          19.95% { transform: translateX(177px) translateY(327.426px) translate(186.055px, 355.195px) rotate(0rad) scaleX(0.14) scaleY(0.14) translate(-186.055px, -355.195px); }
+          52.03% { animation-timing-function: cubic-bezier(1, 0, 0.5, 1); transform: translateX(177px) translateY(327.426px) translate(186.055px, 355.195px) rotate(0rad) scaleX(0.14) scaleY(0.14) translate(-186.055px, -355.195px); }
+          70.58% { transform: translateX(177px) translateY(327.426px) translate(186.055px, 355.195px) rotate(0rad) scaleX(1) scaleY(1) translate(-186.055px, -355.195px); }
+          100% { transform: translateX(177px) translateY(327.426px) translate(186.055px, 355.195px) rotate(0rad) scaleX(1) scaleY(1) translate(-186.055px, -355.195px); }
+        }
+        @keyframes kf_Vector_opacity_0 {
+          0% { animation-timing-function: linear; opacity: 1; }
+          19.95% { animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); opacity: 1; }
+          20.25% { animation-timing-function: linear; opacity: 0; }
+          51.68% { animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); opacity: 0; }
+          52.03% { animation-timing-function: linear; opacity: 1; }
+          100% { opacity: 1; }
+        }
+        #loading-screen #Vector { transform-origin: 0 0; animation: kf_Vector_transform_0 2s linear infinite, kf_Vector_opacity_0 2s linear infinite; }
+        @keyframes kf_Vector_2_transform_0 {
+          0% { animation-timing-function: cubic-bezier(1, 0, 0.448, 1); transform: translateX(500.695px) translateY(548.402px) translate(248.652px, 267.3px) rotate(0rad) scaleX(1) scaleY(1) translate(-248.652px, -267.3px); }
+          19.95% { transform: translateX(500.695px) translateY(548.402px) translate(248.652px, 267.3px) rotate(0rad) scaleX(0.14) scaleY(0.14) translate(-248.652px, -267.3px); }
+          52.03% { animation-timing-function: cubic-bezier(1, 0, 0.5, 1); transform: translateX(500.695px) translateY(548.402px) translate(248.652px, 267.3px) rotate(0rad) scaleX(0.14) scaleY(0.14) translate(-248.652px, -267.3px); }
+          70.58% { transform: translateX(500.695px) translateY(548.402px) translate(248.652px, 267.3px) rotate(0rad) scaleX(1) scaleY(1) translate(-248.652px, -267.3px); }
+          100% { transform: translateX(500.695px) translateY(548.402px) translate(248.652px, 267.3px) rotate(0rad) scaleX(1) scaleY(1) translate(-248.652px, -267.3px); }
+        }
+        @keyframes kf_Vector_2_opacity_0 {
+          0% { animation-timing-function: linear; opacity: 1; }
+          19.95% { animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); opacity: 1; }
+          20.25% { animation-timing-function: linear; opacity: 0; }
+          51.68% { animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); opacity: 0; }
+          52.03% { animation-timing-function: linear; opacity: 1; }
+          100% { opacity: 1; }
+        }
+        #loading-screen #Vector_2 { transform-origin: 0 0; animation: kf_Vector_2_transform_0 2s linear infinite, kf_Vector_2_opacity_0 2s linear infinite; }
+        @keyframes kf_Vector_3_transform_0 {
+          0% { animation-timing-function: cubic-bezier(1, 0, 0.448, 1); transform: translateX(362px) translateY(192px) translate(307.535px, 183.062px) rotate(0rad) scaleX(1) scaleY(1) translate(-307.535px, -183.062px); }
+          19.95% { transform: translateX(362px) translateY(192px) translate(307.535px, 183.062px) rotate(0rad) scaleX(0.14) scaleY(0.14) translate(-307.535px, -183.062px); }
+          52.03% { animation-timing-function: cubic-bezier(1, 0, 0.5, 1); transform: translateX(362px) translateY(192px) translate(307.535px, 183.062px) rotate(0rad) scaleX(0.14) scaleY(0.14) translate(-307.535px, -183.062px); }
+          70.58% { transform: translateX(362px) translateY(192px) translate(307.535px, 183.062px) rotate(0rad) scaleX(1) scaleY(1) translate(-307.535px, -183.062px); }
+          100% { transform: translateX(362px) translateY(192px) translate(307.535px, 183.062px) rotate(0rad) scaleX(1) scaleY(1) translate(-307.535px, -183.062px); }
+        }
+        @keyframes kf_Vector_3_opacity_0 {
+          0% { animation-timing-function: linear; opacity: 1; }
+          19.95% { animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); opacity: 1; }
+          20.25% { animation-timing-function: linear; opacity: 0; }
+          51.68% { animation-timing-function: cubic-bezier(0.5, 0, 0.5, 1); opacity: 0; }
+          52.03% { animation-timing-function: linear; opacity: 1; }
+          100% { opacity: 1; }
+        }
+        #loading-screen #Vector_3 { transform-origin: 0 0; animation: kf_Vector_3_transform_0 2s linear infinite, kf_Vector_3_opacity_0 2s linear infinite; }
+        @keyframes kf_Vector_4_transform_0 {
+          0% { transform: translateX(280.234px) translateY(289.037px) translate(296.642px, 297.15px) rotate(0rad) translate(-296.642px, -297.15px); }
+          20.48% { animation-timing-function: cubic-bezier(0.722, 0, 0.326, 1); transform: translateX(280.234px) translateY(289.037px) translate(296.642px, 297.15px) rotate(0rad) translate(-296.642px, -297.15px); }
+          51.68% { transform: translateX(280.234px) translateY(289.037px) translate(296.642px, 297.15px) rotate(6.283rad) translate(-296.642px, -297.15px); }
+          100% { transform: translateX(280.234px) translateY(289.037px) translate(296.642px, 297.15px) rotate(6.283rad) translate(-296.642px, -297.15px); }
+        }
+        #loading-screen #Vector_4 { transform-origin: 0 0; animation: kf_Vector_4_transform_0 2s linear infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          #loading-screen #Vector, #loading-screen #Vector_2,
+          #loading-screen #Vector_3, #loading-screen #Vector_4 { animation: none; }
+        }
+      </style>
+      <g id="spin-cycle">
+        <g id="Vector" transform="translate(177 327.426)"><path d="M346.507 229.632L156.138 15.8677C133.697 -9.28311 106.546 -3.96011 95.7905 27.754L4.41662 296.971C-6.34743 328.642 3.26272 375.231 25.6519 400.434L69.3798 449.547L160.573 697.42C167.221 715.457 174.239 714.544 176.219 695.534L188.043 582.751L215.978 614.19C238.453 639.35 265.613 633.983 276.325 602.304L367.647 333.095C378.454 301.381 368.948 254.783 346.507 229.632Z" fill="#CB2127"/></g>
+        <g id="Vector_2" transform="translate(500.695 548.402)"><path d="M453.802 1.30494L173.954 58.8676C141.033 65.6118 105.202 97.1451 94.4461 128.868L3.11529 398.034C-7.69181 429.799 10.5468 450.178 43.4676 443.426L148.232 421.806L307.342 531.565C316.53 537.896 323.643 533.994 323.135 522.892L316.719 387.198L323.316 385.872C356.288 379.033 392.068 347.585 402.875 315.819L494.206 46.697C504.961 14.9399 486.817 -5.49094 453.802 1.30494Z" fill="#2E64A0"/></g>
+        <g id="Vector_3" transform="translate(362 192)"><path d="M602.637 248.821L560.623 201.681L575.124 50.9827C576.226 39.8716 568.657 34.3677 558.358 38.7777L454.61 82.6538L412.268 35.1084C389.793 9.8973 344.446 -5.15872 311.474 1.62855L31.6255 59.1567C-1.29522 65.9526 -9.96673 92.0595 12.5086 117.314L202.834 331.035C225.223 356.186 270.665 371.285 303.586 364.498L583.382 306.935C616.398 300.182 624.983 274.024 602.637 248.821Z" fill="#96659E"/></g>
+        <g id="Vector_4" transform="translate(280.234 289.037)">
+          <path d="M261.909 62.1143C249.187 48.2605 256.621 25.8212 275.099 22.3044L385.608 1.27112C410.091 -3.38887 435.244 4.94457 452.101 23.3017L528.19 106.158C540.912 120.012 533.477 142.451 515 145.968L404.491 167.001C380.007 171.661 354.855 163.328 337.997 144.971L261.909 62.1143Z" fill="#96659E"/>
+          <path d="M37.0217 233.245C42.6584 215.3 65.8087 210.519 78.0931 224.763L151.563 309.949C167.84 328.823 173.199 354.772 165.731 378.55L132.019 485.872C126.382 503.817 103.232 508.598 90.9477 494.355L17.478 409.168C1.20047 390.294 -4.15872 364.345 3.31019 340.567L37.0217 233.245Z" fill="#CB2127"/>
+          <path d="M564.029 385.12C582.388 381.029 598.104 398.688 591.911 416.448L554.872 522.668C546.665 546.201 526.872 563.817 502.546 569.238L392.746 593.704C374.387 597.795 358.671 580.137 364.864 562.376L401.903 456.156C410.11 432.623 429.903 415.007 454.229 409.586L564.029 385.12Z" fill="#2E64A0"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
   <!-- The core Firebase JS SDK is always required and must be listed first -->
-  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-app.js" defer></script>
 
   <!--https://firebase.google.com/docs/web/setup#available-libraries -->
-  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-database.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-functions.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-storage.js"></script>
+  <!-- defer: these are only used by emulator helpers in app-utils.js; none run at parse time -->
+  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-auth.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-firestore.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-database.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-functions.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-storage.js" defer></script>
 
-  <script src="//media.twiliocdn.com/sdk/js/video/releases/2.17.1/twilio-video.min.js"></script>
-  <script src="https://vjs.zencdn.net/7.10.2/video.min.js"></script>
-  <script src="./utils/app-utils.js"></script>
-  <script src="./utils/hark.bundle.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/can-autoplay@3.0.0/build/can-autoplay.min.js"></script>
-  <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
-  <script src="https://player.vimeo.com/api/player.js"></script>
+  <!-- defer: all globals (Twilio, videojs, cloudinary, Vimeo, canAutoplay) are accessed
+       only inside on-demand function calls from Dart — never at parse time -->
+  <script src="//media.twiliocdn.com/sdk/js/video/releases/2.17.1/twilio-video.min.js" defer></script>
+  <script src="https://vjs.zencdn.net/7.10.2/video.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/can-autoplay@3.0.0/build/can-autoplay.min.js" defer></script>
+  <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
+  <script src="https://player.vimeo.com/api/player.js" defer></script>
+  <!-- app-utils and hark depend on the libraries above; deferred order guarantees correct sequencing -->
+  <script src="./utils/hark.bundle.js" defer></script>
+  <script src="./utils/app-utils.js" defer></script>
 
   <!-- The following script tags are used to enable Stripe functionality.
   To enable Stripe, uncomment this block and set kShowStripeFeatures to true in app.dart. -->
@@ -92,14 +184,41 @@
     );
   </script>
   -->
-  <script src="./agora/iris-web-rtc.js"></script>
-
-
   <script type="application/javascript">
-    // Keep this in sync with the main.dart.js version below
+    // Keep this in sync with the Flutter build version
     window.platformVersion = '__VERSION__';
   </script>
-  <script src="main.dart.js?version=__VERSION__" type="application/javascript"></script>
+  <!-- Track RTCPeerConnections created by Agora so the canvas compositor can
+       replace the video sender track.  Must run before iris-web-rtc.js.
+       Uses a Proxy construct trap so static properties, instanceof checks,
+       and any properties added to RTCPeerConnection later all work correctly. -->
+  <script>
+    (function () {
+      window._franklyPeerConnections = new Set();
+      var _Orig = window.RTCPeerConnection;
+      window.RTCPeerConnection = new Proxy(_Orig, {
+        construct: function (target, args, newTarget) {
+          var pc = Reflect.construct(target, args, newTarget);
+          window._franklyPeerConnections.add(pc);
+          pc.addEventListener('connectionstatechange', function () {
+            var s = pc.connectionState;
+            if (s === 'closed' || s === 'failed') window._franklyPeerConnections.delete(pc);
+          });
+          return pc;
+        }
+      });
+    })();
+  </script>
+
+  <!-- iris-web-rtc must execute before flutter_bootstrap to ensure Agora globals are available -->
+  <script src="./agora/iris-web-rtc.js" defer></script>
+  <!-- Canvas compositor for screen sharing (must load after iris-web-rtc) -->
+  <script src="./agora/canvas_compositor.js" defer></script>
+  <!-- Client bridge: subscriber-side quality APIs iris-web stubs out
+       (dual-stream selection, weak-network fallback). Must load after
+       iris-web-rtc so window.__ARTC__ exists. -->
+  <script src="./agora/agora_client_bridge.js" defer></script>
+  <script src="flutter_bootstrap.js?version=__VERSION__" defer></script>
 
   <script>
     if (window.location.hostname == 'localhost') {

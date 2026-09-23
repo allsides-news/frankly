@@ -11,17 +11,38 @@ jobs:
     name: Deploy Client To Production
     runs-on: ubuntu-latest
     environment: production
+    env:
+      # Agora upstream SHA: single source client/.agora-patch-ref (CI reads it below).
+      YOUTUBE_IFRAME_WEB_VERSION: "2.0.2"
     defaults:
       run:
         working-directory: client
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Resolve Agora patch ref
+        run: echo "AGORA_PATCH_REF=$(tr -d '[:space:]' < .agora-patch-ref)" >> "$GITHUB_ENV"
+
+      - name: Cache patched path deps (Agora + youtube iframe web)
+        uses: actions/cache@v4
+        with:
+          path: |
+            client/patches/agora_rtc_engine
+            client/patches/youtube_player_iframe_web-${{ env.YOUTUBE_IFRAME_WEB_VERSION }}
+          key: patch-deps-${{ runner.os }}-${{ env.AGORA_PATCH_REF }}-yt-${{ env.YOUTUBE_IFRAME_WEB_VERSION }}
+
+      - name: Bootstrap patched path dependencies (Agora, youtube_player_iframe_web)
+        working-directory: client
+        env:
+          AGORA_PATCH_REPO: https://github.com/berkmancenter/Agora-Flutter-SDK.git
+          FORCE_RESTORE_OVERLAYS: "1"
+        run: ./bootstrap_patches.sh
 
       - name: Set Up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.22.2" # could read version from pubspec file, but would need to be exact
+          flutter-version: "3.41.4" # Pin stable toolchain (see client/UPGRADE-README.md)
           channel: "stable"
           cache: true
           cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
@@ -67,13 +88,13 @@ jobs:
             "SENTRY_RELEASE": "${{ env.VERSION }}",
             "SENTRY_ENVIRONMENT": "production",
             "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
-            "MATOMO_URL": "${{ secrets.MATOMO_URL}}",
-            "MATOMO_SITE_ID": "${{ secrets.MATOMO_SITE_ID}}",
+            "MATOMO_URL": "${{ secrets.MATOMO_URL }}",
+            "MATOMO_SITE_ID": "${{ secrets.MATOMO_SITE_ID }}",
             "APP_NAME": "AllSides Roundtables",
             "APP_URL": "https://roundtables.allsides.com",
             "TERMS_URL": "https://www.allsides.com/terms-of-use",
             "PRICING_URL": "https://roundtables.allsides.com/pricing",
-            "ABOUT_URL": "https://www.allsides.com/national-roundtable-political-violence",
+            "ABOUT_URL": "https://www.allsides.com/dialogue",
             "PRIVACY_POLICY_URL": "https://www.allsides.com/privacy",
             "HELP_CENTER_URL": "https://www.notion.so/allsides/Roundtables-Help-Center-29ba7a1b66cc801b85c1fc7613aaca34",
             "CREATE_TEMPLATE_HELP_URL": "https://www.notion.so/allsides/Roundtables-Help-Center-29ba7a1b66cc801b85c1fc7613aaca34",
@@ -82,6 +103,8 @@ jobs:
             "LOGO_URL": "https://img.allsides.com/sites/default/files/AllSides-Icon.png",
             "SIDEBAR_FOOTER": "${{ secrets.SIDEBAR_FOOTER }}",
             "COPYRIGHT_STATEMENT": "${{ secrets.COPYRIGHT_STATEMENT }}",
+            "SIDEBAR_FOOTER_F": "${{ secrets.SIDEBAR_FOOTER_F }}",
+            "COPYRIGHT_STATEMENT_F": "${{ secrets.COPYRIGHT_STATEMENT_F }}",
             "CLOUDINARY_IMAGE_PRESET": "${{ secrets.CLOUDINARY_IMAGE_PRESET }}",
             "CLOUDINARY_VIDEO_PRESET": "${{ secrets.CLOUDINARY_VIDEO_PRESET }}",
             "CLOUDINARY_DEFAULT_PRESET": "${{ secrets.CLOUDINARY_DEFAULT_PRESET }}",
@@ -92,8 +115,32 @@ jobs:
           }
           EOF
 
+      # Flutter 3.41+ removed --web-renderer html; smoke-test video/platform views after deploy (UPGRADE-README.md).
       - name: Build the Flutter App
-        run: flutter build web --release --build-number=${{ env.BUILD_NUMBER }} --source-maps --web-renderer html -t lib/main.dart --dart-define-from-file=${{ github.workspace }}/.env.json
+        run: flutter build web --release --build-number=${{ env.BUILD_NUMBER }} --source-maps -t lib/main.dart --dart-define-from-file=${{ github.workspace }}/.env.json
+
+      - name: Verify Flutter web asset manifests exist
+        run: |
+          set -e
+          if ! compgen -G "build/web/assets/AssetManifest*" > /dev/null; then
+            echo "No AssetManifest files under build/web/assets"
+            exit 1
+          fi
+          test -f build/web/assets/FontManifest.json
+          ls -la build/web/assets/AssetManifest* build/web/assets/FontManifest.json
+
+      # Tree-shaking makes the icon font's contents build-specific while its
+      # path stays fixed, so a browser that cached an older subset keeps it and
+      # any icon added since renders blank. Cache headers can't rescue a
+      # browser that already cached the file; only a different URL can.
+      - name: Fingerprint font assets
+        run: python3 tool/fingerprint_font_assets.py build/web
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Upload sourcemaps to Sentry
         continue-on-error: true

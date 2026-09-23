@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/localization/localization_helper.dart';
-import 'package:universal_html/js.dart' as universal_js;
 
 enum BorderType {
   none,
@@ -132,13 +130,6 @@ class _CustomTextFieldState extends State<CustomTextField> {
   bool _hasFocus = false;
   bool _hasMouseHover = false;
 
-  void _unfocus() {
-    if (kIsWeb) {
-      universal_js.context.callMethod('focus');
-    }
-    FocusNode().requestFocus();
-  }
-
   void _onExitMouse(PointerEvent details) {
     setState(() {
       _hasMouseHover = false;
@@ -248,13 +239,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
           child: Stack(
             children: [
               TextFormField(
-                onTap: () {
-                  _unfocus();
-                  final localOnTap = widget.onTap;
-                  if (localOnTap != null) {
-                    localOnTap();
-                  }
-                },
+                onTap: widget.onTap,
                 onChanged: (text) {
                   final onChanged = widget.onChanged;
                   if (onChanged != null) {

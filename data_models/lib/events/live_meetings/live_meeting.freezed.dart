@@ -38,6 +38,16 @@ mixin _$LiveMeeting {
   bool get isMeetingCardMinimized => throw _privateConstructorUsedError;
   List<String> get pinnedUserIds => throw _privateConstructorUsedError;
 
+  /// The userId of the participant currently sharing their screen, or null if no one is sharing.
+  String? get screenSharingUserId => throw _privateConstructorUsedError;
+
+  /// Native dual-engine: Agora UID for the secondary screen connection; null for web / legacy.
+  @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+  int? get screenShareAgoraUid => throw _privateConstructorUsedError;
+
+  /// How the sharer publishes: [screenSharePathCanvas], [screenSharePathDual], or [screenSharePathSingle].
+  String? get screenSharePath => throw _privateConstructorUsedError;
+
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
   $LiveMeetingCopyWith<LiveMeeting> get copyWith =>
@@ -57,7 +67,11 @@ abstract class $LiveMeetingCopyWith<$Res> {
       BreakoutRoomSession? currentBreakoutSession,
       bool record,
       bool isMeetingCardMinimized,
-      List<String> pinnedUserIds});
+      List<String> pinnedUserIds,
+      String? screenSharingUserId,
+      @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+      int? screenShareAgoraUid,
+      String? screenSharePath});
 
   $BreakoutRoomSessionCopyWith<$Res>? get currentBreakoutSession;
 }
@@ -82,6 +96,9 @@ class _$LiveMeetingCopyWithImpl<$Res, $Val extends LiveMeeting>
     Object? record = null,
     Object? isMeetingCardMinimized = null,
     Object? pinnedUserIds = null,
+    Object? screenSharingUserId = freezed,
+    Object? screenShareAgoraUid = freezed,
+    Object? screenSharePath = freezed,
   }) {
     return _then(_value.copyWith(
       meetingId: freezed == meetingId
@@ -112,6 +129,18 @@ class _$LiveMeetingCopyWithImpl<$Res, $Val extends LiveMeeting>
           ? _value.pinnedUserIds
           : pinnedUserIds // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      screenSharingUserId: freezed == screenSharingUserId
+          ? _value.screenSharingUserId
+          : screenSharingUserId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      screenShareAgoraUid: freezed == screenShareAgoraUid
+          ? _value.screenShareAgoraUid
+          : screenShareAgoraUid // ignore: cast_nullable_to_non_nullable
+              as int?,
+      screenSharePath: freezed == screenSharePath
+          ? _value.screenSharePath
+          : screenSharePath // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 
@@ -144,7 +173,11 @@ abstract class _$$_LiveMeetingCopyWith<$Res>
       BreakoutRoomSession? currentBreakoutSession,
       bool record,
       bool isMeetingCardMinimized,
-      List<String> pinnedUserIds});
+      List<String> pinnedUserIds,
+      String? screenSharingUserId,
+      @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+      int? screenShareAgoraUid,
+      String? screenSharePath});
 
   @override
   $BreakoutRoomSessionCopyWith<$Res>? get currentBreakoutSession;
@@ -168,6 +201,9 @@ class __$$_LiveMeetingCopyWithImpl<$Res>
     Object? record = null,
     Object? isMeetingCardMinimized = null,
     Object? pinnedUserIds = null,
+    Object? screenSharingUserId = freezed,
+    Object? screenShareAgoraUid = freezed,
+    Object? screenSharePath = freezed,
   }) {
     return _then(_$_LiveMeeting(
       meetingId: freezed == meetingId
@@ -198,6 +234,18 @@ class __$$_LiveMeetingCopyWithImpl<$Res>
           ? _value.pinnedUserIds
           : pinnedUserIds // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      screenSharingUserId: freezed == screenSharingUserId
+          ? _value.screenSharingUserId
+          : screenSharingUserId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      screenShareAgoraUid: freezed == screenShareAgoraUid
+          ? _value.screenShareAgoraUid
+          : screenShareAgoraUid // ignore: cast_nullable_to_non_nullable
+              as int?,
+      screenSharePath: freezed == screenSharePath
+          ? _value.screenSharePath
+          : screenSharePath // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -212,7 +260,11 @@ class _$_LiveMeeting implements _LiveMeeting {
       this.currentBreakoutSession,
       this.record = false,
       this.isMeetingCardMinimized = false,
-      this.pinnedUserIds = const []});
+      this.pinnedUserIds = const [],
+      this.screenSharingUserId,
+      @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+      this.screenShareAgoraUid,
+      this.screenSharePath});
 
   factory _$_LiveMeeting.fromJson(Map<String, dynamic> json) =>
       _$$_LiveMeetingFromJson(json);
@@ -245,9 +297,22 @@ class _$_LiveMeeting implements _LiveMeeting {
   @JsonKey()
   final List<String> pinnedUserIds;
 
+  /// The userId of the participant currently sharing their screen, or null if no one is sharing.
+  @override
+  final String? screenSharingUserId;
+
+  /// Native dual-engine: Agora UID for the secondary screen connection; null for web / legacy.
+  @override
+  @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+  final int? screenShareAgoraUid;
+
+  /// How the sharer publishes: [screenSharePathCanvas], [screenSharePathDual], or [screenSharePathSingle].
+  @override
+  final String? screenSharePath;
+
   @override
   String toString() {
-    return 'LiveMeeting(meetingId: $meetingId, participants: $participants, events: $events, currentBreakoutSession: $currentBreakoutSession, record: $record, isMeetingCardMinimized: $isMeetingCardMinimized, pinnedUserIds: $pinnedUserIds)';
+    return 'LiveMeeting(meetingId: $meetingId, participants: $participants, events: $events, currentBreakoutSession: $currentBreakoutSession, record: $record, isMeetingCardMinimized: $isMeetingCardMinimized, pinnedUserIds: $pinnedUserIds, screenSharingUserId: $screenSharingUserId, screenShareAgoraUid: $screenShareAgoraUid, screenSharePath: $screenSharePath)';
   }
 
   @override
@@ -266,7 +331,13 @@ class _$_LiveMeeting implements _LiveMeeting {
             (identical(other.isMeetingCardMinimized, isMeetingCardMinimized) ||
                 other.isMeetingCardMinimized == isMeetingCardMinimized) &&
             const DeepCollectionEquality()
-                .equals(other.pinnedUserIds, pinnedUserIds));
+                .equals(other.pinnedUserIds, pinnedUserIds) &&
+            (identical(other.screenSharingUserId, screenSharingUserId) ||
+                other.screenSharingUserId == screenSharingUserId) &&
+            (identical(other.screenShareAgoraUid, screenShareAgoraUid) ||
+                other.screenShareAgoraUid == screenShareAgoraUid) &&
+            (identical(other.screenSharePath, screenSharePath) ||
+                other.screenSharePath == screenSharePath));
   }
 
   @JsonKey(ignore: true)
@@ -279,7 +350,10 @@ class _$_LiveMeeting implements _LiveMeeting {
       currentBreakoutSession,
       record,
       isMeetingCardMinimized,
-      const DeepCollectionEquality().hash(pinnedUserIds));
+      const DeepCollectionEquality().hash(pinnedUserIds),
+      screenSharingUserId,
+      screenShareAgoraUid,
+      screenSharePath);
 
   @JsonKey(ignore: true)
   @override
@@ -303,7 +377,11 @@ abstract class _LiveMeeting implements LiveMeeting {
       final BreakoutRoomSession? currentBreakoutSession,
       final bool record,
       final bool isMeetingCardMinimized,
-      final List<String> pinnedUserIds}) = _$_LiveMeeting;
+      final List<String> pinnedUserIds,
+      final String? screenSharingUserId,
+      @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+      final int? screenShareAgoraUid,
+      final String? screenSharePath}) = _$_LiveMeeting;
 
   factory _LiveMeeting.fromJson(Map<String, dynamic> json) =
       _$_LiveMeeting.fromJson;
@@ -329,6 +407,19 @@ abstract class _LiveMeeting implements LiveMeeting {
   bool get isMeetingCardMinimized;
   @override
   List<String> get pinnedUserIds;
+  @override
+
+  /// The userId of the participant currently sharing their screen, or null if no one is sharing.
+  String? get screenSharingUserId;
+  @override
+
+  /// Native dual-engine: Agora UID for the secondary screen connection; null for web / legacy.
+  @JsonKey(name: LiveMeeting.kFieldScreenShareAgoraUid)
+  int? get screenShareAgoraUid;
+  @override
+
+  /// How the sharer publishes: [screenSharePathCanvas], [screenSharePathDual], or [screenSharePathSingle].
+  String? get screenSharePath;
   @override
   @JsonKey(ignore: true)
   _$$_LiveMeetingCopyWith<_$_LiveMeeting> get copyWith =>

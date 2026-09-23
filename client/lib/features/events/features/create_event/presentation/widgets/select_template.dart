@@ -1,3 +1,4 @@
+import 'package:client/core/localization/localization_helper.dart';
 import 'package:client/styles/styles.dart';
 import 'package:dotted_border/dotted_border.dart' as dotted_border;
 import 'package:flutter/material.dart';
@@ -60,7 +61,7 @@ class _SelectTemplateState extends State<SelectTemplate> {
   Widget _buildSearchBar() {
     return CustomTextField(
       padding: EdgeInsets.zero,
-      labelText: 'Search templates',
+      labelText: context.l10n.searchTemplates,
       labelStyle: TextStyle(color: context.theme.colorScheme.primary),
       textStyle:
           TextStyle(color: context.theme.colorScheme.primary, fontSize: 16),
@@ -218,7 +219,7 @@ class _AddNewTemplateButton extends StatelessWidget {
             Padding(
               padding: EdgeInsets.only(left: 5, bottom: 10, right: 5),
               child: HeightConstrainedText(
-                'Create a new template',
+                context.l10n.createANewCommunity,
                 style: TextStyle(
                   fontSize: 13,
                   color: context.theme.colorScheme.primary,
@@ -255,9 +256,12 @@ class TemplateSelectionCard extends StatelessWidget {
         strokeCap: StrokeCap.round,
         borderType: dotted_border.BorderType.RRect,
         radius: Radius.circular(10),
+        // Sits on the dialog surface, so it takes the surface pair. Both
+        // branches used to be onPrimary -- identical, and dark-on-dark under a
+        // dark theme.
         color: isSelected
-            ? context.theme.colorScheme.onPrimary
-            : context.theme.colorScheme.onPrimary,
+            ? context.theme.colorScheme.primary
+            : context.theme.colorScheme.onSurfaceVariant,
         dashPattern: isSelected ? const [1, 0] : const [5, 5],
         strokeWidth: isSelected ? 4 : 1,
         child: Container(
@@ -290,7 +294,7 @@ class TemplateSelectionCard extends StatelessWidget {
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    color: Color(0xFF303B5F).withOpacity(0.8),
+                    color: AppNeutralColors.neutral900.withOpacity(0.8),
                     backgroundBlendMode: BlendMode.multiply,
                   ),
                 ),
@@ -307,7 +311,9 @@ class TemplateSelectionCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.3,
-                      color: context.theme.colorScheme.onPrimary,
+                      // Fixed light: this sits on the multiply scrim below,
+                      // which is dark in both modes because the image is.
+                      color: AppNeutralColors.neutral50,
                       fontWeight: FontWeight.w900,
                     ),
                   ),

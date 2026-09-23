@@ -117,13 +117,13 @@ class _ChooseColorSectionState extends State<ChooseColorSection> {
         } else if (!ThemeUtils.isContrastRatioValid(
           context,
           firstColor,
-          context.theme.colorScheme.secondary,
+          ThemeUtils.kLightColorReference,
         )) {
           _selectedColorErrorMessage = 'Light color must be lighter';
         } else if (!ThemeUtils.isContrastRatioValid(
           context,
           secondColor,
-          context.theme.colorScheme.surface,
+          ThemeUtils.kDarkColorReference,
         )) {
           _selectedColorErrorMessage = 'Dark color must be darker';
         }
@@ -293,8 +293,10 @@ class _ChooseColorSectionState extends State<ChooseColorSection> {
     const linkText = 'color.review.';
     final launchLink = TapGestureRecognizer()
       ..onTap = () => launch('https://color.review');
+    // onSecondaryContainer is neutral700 under the dark theme -- a mid-dark
+    // grey on a dark dialog. This paragraph is body copy on a surface.
     final textStyle = AppTextStyle.body
-        .copyWith(color: context.theme.colorScheme.onSecondaryContainer);
+        .copyWith(color: context.theme.colorScheme.onSurfaceVariant);
     final linkStyle = AppTextStyle.body.copyWith(
       decoration: TextDecoration.underline,
       color: context.theme.colorScheme.primary,

@@ -50,6 +50,9 @@ class LiveMeetingDesktopLayout extends StatefulWidget {
 class _LiveMeetingDesktopLayoutState extends State<LiveMeetingDesktopLayout> {
   Widget _buildBreakoutRoom(String roomId) {
     return RefreshKeyWidget(
+      // Offered in the control bar's overflow menu instead of sitting on top
+      // of someone's video, matching mobile.
+      showRefreshButton: false,
       child: RefreshableBreakoutRoom(
         key: Key('breakout-room-$roomId'),
         liveMeetingBuilder: (_) => VideoFlutterMeeting(),
@@ -59,6 +62,7 @@ class _LiveMeetingDesktopLayoutState extends State<LiveMeetingDesktopLayout> {
 
   Widget _buildLiveMeeting() {
     return RefreshKeyWidget(
+      showRefreshButton: false,
       child: VideoFlutterMeeting(),
     );
   }
@@ -66,14 +70,25 @@ class _LiveMeetingDesktopLayoutState extends State<LiveMeetingDesktopLayout> {
   Widget _buildMeetingLoading() {
     final liveMeetingProvider = LiveMeetingProvider.watch(context);
 
+    // Guard: when breakout rooms end, leaveBreakoutRoom() clears the room
+    // state before this widget is replaced. If the stream fires one last time
+    // in that transition window, getCurrentMeetingJoinInfo() returns null and
+    // the ! crashes. Return a loading indicator and let the parent rebuild.
+    final joinInfoFuture = liveMeetingProvider.getCurrentMeetingJoinInfo();
+    if (joinInfoFuture == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return CustomStreamBuilder<GetMeetingJoinInfoResponse>(
-      key: ObjectKey(liveMeetingProvider.getCurrentMeetingJoinInfo()),
+      key: ObjectKey(joinInfoFuture),
       entryFrom: '_buildConferenceRoomWrapper.build',
-      stream: liveMeetingProvider.getCurrentMeetingJoinInfo()!.asStream(),
+      stream: joinInfoFuture.asStream(),
       loadingMessage: 'Loading room. Please wait...',
       builder: (_, response) {
-        if (liveMeetingProvider.activeUiState == MeetingUiState.breakoutRoom) {
-          return _buildBreakoutRoom(liveMeetingProvider.currentBreakoutRoomId!);
+        final breakoutRoomId = liveMeetingProvider.currentBreakoutRoomId;
+        if (liveMeetingProvider.activeUiState == MeetingUiState.breakoutRoom &&
+            breakoutRoomId != null) {
+          return _buildBreakoutRoom(breakoutRoomId);
         }
         return _buildLiveMeeting();
       },
@@ -120,52 +135,50 @@ class _LiveMeetingDesktopLayoutState extends State<LiveMeetingDesktopLayout> {
       label: context.l10n.eventTabsContent,
       child: Container(
         width: 400,
-        color: context.theme.colorScheme.surfaceContainer,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        decoration: BoxDecoration(
+          color: context.theme.colorScheme.surfaceContainer,
+          // The agenda, chat and admin panels all render inside here, and all
+          // three used to meet the video with no edge at all.
+          border: Border(
+            left: BorderSide(color: AppNeutralColors.of(context).neutral300),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Builder(
-                    builder: (context) => Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: CustomInkWell(
-                        onTap: () {
-                          Provider.of<EventTabsControllerState>(
-                            context,
-                            listen: false,
-                          ).expanded = false;
-                        },
-                        child: CircleAvatar(
-                          backgroundColor: Colors.transparent,
-                          child: Icon(
-                            Icons.close,
-                            color: context.theme.colorScheme.onSurface,
-                          ),
-                        ),
+            Builder(
+              builder: (context) => Padding(
+                padding: const EdgeInsets.all(8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: CustomInkWell(
+                    onTap: () {
+                      Provider.of<EventTabsControllerState>(
+                        context,
+                        listen: false,
+                      ).expanded = false;
+                    },
+                    child: CircleAvatar(
+                      backgroundColor: Colors.transparent,
+                      child: Icon(
+                        Icons.close,
+                        color: context.theme.colorScheme.onSurface,
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      child: CustomTabBarView(
-                        keepAlive: !responsiveLayoutService.isMobile(context),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-            Container(
-              width: 1,
-              color: context.theme.colorScheme.surfaceContainer,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: CustomTabBarView(
+                  keepAlive: !responsiveLayoutService.isMobile(context),
+                ),
+              ),
             ),
           ],
         ),
@@ -179,7 +192,11 @@ class _LiveMeetingDesktopLayoutState extends State<LiveMeetingDesktopLayout> {
       child: CustomPointerInterceptor(
         child: GestureDetector(
           onTap: () {},
-          child: RepaintBoundary(child: _buildEventTabsContent()),
+          child: SizedBox(
+            width: 400,
+            height: double.infinity,
+            child: RepaintBoundary(child: _buildEventTabsContent()),
+          ),
         ),
       ),
     );
@@ -190,69 +207,72 @@ class _LiveMeetingDesktopLayoutState extends State<LiveMeetingDesktopLayout> {
     final liveMeetingProvider = LiveMeetingProvider.watch(context);
 
     final eventProvider = Provider.of<EventProvider>(context);
+    final eventTabsModel = Provider.of<EventTabsControllerState>(context);
 
-    return AnimatedBuilder(
-      animation: liveMeetingProvider.conferenceRoomNotifier,
-      builder: (context, _) {
-        final eventTabsModel = Provider.of<EventTabsControllerState>(context);
-        return Column(
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      color: context.theme.colorScheme.surface,
-                      child: Stack(
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: _buildEvent(context)),
-                            ],
-                          ),
-                          // Event countdown timer - shows X minutes before event ends
-                          Positioned(
-                            top: 8,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: EventCountdownTimer(
-                                event: eventProvider.event,
-                                minutesBeforeEnd: 5,
-                              ),
-                            ),
-                          ),
-                          if (eventTabsModel.widget.enableChat &&
-                              eventProvider.enableFloatingChat &&
-                              !(EventPermissionsProvider.watch(context)
-                                      ?.shouldDisableChatInHostlessWaitingRoom(context) ??
-                                  false))
-                            Align(
-                              alignment: Alignment.bottomCenter,
-                              child: FloatingChatDisplay(),
-                            ),
-                          if (eventTabsModel.expanded) ...[
-                            CustomPointerInterceptor(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () => eventTabsModel.expanded = false,
-                              ),
-                            ),
-                            _buildFloatingEventTabsContent(),
+    // Only the video stage and the hostless participant count watch the
+    // room. The control-bar chat field and the side-tab ChatWidget cannot
+    // rebuild on join/leave/mute — Flutter web's text-selection overlay
+    // null-checks when its EditableText is disposed mid-selection.
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  color: context.theme.colorScheme.surface,
+                  child: Stack(
+                    children: [
+                      AnimatedBuilder(
+                        animation: liveMeetingProvider.conferenceRoomNotifier,
+                        builder: (context, _) => Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: _buildEvent(context)),
                           ],
-                        ],
+                        ),
                       ),
-                    ),
+                      Positioned(
+                        top: 8,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: EventCountdownTimer(
+                            event: eventProvider.event,
+                            minutesBeforeEnd: 5,
+                          ),
+                        ),
+                      ),
+                      if (eventTabsModel.widget.enableChat &&
+                          eventProvider.enableFloatingChat &&
+                          !(EventPermissionsProvider.watch(context)
+                                  ?.shouldDisableChatInHostlessWaitingRoom(
+                                    context,
+                                  ) ??
+                              false))
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: FloatingChatDisplay(),
+                        ),
+                      if (eventTabsModel.expanded) ...[
+                        CustomPointerInterceptor(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => eventTabsModel.expanded = false,
+                          ),
+                        ),
+                        _buildFloatingEventTabsContent(),
+                      ],
+                    ],
                   ),
-                  HostlessMeetingInfo(),
-                ],
+                ),
               ),
-            ),
-            ControlBar(),
-          ],
-        );
-      },
+              HostlessMeetingInfo(),
+            ],
+          ),
+        ),
+        ControlBar(),
+      ],
     );
   }
 }
@@ -273,8 +293,9 @@ class _FloatingChatDisplayState extends State<FloatingChatDisplay> {
         newMessage.membershipStatusSnapshot?.isMod ?? false;
     final isBroadcast = (newMessage.broadcast ?? false) && snapshotIsMod;
     final floatMessage = !onlyShowBroadcast || isBroadcast;
-    if (floatMessage) {
-      setState(() => _floatingMessages[newMessage.id!] = newMessage);
+    final id = newMessage.id;
+    if (floatMessage && id != null && mounted) {
+      setState(() => _floatingMessages[id] = newMessage);
     }
   }
 
@@ -501,7 +522,7 @@ class _RefreshableBreakoutRoomState extends State<RefreshableBreakoutRoom> {
       'You are in the waiting room.',
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Theme.of(context).primaryColor,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
     );
   }
@@ -604,22 +625,26 @@ class BreakoutStatusInformation extends StatelessWidget {
   Widget build(BuildContext context) {
     final liveMeetingProvider = LiveMeetingProvider.watch(context);
 
+    // Do NOT gate on assignedBreakoutRoomIsLoading here: after a consensus
+    // kick the Firestore stream for the new late-comer can take extra time to
+    // resolve, leaving loading=true long enough that the JOIN button never
+    // appears. GetBreakoutRoomAssignment is idempotent — it returns the
+    // user's existing room if they are already assigned — so it is safe to
+    // show the button even before the stream has resolved.
     final breakoutsAreActiveWithoutUser = liveMeetingProvider.breakoutsActive &&
-        !liveMeetingProvider.assignedBreakoutRoomIsLoading &&
         !liveMeetingProvider.shouldBeInBreakout &&
         !liveMeetingProvider.userLeftBreakouts;
 
+    // Only show the pending/generating message for genuinely pending or
+    // processing states, not for the transient "active but stream loading"
+    // case (which is now handled by the JOIN button above).
     final breakoutsPending = [
           BreakoutRoomStatus.pending,
           BreakoutRoomStatus.processingAssignments,
         ].contains(
           liveMeetingProvider
               .liveMeeting?.currentBreakoutSession?.breakoutRoomStatus,
-        ) ||
-        (liveMeetingProvider
-                    .liveMeeting?.currentBreakoutSession?.breakoutRoomStatus ==
-                BreakoutRoomStatus.active &&
-            liveMeetingProvider.assignedBreakoutRoomIsLoading);
+        );
 
     final breakoutSession =
         liveMeetingProvider.liveMeeting?.currentBreakoutSession;
@@ -654,24 +679,23 @@ class BreakoutStatusInformation extends StatelessWidget {
               'Breakout room message: Generating assignments (status: ${breakoutSession?.breakoutRoomStatus}, scheduledTime: ${breakoutSession?.scheduledTime})',
             );
           }
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: HeightConstrainedText(breakoutsMessage),
+          return _buildBanner(
+            context,
+            children: [
+              Flexible(
+                child: HeightConstrainedText(
+                  breakoutsMessage,
+                  style: _bannerTextStyle(context),
                 ),
-                SizedBox(width: 8),
-                if (!areBreakoutsPending)
-                  SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CustomLoadingIndicator(),
-                  ),
-              ],
-            ),
+              ),
+              SizedBox(width: 8),
+              if (!areBreakoutsPending)
+                SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CustomLoadingIndicator(),
+                ),
+            ],
           );
         },
       );
@@ -680,37 +704,66 @@ class BreakoutStatusInformation extends StatelessWidget {
     }
   }
 
-  Widget _buildUsersAreInBreakoutsMessage(BuildContext context) {
+  /// The strip between the video and the controls, used both for the
+  /// countdown to breakouts and for the invitation to join one already
+  /// running.
+  ///
+  /// Both were a line of body text on the page's own background, easy to miss
+  /// in the seconds someone has to act on it. A filled band, set off from the
+  /// video above, is what makes it read as a notice rather than a caption.
+  Widget _buildBanner(BuildContext context, {required List<Widget> children}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      alignment: Alignment.center,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: context.theme.colorScheme.surfaceContainerHigh,
+        border: Border(
+          top: BorderSide(color: AppNeutralColors.of(context).neutral300),
+        ),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: HeightConstrainedText(context.l10n.usersAreInBreakoutRooms),
-          ),
-          SizedBox(width: 10),
-          ActionButton(
-            text: 'JOIN',
-            height: 45,
-            onPressed: () async {
-              final event = context.read<EventProvider>().event;
-
-              await alertOnError(
-                context,
-                () =>
-                    cloudFunctionsLiveMeetingService.getBreakoutRoomAssignment(
-                  GetBreakoutRoomAssignmentRequest(
-                    eventId: event.id,
-                    eventPath: event.fullPath,
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: children,
       ),
+    );
+  }
+
+  TextStyle _bannerTextStyle(BuildContext context) => TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: context.theme.colorScheme.onSurface,
+      );
+
+  Widget _buildUsersAreInBreakoutsMessage(BuildContext context) {
+    return _buildBanner(
+      context,
+      children: [
+        Flexible(
+          child: HeightConstrainedText(
+            context.l10n.usersAreInBreakoutRooms,
+            style: _bannerTextStyle(context),
+          ),
+        ),
+        SizedBox(width: 16),
+        ActionButton(
+          text: 'JOIN',
+          height: 45,
+          onPressed: () async {
+            final event = context.read<EventProvider>().event;
+
+            await alertOnError(
+              context,
+              () => cloudFunctionsLiveMeetingService.getBreakoutRoomAssignment(
+                GetBreakoutRoomAssignmentRequest(
+                  eventId: event.id,
+                  eventPath: event.fullPath,
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

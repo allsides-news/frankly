@@ -12,12 +12,17 @@ jobs:
     name: Build & Unit Test
     runs-on: ubuntu-latest
     environment: staging
+    env:
+      YOUTUBE_IFRAME_WEB_VERSION: "2.0.2"
     defaults:
       run:
         working-directory: client
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Resolve Agora patch ref
+        run: echo "AGORA_PATCH_REF=$(tr -d '[:space:]' < .agora-patch-ref)" >> "$GITHUB_ENV"
 
       - uses: dorny/paths-filter@v3
         id: changes
@@ -26,11 +31,29 @@ jobs:
             client:
               - 'client/**'
 
+      - name: Cache patched path deps (Agora + youtube iframe web)
+        if: steps.changes.outputs.client == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            client/patches/agora_rtc_engine
+            client/patches/youtube_player_iframe_web-${{ env.YOUTUBE_IFRAME_WEB_VERSION }}
+          key: patch-deps-${{ runner.os }}-${{ env.AGORA_PATCH_REF }}-yt-${{ env.YOUTUBE_IFRAME_WEB_VERSION }}
+
+      # Path deps under client/patches/ are incomplete in git (overlays only); same bootstrap as ./update.sh.
+      - name: Bootstrap patched path dependencies (Agora, youtube_player_iframe_web)
+        if: steps.changes.outputs.client == 'true'
+        working-directory: client
+        env:
+          AGORA_PATCH_REPO: https://github.com/berkmancenter/Agora-Flutter-SDK.git
+          FORCE_RESTORE_OVERLAYS: "1"
+        run: ./bootstrap_patches.sh
+
       - name: Set Up Flutter
         if: steps.changes.outputs.client == 'true'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.22.2" # could read version from pubspec file, but would need to be exact
+          flutter-version: "3.41.4" # Pin stable toolchain (see client/UPGRADE-README.md)
           channel: "stable"
           cache: true
           cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
@@ -38,9 +61,33 @@ jobs:
           pub-cache-key: "flutter-pub-:os:-:channel:-:version:-:arch:-:hash:"
           pub-cache-path: "/home/runner/.pub-cache"
 
+      # Incomplete tool-cache restores can omit Dart SDK pieces; build_runner then fails looking for
+      # frontend_server*.snapshot. Current Dart SDKs ship frontend_server_aot.dart.snapshot (JIT path optional).
+      # Do not use `flutter --version` here: after removing dart-sdk the flutter wrapper has no dart binary.
+      - name: Repair incomplete Flutter/Dart SDK in tool cache
+        if: steps.changes.outputs.client == 'true'
+        run: |
+          SDK_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin"
+          SNAP_JIT="$SDK_BIN/snapshots/frontend_server.dart.snapshot"
+          SNAP_AOT="$SDK_BIN/snapshots/frontend_server_aot.dart.snapshot"
+          dart_sdk_complete() {
+            [ -x "$SDK_BIN/dart" ] && { [ -f "$SNAP_JIT" ] || [ -f "$SNAP_AOT" ]; }
+          }
+          if ! dart_sdk_complete; then
+            echo "::warning::Flutter tool cache missing Dart SDK or frontend_server snapshot; re-downloading Dart SDK"
+            rm -rf "$FLUTTER_ROOT/bin/cache/dart-sdk"
+            rm -f "$FLUTTER_ROOT/bin/cache/engine-dart-sdk.stamp"
+            bash "$FLUTTER_ROOT/bin/internal/update_dart_sdk.sh"
+          fi
+          dart_sdk_complete || { echo "::error::Dart SDK still incomplete after repair"; exit 1; }
+
       - name: Install Dependencies
         if: steps.changes.outputs.client == 'true'
         run: flutter pub get
+
+      - name: Generate Localizations
+        if: steps.changes.outputs.client == 'true'
+        run: flutter gen-l10n
 
       - name: Generate Test Dependencies
         if: steps.changes.outputs.client == 'true'
@@ -80,7 +127,10 @@ jobs:
             "ENABLE_DEV_EVENT_SETTINGS": "true",
             "ENABLE_DEV_ADMIN_SETTINGS": "true",
             "ENABLE_TRACE_LOG": "true",
-             "APP_NAME": "AllSides",
+            "SENTRY_DSN": "${{ secrets.SENTRY_DSN }}",
+            "SENTRY_RELEASE": "pr${{ github.event.pull_request.number }}-${{ github.sha }}",
+            "SENTRY_ENVIRONMENT": "development",
+            "APP_NAME": "AllSides",
             "APP_URL": "https://roundtables.allsides.com",
             "TERMS_URL": "https://roundtables.allsides.com/terms",
             "PRICING_URL": "https://roundtables.allsides.com/pricing",
@@ -93,6 +143,8 @@ jobs:
             "LOGO_URL": "https://res.cloudinary.com/dh0vegjku/image/upload/v1725488238/frankly_assets/Frankly-Icon-144x144_ex8nky.png",
             "SIDEBAR_FOOTER": "AllSides Roundtables is operated by AllSides Technologies Inc.",
             "COPYRIGHT_STATEMENT": "2025 AllSides Technologies Inc.",
+            "SIDEBAR_FOOTER_F": "Powered by Frankly",
+            "COPYRIGHT_STATEMENT_F": "2024-2026 President and Fellows of Harvard College.",
             "CLOUDINARY_IMAGE_PRESET": "${{ secrets.CLOUDINARY_IMAGE_PRESET }}",
             "CLOUDINARY_VIDEO_PRESET": "${{ secrets.CLOUDINARY_VIDEO_PRESET }}",
             "CLOUDINARY_DEFAULT_PRESET": "${{ secrets.CLOUDINARY_DEFAULT_PRESET }}",
@@ -101,16 +153,43 @@ jobs:
           }
           EOF
 
+      # Flutter 3.41+ removed --web-renderer html; validate HtmlElementView flows manually (see client/UPGRADE-README.md).
       - name: Build App
         if: steps.changes.outputs.client == 'true' && steps.test.outcome == 'success'
         id: build_app
-        run: flutter build web --release web-renderer html -t lib/main.dart --dart-define-from-file=${{ github.workspace }}/.env.json
+        run: flutter build web --release -t lib/main.dart --dart-define-from-file=${{ github.workspace }}/.env.json
+
+      - name: Verify Flutter web asset manifests exist
+        if: steps.changes.outputs.client == 'true' && steps.build_app.outcome == 'success'
+        run: |
+          set -e
+          if ! compgen -G "build/web/assets/AssetManifest*" > /dev/null; then
+            echo "No AssetManifest files under build/web/assets"
+            exit 1
+          fi
+          test -f build/web/assets/FontManifest.json
+          ls -la build/web/assets/AssetManifest* build/web/assets/FontManifest.json
+
+      # This is the workflow that builds and deploys the PR preview channels,
+      # so it is the one that has to fingerprint -- deploy-preview.yml is
+      # workflow_dispatch only and produces no preview URLs. Without this the
+      # script's first real run would be the prod deploy.
+      - name: Fingerprint font assets
+        if: steps.changes.outputs.client == 'true' && steps.build_app.outcome == 'success'
+        run: python3 tool/fingerprint_font_assets.py build/web
+
+      - name: Set up Java 21
+        if: steps.changes.outputs.client == 'true' && steps.build_app.outcome == 'success'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Deploy to Preview Channel
         if: steps.changes.outputs.client == 'true' && steps.build_app.outcome == 'success' &&  github.event.pull_request.head.repo.full_name == github.repository
-        uses: FirebaseExtended/action-hosting-deploy@v0.9.0
+        uses: FirebaseExtended/action-hosting-deploy@v0.10.0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.GCP_SA_KEY }}
           expires: 14d
-          projectId: ${{secrets.APP_STAGING_PROJECT_ID}}
+          projectId: ${{ secrets.APP_STAGING_PROJECT_ID }}

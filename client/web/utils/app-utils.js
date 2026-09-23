@@ -83,20 +83,36 @@ window.pickMedia = function(parameters, onResult) {
 }
 
 window.playVimeoVideo = function(div, vimeoId, onEnded) {
-    var player = new Vimeo.Player(div, {
-      id: vimeoId,
-      responsive: true,
-      controls: true,
-    });
-
-    try {
-      player.play();
-    } catch (e) {
-      console.log(e);
+    if (!div || !vimeoId) {
+      console.warn('playVimeoVideo: missing div or vimeoId', { div, vimeoId });
+      return;
     }
+
+    var safeOnEnded = (typeof onEnded === 'function') ? onEnded : function() {};
+
+    var player;
+    try {
+      player = new Vimeo.Player(div, {
+        id: vimeoId,
+        responsive: true,
+        controls: true,
+      });
+    } catch (e) {
+      console.error('playVimeoVideo: failed to create Vimeo.Player', e);
+      return;
+    }
+
+    if (!player) {
+      console.warn('playVimeoVideo: Vimeo.Player constructor returned null');
+      return;
+    }
+
+    player.play().catch(function(e) {
+      console.warn('playVimeoVideo: player.play() failed', e);
+    });
 
     player.on('ended', function() {
       console.log('video ended');
-      onEnded();
+      safeOnEnded();
     });
 }

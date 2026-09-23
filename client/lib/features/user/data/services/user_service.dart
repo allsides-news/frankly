@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -22,14 +23,51 @@ enum SignInState {
   signedOut,
 }
 
+/// What to do after [UserService]'s auth listener (or a retry) throws.
+///
+/// [authStateChanges] does not re-emit when the network returns if Firebase's
+/// user is unchanged, so we cannot wait for another event to leave the splash.
+@visibleForTesting
+enum AuthFailureRecovery {
+  /// Firebase already has a user; finish sign-in so the splash can dismiss.
+  completeSignIn,
+
+  /// No user yet and the error is a flaky network; try anonymous sign-in again.
+  retryAnonymousSignIn,
+
+  /// No user and the error will not heal itself; show the signed-out refresh UI.
+  markSignedOut,
+}
+
+@visibleForTesting
+AuthFailureRecovery recoveryForAuthFailure({
+  required bool hasCurrentUser,
+  required bool isTransientNetworkError,
+}) {
+  if (hasCurrentUser) return AuthFailureRecovery.completeSignIn;
+  if (isTransientNetworkError) {
+    return AuthFailureRecovery.retryAnonymousSignIn;
+  }
+  return AuthFailureRecovery.markSignedOut;
+}
+
+/// Unexpected failures still go to [runZonedGuarded] / Sentry. Skip expected
+/// Auth network flickers and security-rule denials.
+@visibleForTesting
+bool shouldReportAuthFailure(Object error) {
+  return !isTransientAuthNetworkError(error) && !isPermissionDeniedError(error);
+}
+
 class UserService with ChangeNotifier {
   static bool usingEmulator = false;
+  static const _anonSignInRetryDelay = Duration(seconds: 2);
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
   // ignore: close_sinks
   final BehaviorSubject<String> _currentUserChanges = BehaviorSubject();
 
   Timer? _returningUserTimer;
+  Timer? _anonSignInRetryTimer;
   User? _currentUser;
 
   bool _signingInAnonymously = false;
@@ -76,19 +114,19 @@ class UserService with ChangeNotifier {
   ///
   /// We wait for a period and if we don't see them get signed in, we sign in anonymously.
   void _handleReturningUser() {
-    _returningUserTimer = Timer(Duration(seconds: 8), () {
+    _returningUserTimer = Timer(Duration(seconds: 1), () {
       final user = _firebaseAuth.currentUser;
       if (user != null) {
         // This path happens during hot reload mostly.
         loggingService.log(
           'Returning user timer has expired, but there is a current user so not signing in anonymously',
         );
-        _handleUserSignedIn(user);
+        unawaited(_handleUserSignedIn(user));
         return;
       }
       loggingService
           .log('Returning user timer has expired, signing in anonymously');
-      _firebaseAuth.signInAnonymously();
+      unawaited(_signInAnonymouslyOrRecover());
     });
   }
 
@@ -129,8 +167,16 @@ class UserService with ChangeNotifier {
         'Firebase user updated ${user?.uid}: Email - ${user?.email} Anonymous: ${user?.isAnonymous}',
       );
 
-      // Notify listeners immediately in order to update any firestore streams that are listening
-      // to the old user.
+      // Keep [_currentUser] in sync with [user] *before* notifying. Otherwise the first
+      // [notifyListeners] can run while [currentUserId] / [isSignedIn] still describe the
+      // previous account (e.g. anonymous → real user), and services such as [UserDataService]
+      // can miss a transition or load membership under the wrong uid.
+      if (user != null) {
+        _setCurrentUser(user);
+      } else {
+        _currentUser = null;
+      }
+
       notifyListeners();
 
       // On macos it throws un-implemented error, thus wrap in control flow
@@ -141,7 +187,7 @@ class UserService with ChangeNotifier {
       if (!sharedPreferencesService.isReturningUser() &&
           user == null &&
           !_signingInAnonymously) {
-        await signInAnonymously();
+        await _signInAnonymouslyOrRecover();
       } else if (user == null && _signInState == SignInState.signedIn) {
         _signInState = SignInState.signedOut;
         notifyListeners();
@@ -151,24 +197,100 @@ class UserService with ChangeNotifier {
     });
   }
 
-  Future<void> _handleUserSignedIn(User user) async {
-    unawaited(sharedPreferencesService.setIsReturningUser(true));
-    _returningUserTimer?.cancel();
-
-    _setCurrentUser(user);
-    if (!user.isAnonymous) {
-      await createCurrentUserInfoIfNotExists(
-        displayName: _emailRegistrationDisplayName,
+  void _recoverFromAuthFailure(Object e, StackTrace st) {
+    final transient = isTransientAuthNetworkError(e);
+    if (transient) {
+      loggingService.log(
+        'Auth state change hit a transient network error',
+        logType: LogType.warning,
+        error: e,
+        stackTrace: st,
       );
     }
 
-    _signInState = SignInState.signedIn;
+    switch (recoveryForAuthFailure(
+      hasCurrentUser: _currentUser != null,
+      isTransientNetworkError: transient,
+    )) {
+      case AuthFailureRecovery.completeSignIn:
+        _markSignedIn();
+        break;
+      case AuthFailureRecovery.retryAnonymousSignIn:
+        _scheduleAnonymousSignInRetry();
+        break;
+      case AuthFailureRecovery.markSignedOut:
+        if (_signInState == SignInState.loading) {
+          _signInState = SignInState.signedOut;
+          notifyListeners();
+        }
+        break;
+    }
+  }
 
+  void _markSignedIn() {
+    _returningUserTimer?.cancel();
+    _anonSignInRetryTimer?.cancel();
+    if (_signInState == SignInState.signedIn) return;
+    _signInState = SignInState.signedIn;
     notifyListeners();
   }
 
+  void _scheduleAnonymousSignInRetry() {
+    if (_currentUser != null || _signingInAnonymously) return;
+    if (_returningUserTimer?.isActive ?? false) return;
+    if (_anonSignInRetryTimer?.isActive ?? false) return;
+
+    _anonSignInRetryTimer = Timer(_anonSignInRetryDelay, () {
+      if (_currentUser != null || _signingInAnonymously) return;
+      unawaited(_signInAnonymouslyOrRecover());
+    });
+  }
+
+  Future<void> _signInAnonymouslyOrRecover() async {
+    try {
+      await signInAnonymously();
+    } catch (e, st) {
+      // Leave the splash, then rethrow unexpected errors so runZonedGuarded
+      // still reports them. Transient Auth network failures are expected.
+      _recoverFromAuthFailure(e, st);
+      if (shouldReportAuthFailure(e)) {
+        Error.throwWithStackTrace(e, st);
+      }
+    }
+  }
+
+  Future<void> _handleUserSignedIn(User user) async {
+    unawaited(sharedPreferencesService.setIsReturningUser(true));
+    _setCurrentUser(user);
+    // Dismiss the splash as soon as Firebase has a user. Profile writes can
+    // fail or hang on a flaky network; do not keep [SignInState.loading].
+    _markSignedIn();
+
+    if (!user.isAnonymous) {
+      try {
+        await createCurrentUserInfoIfNotExists(
+          displayName: _emailRegistrationDisplayName,
+        );
+      } catch (e, st) {
+        if (!shouldReportAuthFailure(e)) {
+          loggingService.log(
+            'Failed to create or reload public user info after sign-in',
+            logType: LogType.warning,
+            error: e,
+            stackTrace: st,
+          );
+          return;
+        }
+        Error.throwWithStackTrace(e, st);
+      }
+    }
+  }
+
   PublicUserInfo getDefaultPublicUserInfo({String? displayName}) {
-    final currentUser = _currentUser!;
+    final currentUser = _currentUser;
+    if (currentUser == null) {
+      throw StateError('Cannot build public user info while signed out');
+    }
     return PublicUserInfo(
       id: currentUser.uid,
       agoraId: uidToInt(currentUser.uid),
@@ -201,6 +323,7 @@ class UserService with ChangeNotifier {
   }
 
   Future<void> createCurrentUserInfoIfNotExists({String? displayName}) async {
+    if (_currentUser == null) return;
     loggingService.log(
       'UserService.createCurrentUserInfoIfNotExists: updating current user info to $displayName',
     );
@@ -208,10 +331,13 @@ class UserService with ChangeNotifier {
       defaultUserInfo: getDefaultPublicUserInfo(displayName: displayName),
     );
 
+    final userId = currentUserId;
+    if (userId == null) return;
+
     // Update the agora ID for anyone who logs in
     unawaited(updateCurrentUserInfo(userInfo, [PublicUserInfo.kFieldAgoraId]));
 
-    UserInfoProvider.reloadUser(currentUserId!);
+    UserInfoProvider.reloadUser(userId);
   }
 
   Future<void> updateCurrentUserInfo(
@@ -222,20 +348,35 @@ class UserService with ChangeNotifier {
       userInfo: newUserInfo,
       keys: keys,
     );
-    UserInfoProvider.reloadUser(currentUserId!);
+    final userId = currentUserId;
+    if (userId == null) return;
+    UserInfoProvider.reloadUser(userId);
   }
 
   Future<UserCredential> signInAnonymously() async {
     _signingInAnonymously = true;
     loggingService.log('signing in anonymously');
-    final result = await _firebaseAuth.signInAnonymously();
-    _signingInAnonymously = false;
-    return result;
+    try {
+      return await _firebaseAuth.signInAnonymously();
+    } finally {
+      _signingInAnonymously = false;
+    }
   }
 
   Future<void> signOut() async {
     await sharedPreferencesService.setIsReturningUser(false);
-    await _firebaseAuth.signOut();
+    try {
+      await _firebaseAuth.signOut();
+    } on FirebaseAuthException catch (e, st) {
+      // Returning-user is already cleared; always reload so we never stay in a
+      // half-signed-out UI if the Auth RPC fails for any code.
+      loggingService.log(
+        'signOut: FirebaseAuthException (${e.code}), reloading anyway',
+        logType: LogType.warning,
+        error: e,
+        stackTrace: st,
+      );
+    }
 
     html.window.location.reload();
   }

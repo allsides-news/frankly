@@ -78,7 +78,7 @@ class _CreateAnnouncementDialogState extends State<CreateAnnouncementDialog> {
                 children: [
                   ActionButton(
                     onPressed: _createAnnouncement,
-                    color: Theme.of(context).primaryColor,
+                    color: Theme.of(context).colorScheme.primary,
                     text: 'Create',
                   ),
                 ],

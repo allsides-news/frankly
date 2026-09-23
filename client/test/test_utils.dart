@@ -10,11 +10,12 @@ class TestUtils {
     double width,
     double height,
   ) {
-    // Resets screen size after each test.
-    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
-    final renderView = WidgetsBinding.instance.renderView;
-
-    renderView.configuration = TestViewConfiguration(size: Size(width, height));
+    tester.view.physicalSize = Size(width, height);
+    tester.view.devicePixelRatio = 1.0;
   }
 }

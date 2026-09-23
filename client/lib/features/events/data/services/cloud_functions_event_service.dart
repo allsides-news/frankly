@@ -1,3 +1,4 @@
+import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/event.dart';
@@ -45,5 +46,17 @@ class CloudFunctionsEventService {
     final result = await cloudFunctions.callFunction(
         'getCommunityCalendarLink', request.toJson(),);
     return GetCommunityCalendarLinkResponse.fromJson(result);
+  }
+
+  Future<LookupEventParticipantByEmailResponse> lookupEventParticipantByEmail(
+    LookupEventParticipantByEmailRequest request,
+  ) async {
+    final result = await cloudFunctions.callFunction(
+      'LookupEventParticipantByEmail',
+      request.toJson(),
+    );
+    return LookupEventParticipantByEmailResponse.fromJson(
+      fromFirestoreJson(result),
+    );
   }
 }

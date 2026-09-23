@@ -39,6 +39,12 @@ import 'package:pedantic/pedantic.dart';
 
 final services = GetIt.instance;
 
+void _ensureResponsiveLayoutServiceRegistered() {
+  if (!services.isRegistered<ResponsiveLayoutService>()) {
+    services.registerSingleton(ResponsiveLayoutService());
+  }
+}
+
 /// This getter immediately registers and returns a singleton. This is used because this can be
 /// called before create is called below.
 ///
@@ -50,10 +56,10 @@ LoggingService get loggingService {
   return services.get<LoggingService>();
 }
 
+/// Lazy registration like [loggingService]; [createServices] registers too so
+/// `GetIt.instance` callers do not depend on getter order.
 ResponsiveLayoutService get responsiveLayoutService {
-  if (!services.isRegistered<ResponsiveLayoutService>()) {
-    services.registerSingleton(ResponsiveLayoutService());
-  }
+  _ensureResponsiveLayoutServiceRegistered();
   return services.get<ResponsiveLayoutService>();
 }
 
@@ -157,6 +163,8 @@ void createServices() {
   services.registerSingleton(SharedPreferencesService());
   services.registerSingleton(UserService());
 
+  _ensureResponsiveLayoutServiceRegistered();
+
   services.registerSingleton(AnalyticsService());
 
   services.registerSingleton(DialogProvider());
@@ -167,14 +175,18 @@ void createServices() {
 }
 
 Future<void> initializeServices() async {
+  await sharedPreferencesService.initialize();
   await Future.wait([
-    analytics.initialize(),
-    userService.initialize(),
+    // analytics.initialize() makes a network request to Matomo; fire-and-forget
+    // so it never delays content render.
     firestoreDatabase.initialize(),
-    userDataService.initialize(),
     cloudFunctions.initialize(),
-    sharedPreferencesService.initialize(),
   ]);
+  unawaited(analytics.initialize());
+  // Auth before UserDataService so membership streams always attach to the
+  // intended account (see userService / UserDataService init ordering).
+  await userService.initialize();
+  await userDataService.initialize();
 
   unawaited(clockService.initialize());
 }

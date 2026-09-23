@@ -21,6 +21,7 @@ Emotion _$EmotionFromJson(Map<String, dynamic> json) {
 /// @nodoc
 mixin _$Emotion {
   String get creatorId => throw _privateConstructorUsedError;
+  @JsonKey(unknownEnumValue: EmotionType.thumbsUp)
   EmotionType get emotionType => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -33,7 +34,10 @@ abstract class $EmotionCopyWith<$Res> {
   factory $EmotionCopyWith(Emotion value, $Res Function(Emotion) then) =
       _$EmotionCopyWithImpl<$Res, Emotion>;
   @useResult
-  $Res call({String creatorId, EmotionType emotionType});
+  $Res call(
+      {String creatorId,
+      @JsonKey(unknownEnumValue: EmotionType.thumbsUp)
+      EmotionType emotionType});
 }
 
 /// @nodoc
@@ -72,7 +76,10 @@ abstract class _$$_EmotionCopyWith<$Res> implements $EmotionCopyWith<$Res> {
       __$$_EmotionCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String creatorId, EmotionType emotionType});
+  $Res call(
+      {String creatorId,
+      @JsonKey(unknownEnumValue: EmotionType.thumbsUp)
+      EmotionType emotionType});
 }
 
 /// @nodoc
@@ -104,7 +111,11 @@ class __$$_EmotionCopyWithImpl<$Res>
 /// @nodoc
 @JsonSerializable()
 class _$_Emotion extends _Emotion {
-  _$_Emotion({required this.creatorId, required this.emotionType}) : super._();
+  _$_Emotion(
+      {required this.creatorId,
+      @JsonKey(unknownEnumValue: EmotionType.thumbsUp)
+      required this.emotionType})
+      : super._();
 
   factory _$_Emotion.fromJson(Map<String, dynamic> json) =>
       _$$_EmotionFromJson(json);
@@ -112,6 +123,7 @@ class _$_Emotion extends _Emotion {
   @override
   final String creatorId;
   @override
+  @JsonKey(unknownEnumValue: EmotionType.thumbsUp)
   final EmotionType emotionType;
 
   @override
@@ -151,6 +163,7 @@ class _$_Emotion extends _Emotion {
 abstract class _Emotion extends Emotion {
   factory _Emotion(
       {required final String creatorId,
+      @JsonKey(unknownEnumValue: EmotionType.thumbsUp)
       required final EmotionType emotionType}) = _$_Emotion;
   _Emotion._() : super._();
 
@@ -159,6 +172,7 @@ abstract class _Emotion extends Emotion {
   @override
   String get creatorId;
   @override
+  @JsonKey(unknownEnumValue: EmotionType.thumbsUp)
   EmotionType get emotionType;
   @override
   @JsonKey(ignore: true)

@@ -45,43 +45,11 @@ class AutoEndEvents implements CloudFunction {
             firestoreUtils.fromFirestoreJson(eventDoc.data.toMap()),
           );
 
-          // Check if event has an active live meeting first
-          // If it does, use the live meeting start time, not the scheduled time
-          DateTime? actualEndTime;
-          try {
-            final liveMeetingDoc = await firestore
-                .document('${event.fullPath}/live-meetings/${event.id}')
-                .get();
-            
-            if (liveMeetingDoc.exists) {
-              final liveMeeting = liveMeetingDoc.data.toMap();
-              final events = liveMeeting['events'] as List<dynamic>?;
-              
-              // Find when the event actually started (first event in live meeting)
-              if (events != null && events.isNotEmpty) {
-                final firstEvent = events.first as Map<String, dynamic>;
-                final actualStartTime = (firstEvent['timestamp'] as Timestamp?)?.toDateTime();
-                
-                if (actualStartTime != null) {
-                  actualEndTime = actualStartTime.add(Duration(minutes: event.durationInMinutes));
-                  print('AutoEndEvents: Event ${event.id} actual start: $actualStartTime, will end at: $actualEndTime');
-                }
-              }
-            }
-          } catch (e) {
-            print('AutoEndEvents: Could not get live meeting for ${event.id}, using scheduled time: $e');
-          }
-          
-          // Fall back to scheduled time if no live meeting exists
-          final shouldEnd = actualEndTime != null 
-              ? now.isAfter(actualEndTime)
-              : event.hasEnded(now);
-
           // Check if event should end
-          if (shouldEnd) {
+          if (event.hasEnded(now)) {
             print(
                 'AutoEndEvents: Auto-ending event ${event.id} - "${event.title}" '
-                '(scheduled: ${event.scheduledTime}, duration: ${event.durationInMinutes} min, actual end: ${actualEndTime ?? event.scheduledEndTime})');
+                '(scheduled: ${event.scheduledTime}, duration: ${event.durationInMinutes} min)');
 
             // Lock the event to prevent new entries
             await eventDoc.reference.updateData(

@@ -1,3 +1,4 @@
+import 'package:client/app.dart';
 import 'package:client/core/utils/navigation_utils.dart';
 import 'package:client/features/community/data/services/cloud_functions_community_service.dart';
 import 'package:collection/collection.dart';
@@ -12,6 +13,7 @@ import 'package:client/core/utils/extensions.dart';
 import 'package:data_models/cloud_functions/requests.dart';
 import 'package:data_models/events/pre_post_card.dart';
 import 'package:data_models/events/pre_post_card_attribute.dart';
+import 'package:data_models/events/pre_post_survey.dart';
 import 'package:data_models/events/pre_post_url_params.dart';
 import 'package:provider/provider.dart';
 
@@ -201,6 +203,158 @@ class PrePostCardWidgetPresenter {
     _view.updateView();
   }
 
+  void addSurveyQuestion(PrePostSurveyQuestionType type) {
+    final surveyQuestions = List.of(_model.prePostCard.surveyQuestions);
+    switch (type) {
+      case PrePostSurveyQuestionType.multipleChoice:
+        surveyQuestions.add(
+          PrePostSurveyQuestion(
+            id: uuid.v4(),
+            type: type,
+            options: [
+              PrePostSurveyItem(id: uuid.v4()),
+              PrePostSurveyItem(id: uuid.v4()),
+            ],
+          ),
+        );
+        break;
+      case PrePostSurveyQuestionType.agreeDisagree:
+        surveyQuestions.add(
+          PrePostSurveyQuestion(
+            id: uuid.v4(),
+            type: type,
+            statements: [PrePostSurveyItem(id: uuid.v4())],
+          ),
+        );
+        break;
+      case PrePostSurveyQuestionType.residence:
+        // Question text and options are fixed in code.
+        surveyQuestions.add(
+          PrePostSurveyQuestion(id: uuid.v4(), type: type),
+        );
+        break;
+    }
+    _model.prePostCard =
+        _model.prePostCard.copyWith(surveyQuestions: surveyQuestions);
+    _view.updateView();
+  }
+
+  void removeSurveyQuestion(String questionId) {
+    final surveyQuestions = List.of(_model.prePostCard.surveyQuestions)
+      ..removeWhere((question) => question.id == questionId);
+    _model.prePostCard =
+        _model.prePostCard.copyWith(surveyQuestions: surveyQuestions);
+    _view.updateView();
+  }
+
+  void updateSurveyQuestionTitle(String questionId, String text) {
+    _updateSurveyQuestion(
+      questionId,
+      (question) => question.copyWith(title: text),
+    );
+  }
+
+  /// Adds an answer option (multiple choice) or statement (agree/disagree) to
+  /// the given question, respecting the per-type maximums.
+  void addSurveyQuestionItem(String questionId) {
+    _updateSurveyQuestion(questionId, (question) {
+      final item = PrePostSurveyItem(id: uuid.v4());
+      switch (question.type) {
+        case PrePostSurveyQuestionType.multipleChoice:
+          if (question.options.length >=
+              PrePostSurveyQuestion.maxMultipleChoiceOptions) {
+            return question;
+          }
+          return question.copyWith(options: [...question.options, item]);
+        case PrePostSurveyQuestionType.agreeDisagree:
+          if (question.statements.length >=
+              PrePostSurveyQuestion.maxAgreeDisagreeStatements) {
+            return question;
+          }
+          return question.copyWith(statements: [...question.statements, item]);
+        case PrePostSurveyQuestionType.residence:
+          // Residence questions have fixed options; nothing to add.
+          return question;
+      }
+    });
+  }
+
+  void removeSurveyQuestionItem(String questionId, String itemId) {
+    _updateSurveyQuestion(
+      questionId,
+      (question) => question.copyWith(
+        options:
+            question.options.where((option) => option.id != itemId).toList(),
+        statements: question.statements
+            .where((statement) => statement.id != itemId)
+            .toList(),
+      ),
+    );
+  }
+
+  void updateSurveyQuestionItemText(
+    String questionId,
+    String itemId,
+    String text,
+  ) {
+    PrePostSurveyItem updateItem(PrePostSurveyItem item) =>
+        item.id == itemId ? item.copyWith(text: text) : item;
+    _updateSurveyQuestion(
+      questionId,
+      (question) => question.copyWith(
+        options: question.options.map(updateItem).toList(),
+        statements: question.statements.map(updateItem).toList(),
+      ),
+    );
+  }
+
+  void _updateSurveyQuestion(
+    String questionId,
+    PrePostSurveyQuestion Function(PrePostSurveyQuestion) update,
+  ) {
+    final surveyQuestions = List.of(_model.prePostCard.surveyQuestions);
+    final index =
+        surveyQuestions.indexWhere((question) => question.id == questionId);
+    if (index < 0) return;
+
+    surveyQuestions[index] = update(surveyQuestions[index]);
+    _model.prePostCard =
+        _model.prePostCard.copyWith(surveyQuestions: surveyQuestions);
+    _view.updateView();
+  }
+
+  bool reorderSurveyQuestions(Key draggedKey, Key newPositionKey) {
+    final surveyQuestions = List.of(_model.prePostCard.surveyQuestions);
+    final draggedIndex =
+        surveyQuestions.indexWhere((question) => Key(question.id) == draggedKey);
+    final newPositionIndex = surveyQuestions
+        .indexWhere((question) => Key(question.id) == newPositionKey);
+    if (draggedIndex < 0 || newPositionIndex < 0) return false;
+
+    final dragged = surveyQuestions.removeAt(draggedIndex);
+    surveyQuestions.insert(newPositionIndex, dragged);
+    _model.prePostCard =
+        _model.prePostCard.copyWith(surveyQuestions: surveyQuestions);
+    _view.updateView();
+    return true;
+  }
+
+  String? validateSurveyQuestionTitle(String? text, String questionId) {
+    final question = _model.prePostCard.surveyQuestions
+        .firstWhereOrNull((question) => question.id == questionId);
+    if (question == null ||
+        question.type != PrePostSurveyQuestionType.multipleChoice) {
+      return null;
+    }
+
+    final hasOptions =
+        question.options.any((option) => option.text.trim().isNotEmpty);
+    if (hasOptions && (text == null || text.trim().isEmpty)) {
+      return 'Question cannot be empty';
+    }
+    return null;
+  }
+
   void updateCard(int urlIndex) {
     var prePostUrls = _model.prePostCard.prePostUrls;
     List<PrePostCardAttribute> attributes = [];
@@ -240,7 +394,27 @@ class PrePostCardWidgetPresenter {
         )
         .toList();
 
-    _model.prePostCard = _model.prePostCard.copyWith(prePostUrls: prePostUrls);
+    // Drop empty option/statement rows and questions without any content,
+    // mirroring how incomplete action links are dropped above.
+    final surveyQuestions = _model.prePostCard.surveyQuestions
+        .map(
+          (question) => question.copyWith(
+            title: question.title.trim(),
+            options: question.options
+                .where((option) => option.text.trim().isNotEmpty)
+                .toList(),
+            statements: question.statements
+                .where((statement) => statement.text.trim().isNotEmpty)
+                .toList(),
+          ),
+        )
+        .where((question) => question.hasData)
+        .toList();
+
+    _model.prePostCard = _model.prePostCard.copyWith(
+      prePostUrls: prePostUrls,
+      surveyQuestions: surveyQuestions,
+    );
 
     return _model.prePostCard;
   }
@@ -257,7 +431,8 @@ class PrePostCardWidgetPresenter {
             .attributes[attributeIndex]
             .copyWith(type: selectedType);
         prePostUrls[urlIndex].attributes[attributeIndex] = prePostCardAttribute;
-        _model.prePostCard.copyWith(prePostUrls: prePostUrls);
+        _model.prePostCard =
+            _model.prePostCard.copyWith(prePostUrls: prePostUrls);
         _view.updateView();
       }
     }
@@ -274,7 +449,8 @@ class PrePostCardWidgetPresenter {
     if (urlIndex < prePostUrls.length) {
       prePostUrls[urlIndex].attributes[attributeIndex] =
           attribute.copyWith(queryParam: text);
-      _model.prePostCard.copyWith(prePostUrls: prePostUrls);
+      _model.prePostCard =
+          _model.prePostCard.copyWith(prePostUrls: prePostUrls);
       _view.updateView();
     }
   }
@@ -339,7 +515,8 @@ class PrePostCardWidgetPresenter {
 
     return headline != _model.prePostCard.headline ||
         message != _model.prePostCard.message ||
-        _model.prePostCard.prePostUrls.isNotEmpty;
+        _model.prePostCard.prePostUrls.isNotEmpty ||
+        _model.prePostCard.surveyQuestions.isNotEmpty;
   }
 
   void toggleExpansion() {

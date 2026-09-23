@@ -54,6 +54,9 @@ mixin _$Event {
   BreakoutRoomDefinition? get breakoutRoomDefinition =>
       throw _privateConstructorUsedError;
   bool get isLocked => throw _privateConstructorUsedError;
+
+  /// Explicitly ended by a host/mod; triggers post-event teardown (unlike [isLocked]).
+  bool get isEnded => throw _privateConstructorUsedError;
   LiveStreamInfo? get liveStreamInfo => throw _privateConstructorUsedError;
   PrePostCard? get preEventCardData => throw _privateConstructorUsedError;
   PrePostCard? get postEventCardData => throw _privateConstructorUsedError;
@@ -121,6 +124,7 @@ abstract class $EventCopyWith<$Res> {
       @JsonKey(fromJson: BreakoutRoomDefinition.fromJsonMigration)
       BreakoutRoomDefinition? breakoutRoomDefinition,
       bool isLocked,
+      bool isEnded,
       LiveStreamInfo? liveStreamInfo,
       PrePostCard? preEventCardData,
       PrePostCard? postEventCardData,
@@ -177,6 +181,7 @@ class _$EventCopyWithImpl<$Res, $Val extends Event>
     Object? waitingRoomInfo = freezed,
     Object? breakoutRoomDefinition = freezed,
     Object? isLocked = null,
+    Object? isEnded = null,
     Object? liveStreamInfo = freezed,
     Object? preEventCardData = freezed,
     Object? postEventCardData = freezed,
@@ -277,6 +282,10 @@ class _$EventCopyWithImpl<$Res, $Val extends Event>
       isLocked: null == isLocked
           ? _value.isLocked
           : isLocked // ignore: cast_nullable_to_non_nullable
+              as bool,
+      isEnded: null == isEnded
+          ? _value.isEnded
+          : isEnded // ignore: cast_nullable_to_non_nullable
               as bool,
       liveStreamInfo: freezed == liveStreamInfo
           ? _value.liveStreamInfo
@@ -448,6 +457,7 @@ abstract class _$$_EventCopyWith<$Res> implements $EventCopyWith<$Res> {
       @JsonKey(fromJson: BreakoutRoomDefinition.fromJsonMigration)
       BreakoutRoomDefinition? breakoutRoomDefinition,
       bool isLocked,
+      bool isEnded,
       LiveStreamInfo? liveStreamInfo,
       PrePostCard? preEventCardData,
       PrePostCard? postEventCardData,
@@ -507,6 +517,7 @@ class __$$_EventCopyWithImpl<$Res> extends _$EventCopyWithImpl<$Res, _$_Event>
     Object? waitingRoomInfo = freezed,
     Object? breakoutRoomDefinition = freezed,
     Object? isLocked = null,
+    Object? isEnded = null,
     Object? liveStreamInfo = freezed,
     Object? preEventCardData = freezed,
     Object? postEventCardData = freezed,
@@ -608,6 +619,10 @@ class __$$_EventCopyWithImpl<$Res> extends _$EventCopyWithImpl<$Res, _$_Event>
           ? _value.isLocked
           : isLocked // ignore: cast_nullable_to_non_nullable
               as bool,
+      isEnded: null == isEnded
+          ? _value.isEnded
+          : isEnded // ignore: cast_nullable_to_non_nullable
+              as bool,
       liveStreamInfo: freezed == liveStreamInfo
           ? _value.liveStreamInfo
           : liveStreamInfo // ignore: cast_nullable_to_non_nullable
@@ -689,6 +704,7 @@ class _$_Event extends _Event {
       @JsonKey(fromJson: BreakoutRoomDefinition.fromJsonMigration)
       this.breakoutRoomDefinition,
       this.isLocked = false,
+      this.isEnded = false,
       this.liveStreamInfo,
       this.preEventCardData,
       this.postEventCardData,
@@ -763,6 +779,11 @@ class _$_Event extends _Event {
   @override
   @JsonKey()
   final bool isLocked;
+
+  /// Explicitly ended by a host/mod; triggers post-event teardown (unlike [isLocked]).
+  @override
+  @JsonKey()
+  final bool isEnded;
   @override
   final LiveStreamInfo? liveStreamInfo;
   @override
@@ -804,7 +825,7 @@ class _$_Event extends _Event {
 
   @override
   String toString() {
-    return 'Event(id: $id, status: $status, nullableEventType: $nullableEventType, collectionPath: $collectionPath, communityId: $communityId, templateId: $templateId, creatorId: $creatorId, prerequisiteTemplateId: $prerequisiteTemplateId, creatorDisplayName: $creatorDisplayName, createdDate: $createdDate, scheduledTime: $scheduledTime, scheduledTimeZone: $scheduledTimeZone, title: $title, description: $description, image: $image, isPublic: $isPublic, minParticipants: $minParticipants, maxParticipants: $maxParticipants, agendaItems: $agendaItems, waitingRoomInfo: $waitingRoomInfo, breakoutRoomDefinition: $breakoutRoomDefinition, isLocked: $isLocked, liveStreamInfo: $liveStreamInfo, preEventCardData: $preEventCardData, postEventCardData: $postEventCardData, externalPlatform: $externalPlatform, eventSettings: $eventSettings, durationInMinutes: $durationInMinutes, externalCommunityId: $externalCommunityId, externalCommunityStatus: $externalCommunityStatus, participantCountEstimate: $participantCountEstimate, presentParticipantCountEstimate: $presentParticipantCountEstimate, breakoutMatchIdsToRecord: $breakoutMatchIdsToRecord)';
+    return 'Event(id: $id, status: $status, nullableEventType: $nullableEventType, collectionPath: $collectionPath, communityId: $communityId, templateId: $templateId, creatorId: $creatorId, prerequisiteTemplateId: $prerequisiteTemplateId, creatorDisplayName: $creatorDisplayName, createdDate: $createdDate, scheduledTime: $scheduledTime, scheduledTimeZone: $scheduledTimeZone, title: $title, description: $description, image: $image, isPublic: $isPublic, minParticipants: $minParticipants, maxParticipants: $maxParticipants, agendaItems: $agendaItems, waitingRoomInfo: $waitingRoomInfo, breakoutRoomDefinition: $breakoutRoomDefinition, isLocked: $isLocked, isEnded: $isEnded, liveStreamInfo: $liveStreamInfo, preEventCardData: $preEventCardData, postEventCardData: $postEventCardData, externalPlatform: $externalPlatform, eventSettings: $eventSettings, durationInMinutes: $durationInMinutes, externalCommunityId: $externalCommunityId, externalCommunityStatus: $externalCommunityStatus, participantCountEstimate: $participantCountEstimate, presentParticipantCountEstimate: $presentParticipantCountEstimate, breakoutMatchIdsToRecord: $breakoutMatchIdsToRecord)';
   }
 
   @override
@@ -852,6 +873,7 @@ class _$_Event extends _Event {
                 other.breakoutRoomDefinition == breakoutRoomDefinition) &&
             (identical(other.isLocked, isLocked) ||
                 other.isLocked == isLocked) &&
+            (identical(other.isEnded, isEnded) || other.isEnded == isEnded) &&
             (identical(other.liveStreamInfo, liveStreamInfo) ||
                 other.liveStreamInfo == liveStreamInfo) &&
             (identical(other.preEventCardData, preEventCardData) ||
@@ -906,6 +928,7 @@ class _$_Event extends _Event {
         waitingRoomInfo,
         breakoutRoomDefinition,
         isLocked,
+        isEnded,
         liveStreamInfo,
         preEventCardData,
         postEventCardData,
@@ -964,6 +987,7 @@ abstract class _Event extends Event {
       @JsonKey(fromJson: BreakoutRoomDefinition.fromJsonMigration)
       final BreakoutRoomDefinition? breakoutRoomDefinition,
       final bool isLocked,
+      final bool isEnded,
       final LiveStreamInfo? liveStreamInfo,
       final PrePostCard? preEventCardData,
       final PrePostCard? postEventCardData,
@@ -1035,6 +1059,10 @@ abstract class _Event extends Event {
   @override
   bool get isLocked;
   @override
+
+  /// Explicitly ended by a host/mod; triggers post-event teardown (unlike [isLocked]).
+  bool get isEnded;
+  @override
   LiveStreamInfo? get liveStreamInfo;
   @override
   PrePostCard? get preEventCardData;
@@ -1085,9 +1113,8 @@ mixin _$EventSettings {
   bool? get reminderEmails => throw _privateConstructorUsedError;
   bool? get chat => throw _privateConstructorUsedError;
   bool? get showChatMessagesInRealTime => throw _privateConstructorUsedError;
-  bool? get talkingTimer =>
-      throw _privateConstructorUsedError; // Reenable if screensharing is implemented
-//bool? allowScreenshare,
+  bool? get talkingTimer => throw _privateConstructorUsedError;
+  bool? get allowScreenshare => throw _privateConstructorUsedError;
   bool? get allowPredefineBreakoutsOnHosted =>
       throw _privateConstructorUsedError;
   bool? get defaultStageView => throw _privateConstructorUsedError;
@@ -1095,6 +1122,7 @@ mixin _$EventSettings {
   bool? get allowMultiplePeopleOnStage => throw _privateConstructorUsedError;
   bool? get showSmartMatchingForBreakouts => throw _privateConstructorUsedError;
   bool? get alwaysRecord => throw _privateConstructorUsedError;
+  bool? get alwaysTranscribe => throw _privateConstructorUsedError;
   bool? get enablePrerequisites => throw _privateConstructorUsedError;
   bool? get agendaPreview => throw _privateConstructorUsedError;
 
@@ -1115,12 +1143,14 @@ abstract class $EventSettingsCopyWith<$Res> {
       bool? chat,
       bool? showChatMessagesInRealTime,
       bool? talkingTimer,
+      bool? allowScreenshare,
       bool? allowPredefineBreakoutsOnHosted,
       bool? defaultStageView,
       bool? enableBreakoutsByCategory,
       bool? allowMultiplePeopleOnStage,
       bool? showSmartMatchingForBreakouts,
       bool? alwaysRecord,
+      bool? alwaysTranscribe,
       bool? enablePrerequisites,
       bool? agendaPreview});
 }
@@ -1142,12 +1172,14 @@ class _$EventSettingsCopyWithImpl<$Res, $Val extends EventSettings>
     Object? chat = freezed,
     Object? showChatMessagesInRealTime = freezed,
     Object? talkingTimer = freezed,
+    Object? allowScreenshare = freezed,
     Object? allowPredefineBreakoutsOnHosted = freezed,
     Object? defaultStageView = freezed,
     Object? enableBreakoutsByCategory = freezed,
     Object? allowMultiplePeopleOnStage = freezed,
     Object? showSmartMatchingForBreakouts = freezed,
     Object? alwaysRecord = freezed,
+    Object? alwaysTranscribe = freezed,
     Object? enablePrerequisites = freezed,
     Object? agendaPreview = freezed,
   }) {
@@ -1167,6 +1199,10 @@ class _$EventSettingsCopyWithImpl<$Res, $Val extends EventSettings>
       talkingTimer: freezed == talkingTimer
           ? _value.talkingTimer
           : talkingTimer // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      allowScreenshare: freezed == allowScreenshare
+          ? _value.allowScreenshare
+          : allowScreenshare // ignore: cast_nullable_to_non_nullable
               as bool?,
       allowPredefineBreakoutsOnHosted: freezed ==
               allowPredefineBreakoutsOnHosted
@@ -1192,6 +1228,10 @@ class _$EventSettingsCopyWithImpl<$Res, $Val extends EventSettings>
       alwaysRecord: freezed == alwaysRecord
           ? _value.alwaysRecord
           : alwaysRecord // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      alwaysTranscribe: freezed == alwaysTranscribe
+          ? _value.alwaysTranscribe
+          : alwaysTranscribe // ignore: cast_nullable_to_non_nullable
               as bool?,
       enablePrerequisites: freezed == enablePrerequisites
           ? _value.enablePrerequisites
@@ -1218,12 +1258,14 @@ abstract class _$$_EventSettingsCopyWith<$Res>
       bool? chat,
       bool? showChatMessagesInRealTime,
       bool? talkingTimer,
+      bool? allowScreenshare,
       bool? allowPredefineBreakoutsOnHosted,
       bool? defaultStageView,
       bool? enableBreakoutsByCategory,
       bool? allowMultiplePeopleOnStage,
       bool? showSmartMatchingForBreakouts,
       bool? alwaysRecord,
+      bool? alwaysTranscribe,
       bool? enablePrerequisites,
       bool? agendaPreview});
 }
@@ -1243,12 +1285,14 @@ class __$$_EventSettingsCopyWithImpl<$Res>
     Object? chat = freezed,
     Object? showChatMessagesInRealTime = freezed,
     Object? talkingTimer = freezed,
+    Object? allowScreenshare = freezed,
     Object? allowPredefineBreakoutsOnHosted = freezed,
     Object? defaultStageView = freezed,
     Object? enableBreakoutsByCategory = freezed,
     Object? allowMultiplePeopleOnStage = freezed,
     Object? showSmartMatchingForBreakouts = freezed,
     Object? alwaysRecord = freezed,
+    Object? alwaysTranscribe = freezed,
     Object? enablePrerequisites = freezed,
     Object? agendaPreview = freezed,
   }) {
@@ -1268,6 +1312,10 @@ class __$$_EventSettingsCopyWithImpl<$Res>
       talkingTimer: freezed == talkingTimer
           ? _value.talkingTimer
           : talkingTimer // ignore: cast_nullable_to_non_nullable
+              as bool?,
+      allowScreenshare: freezed == allowScreenshare
+          ? _value.allowScreenshare
+          : allowScreenshare // ignore: cast_nullable_to_non_nullable
               as bool?,
       allowPredefineBreakoutsOnHosted: freezed ==
               allowPredefineBreakoutsOnHosted
@@ -1294,6 +1342,10 @@ class __$$_EventSettingsCopyWithImpl<$Res>
           ? _value.alwaysRecord
           : alwaysRecord // ignore: cast_nullable_to_non_nullable
               as bool?,
+      alwaysTranscribe: freezed == alwaysTranscribe
+          ? _value.alwaysTranscribe
+          : alwaysTranscribe // ignore: cast_nullable_to_non_nullable
+              as bool?,
       enablePrerequisites: freezed == enablePrerequisites
           ? _value.enablePrerequisites
           : enablePrerequisites // ignore: cast_nullable_to_non_nullable
@@ -1314,12 +1366,14 @@ class _$_EventSettings implements _EventSettings {
       this.chat,
       this.showChatMessagesInRealTime,
       this.talkingTimer,
+      this.allowScreenshare,
       this.allowPredefineBreakoutsOnHosted,
       this.defaultStageView,
       this.enableBreakoutsByCategory,
       this.allowMultiplePeopleOnStage,
       this.showSmartMatchingForBreakouts,
       this.alwaysRecord,
+      this.alwaysTranscribe,
       this.enablePrerequisites,
       this.agendaPreview});
 
@@ -1334,8 +1388,8 @@ class _$_EventSettings implements _EventSettings {
   final bool? showChatMessagesInRealTime;
   @override
   final bool? talkingTimer;
-// Reenable if screensharing is implemented
-//bool? allowScreenshare,
+  @override
+  final bool? allowScreenshare;
   @override
   final bool? allowPredefineBreakoutsOnHosted;
   @override
@@ -1349,13 +1403,15 @@ class _$_EventSettings implements _EventSettings {
   @override
   final bool? alwaysRecord;
   @override
+  final bool? alwaysTranscribe;
+  @override
   final bool? enablePrerequisites;
   @override
   final bool? agendaPreview;
 
   @override
   String toString() {
-    return 'EventSettings(reminderEmails: $reminderEmails, chat: $chat, showChatMessagesInRealTime: $showChatMessagesInRealTime, talkingTimer: $talkingTimer, allowPredefineBreakoutsOnHosted: $allowPredefineBreakoutsOnHosted, defaultStageView: $defaultStageView, enableBreakoutsByCategory: $enableBreakoutsByCategory, allowMultiplePeopleOnStage: $allowMultiplePeopleOnStage, showSmartMatchingForBreakouts: $showSmartMatchingForBreakouts, alwaysRecord: $alwaysRecord, enablePrerequisites: $enablePrerequisites, agendaPreview: $agendaPreview)';
+    return 'EventSettings(reminderEmails: $reminderEmails, chat: $chat, showChatMessagesInRealTime: $showChatMessagesInRealTime, talkingTimer: $talkingTimer, allowScreenshare: $allowScreenshare, allowPredefineBreakoutsOnHosted: $allowPredefineBreakoutsOnHosted, defaultStageView: $defaultStageView, enableBreakoutsByCategory: $enableBreakoutsByCategory, allowMultiplePeopleOnStage: $allowMultiplePeopleOnStage, showSmartMatchingForBreakouts: $showSmartMatchingForBreakouts, alwaysRecord: $alwaysRecord, alwaysTranscribe: $alwaysTranscribe, enablePrerequisites: $enablePrerequisites, agendaPreview: $agendaPreview)';
   }
 
   @override
@@ -1366,12 +1422,13 @@ class _$_EventSettings implements _EventSettings {
             (identical(other.reminderEmails, reminderEmails) ||
                 other.reminderEmails == reminderEmails) &&
             (identical(other.chat, chat) || other.chat == chat) &&
-            (identical(other.showChatMessagesInRealTime,
-                    showChatMessagesInRealTime) ||
+            (identical(other.showChatMessagesInRealTime, showChatMessagesInRealTime) ||
                 other.showChatMessagesInRealTime ==
                     showChatMessagesInRealTime) &&
             (identical(other.talkingTimer, talkingTimer) ||
                 other.talkingTimer == talkingTimer) &&
+            (identical(other.allowScreenshare, allowScreenshare) ||
+                other.allowScreenshare == allowScreenshare) &&
             (identical(other.allowPredefineBreakoutsOnHosted,
                     allowPredefineBreakoutsOnHosted) ||
                 other.allowPredefineBreakoutsOnHosted ==
@@ -1390,6 +1447,8 @@ class _$_EventSettings implements _EventSettings {
                     showSmartMatchingForBreakouts) &&
             (identical(other.alwaysRecord, alwaysRecord) ||
                 other.alwaysRecord == alwaysRecord) &&
+            (identical(other.alwaysTranscribe, alwaysTranscribe) ||
+                other.alwaysTranscribe == alwaysTranscribe) &&
             (identical(other.enablePrerequisites, enablePrerequisites) ||
                 other.enablePrerequisites == enablePrerequisites) &&
             (identical(other.agendaPreview, agendaPreview) ||
@@ -1404,12 +1463,14 @@ class _$_EventSettings implements _EventSettings {
       chat,
       showChatMessagesInRealTime,
       talkingTimer,
+      allowScreenshare,
       allowPredefineBreakoutsOnHosted,
       defaultStageView,
       enableBreakoutsByCategory,
       allowMultiplePeopleOnStage,
       showSmartMatchingForBreakouts,
       alwaysRecord,
+      alwaysTranscribe,
       enablePrerequisites,
       agendaPreview);
 
@@ -1433,12 +1494,14 @@ abstract class _EventSettings implements EventSettings {
       final bool? chat,
       final bool? showChatMessagesInRealTime,
       final bool? talkingTimer,
+      final bool? allowScreenshare,
       final bool? allowPredefineBreakoutsOnHosted,
       final bool? defaultStageView,
       final bool? enableBreakoutsByCategory,
       final bool? allowMultiplePeopleOnStage,
       final bool? showSmartMatchingForBreakouts,
       final bool? alwaysRecord,
+      final bool? alwaysTranscribe,
       final bool? enablePrerequisites,
       final bool? agendaPreview}) = _$_EventSettings;
 
@@ -1453,8 +1516,9 @@ abstract class _EventSettings implements EventSettings {
   bool? get showChatMessagesInRealTime;
   @override
   bool? get talkingTimer;
-  @override // Reenable if screensharing is implemented
-//bool? allowScreenshare,
+  @override
+  bool? get allowScreenshare;
+  @override
   bool? get allowPredefineBreakoutsOnHosted;
   @override
   bool? get defaultStageView;
@@ -1466,6 +1530,8 @@ abstract class _EventSettings implements EventSettings {
   bool? get showSmartMatchingForBreakouts;
   @override
   bool? get alwaysRecord;
+  @override
+  bool? get alwaysTranscribe;
   @override
   bool? get enablePrerequisites;
   @override
@@ -1757,6 +1823,12 @@ mixin _$Participant {
   /// Host can set to true to mute this user during a meeting
   bool get muteOverride => throw _privateConstructorUsedError;
   Map<String, String>? get joinParameters => throw _privateConstructorUsedError;
+  @JsonKey(name: Participant.kFieldUtmSource)
+  String? get utmSource => throw _privateConstructorUsedError;
+  @JsonKey(name: Participant.kFieldUtmMedium)
+  String? get utmMedium => throw _privateConstructorUsedError;
+  @JsonKey(name: Participant.kFieldUtmCampaign)
+  String? get utmCampaign => throw _privateConstructorUsedError;
   List<BreakoutQuestion> get breakoutRoomSurveyQuestions =>
       throw _privateConstructorUsedError;
   @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
@@ -1766,7 +1838,7 @@ mixin _$Participant {
   /// Whether user opted in to receive community communications
   bool get optInToCommunity => throw _privateConstructorUsedError;
 
-  /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+  /// Whether user opted in to receive newsletters from AllSides
   bool get optInToNewsletters => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -1798,6 +1870,9 @@ abstract class $ParticipantCopyWith<$Res> {
       String? currentBreakoutRoomId,
       bool muteOverride,
       Map<String, String>? joinParameters,
+      @JsonKey(name: Participant.kFieldUtmSource) String? utmSource,
+      @JsonKey(name: Participant.kFieldUtmMedium) String? utmMedium,
+      @JsonKey(name: Participant.kFieldUtmCampaign) String? utmCampaign,
       List<BreakoutQuestion> breakoutRoomSurveyQuestions,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       DateTime? mostRecentPresentTime,
@@ -1833,6 +1908,9 @@ class _$ParticipantCopyWithImpl<$Res, $Val extends Participant>
     Object? currentBreakoutRoomId = freezed,
     Object? muteOverride = null,
     Object? joinParameters = freezed,
+    Object? utmSource = freezed,
+    Object? utmMedium = freezed,
+    Object? utmCampaign = freezed,
     Object? breakoutRoomSurveyQuestions = null,
     Object? mostRecentPresentTime = freezed,
     Object? zipCode = freezed,
@@ -1896,6 +1974,18 @@ class _$ParticipantCopyWithImpl<$Res, $Val extends Participant>
           ? _value.joinParameters
           : joinParameters // ignore: cast_nullable_to_non_nullable
               as Map<String, String>?,
+      utmSource: freezed == utmSource
+          ? _value.utmSource
+          : utmSource // ignore: cast_nullable_to_non_nullable
+              as String?,
+      utmMedium: freezed == utmMedium
+          ? _value.utmMedium
+          : utmMedium // ignore: cast_nullable_to_non_nullable
+              as String?,
+      utmCampaign: freezed == utmCampaign
+          ? _value.utmCampaign
+          : utmCampaign // ignore: cast_nullable_to_non_nullable
+              as String?,
       breakoutRoomSurveyQuestions: null == breakoutRoomSurveyQuestions
           ? _value.breakoutRoomSurveyQuestions
           : breakoutRoomSurveyQuestions // ignore: cast_nullable_to_non_nullable
@@ -1945,6 +2035,9 @@ abstract class _$$_ParticipantCopyWith<$Res>
       String? currentBreakoutRoomId,
       bool muteOverride,
       Map<String, String>? joinParameters,
+      @JsonKey(name: Participant.kFieldUtmSource) String? utmSource,
+      @JsonKey(name: Participant.kFieldUtmMedium) String? utmMedium,
+      @JsonKey(name: Participant.kFieldUtmCampaign) String? utmCampaign,
       List<BreakoutQuestion> breakoutRoomSurveyQuestions,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       DateTime? mostRecentPresentTime,
@@ -1978,6 +2071,9 @@ class __$$_ParticipantCopyWithImpl<$Res>
     Object? currentBreakoutRoomId = freezed,
     Object? muteOverride = null,
     Object? joinParameters = freezed,
+    Object? utmSource = freezed,
+    Object? utmMedium = freezed,
+    Object? utmCampaign = freezed,
     Object? breakoutRoomSurveyQuestions = null,
     Object? mostRecentPresentTime = freezed,
     Object? zipCode = freezed,
@@ -2041,6 +2137,18 @@ class __$$_ParticipantCopyWithImpl<$Res>
           ? _value.joinParameters
           : joinParameters // ignore: cast_nullable_to_non_nullable
               as Map<String, String>?,
+      utmSource: freezed == utmSource
+          ? _value.utmSource
+          : utmSource // ignore: cast_nullable_to_non_nullable
+              as String?,
+      utmMedium: freezed == utmMedium
+          ? _value.utmMedium
+          : utmMedium // ignore: cast_nullable_to_non_nullable
+              as String?,
+      utmCampaign: freezed == utmCampaign
+          ? _value.utmCampaign
+          : utmCampaign // ignore: cast_nullable_to_non_nullable
+              as String?,
       breakoutRoomSurveyQuestions: null == breakoutRoomSurveyQuestions
           ? _value.breakoutRoomSurveyQuestions
           : breakoutRoomSurveyQuestions // ignore: cast_nullable_to_non_nullable
@@ -2085,6 +2193,9 @@ class _$_Participant implements _Participant {
       this.currentBreakoutRoomId,
       this.muteOverride = false,
       this.joinParameters,
+      @JsonKey(name: Participant.kFieldUtmSource) this.utmSource,
+      @JsonKey(name: Participant.kFieldUtmMedium) this.utmMedium,
+      @JsonKey(name: Participant.kFieldUtmCampaign) this.utmCampaign,
       this.breakoutRoomSurveyQuestions = const [],
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       this.mostRecentPresentTime,
@@ -2137,6 +2248,15 @@ class _$_Participant implements _Participant {
   @override
   final Map<String, String>? joinParameters;
   @override
+  @JsonKey(name: Participant.kFieldUtmSource)
+  final String? utmSource;
+  @override
+  @JsonKey(name: Participant.kFieldUtmMedium)
+  final String? utmMedium;
+  @override
+  @JsonKey(name: Participant.kFieldUtmCampaign)
+  final String? utmCampaign;
+  @override
   @JsonKey()
   final List<BreakoutQuestion> breakoutRoomSurveyQuestions;
   @override
@@ -2150,14 +2270,14 @@ class _$_Participant implements _Participant {
   @JsonKey()
   final bool optInToCommunity;
 
-  /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+  /// Whether user opted in to receive newsletters from AllSides
   @override
   @JsonKey()
   final bool optInToNewsletters;
 
   @override
   String toString() {
-    return 'Participant(id: $id, communityId: $communityId, externalCommunityId: $externalCommunityId, templateId: $templateId, lastUpdatedTime: $lastUpdatedTime, createdDate: $createdDate, scheduledTime: $scheduledTime, status: $status, isPresent: $isPresent, availableForBreakoutSessionId: $availableForBreakoutSessionId, membershipStatus: $membershipStatus, currentBreakoutRoomId: $currentBreakoutRoomId, muteOverride: $muteOverride, joinParameters: $joinParameters, breakoutRoomSurveyQuestions: $breakoutRoomSurveyQuestions, mostRecentPresentTime: $mostRecentPresentTime, zipCode: $zipCode, optInToCommunity: $optInToCommunity, optInToNewsletters: $optInToNewsletters)';
+    return 'Participant(id: $id, communityId: $communityId, externalCommunityId: $externalCommunityId, templateId: $templateId, lastUpdatedTime: $lastUpdatedTime, createdDate: $createdDate, scheduledTime: $scheduledTime, status: $status, isPresent: $isPresent, availableForBreakoutSessionId: $availableForBreakoutSessionId, membershipStatus: $membershipStatus, currentBreakoutRoomId: $currentBreakoutRoomId, muteOverride: $muteOverride, joinParameters: $joinParameters, utmSource: $utmSource, utmMedium: $utmMedium, utmCampaign: $utmCampaign, breakoutRoomSurveyQuestions: $breakoutRoomSurveyQuestions, mostRecentPresentTime: $mostRecentPresentTime, zipCode: $zipCode, optInToCommunity: $optInToCommunity, optInToNewsletters: $optInToNewsletters)';
   }
 
   @override
@@ -2193,6 +2313,12 @@ class _$_Participant implements _Participant {
                 other.muteOverride == muteOverride) &&
             const DeepCollectionEquality()
                 .equals(other.joinParameters, joinParameters) &&
+            (identical(other.utmSource, utmSource) ||
+                other.utmSource == utmSource) &&
+            (identical(other.utmMedium, utmMedium) ||
+                other.utmMedium == utmMedium) &&
+            (identical(other.utmCampaign, utmCampaign) ||
+                other.utmCampaign == utmCampaign) &&
             const DeepCollectionEquality().equals(
                 other.breakoutRoomSurveyQuestions,
                 breakoutRoomSurveyQuestions) &&
@@ -2223,6 +2349,9 @@ class _$_Participant implements _Participant {
         currentBreakoutRoomId,
         muteOverride,
         const DeepCollectionEquality().hash(joinParameters),
+        utmSource,
+        utmMedium,
+        utmCampaign,
         const DeepCollectionEquality().hash(breakoutRoomSurveyQuestions),
         mostRecentPresentTime,
         zipCode,
@@ -2262,6 +2391,9 @@ abstract class _Participant implements Participant {
       final String? currentBreakoutRoomId,
       final bool muteOverride,
       final Map<String, String>? joinParameters,
+      @JsonKey(name: Participant.kFieldUtmSource) final String? utmSource,
+      @JsonKey(name: Participant.kFieldUtmMedium) final String? utmMedium,
+      @JsonKey(name: Participant.kFieldUtmCampaign) final String? utmCampaign,
       final List<BreakoutQuestion> breakoutRoomSurveyQuestions,
       @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
       final DateTime? mostRecentPresentTime,
@@ -2311,6 +2443,15 @@ abstract class _Participant implements Participant {
   @override
   Map<String, String>? get joinParameters;
   @override
+  @JsonKey(name: Participant.kFieldUtmSource)
+  String? get utmSource;
+  @override
+  @JsonKey(name: Participant.kFieldUtmMedium)
+  String? get utmMedium;
+  @override
+  @JsonKey(name: Participant.kFieldUtmCampaign)
+  String? get utmCampaign;
+  @override
   List<BreakoutQuestion> get breakoutRoomSurveyQuestions;
   @override
   @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
@@ -2323,7 +2464,7 @@ abstract class _Participant implements Participant {
   bool get optInToCommunity;
   @override
 
-  /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+  /// Whether user opted in to receive newsletters from AllSides
   bool get optInToNewsletters;
   @override
   @JsonKey(ignore: true)

@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:js_interop';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:beamer/beamer.dart';
 import 'package:client/core/utils/navigation_utils.dart';
 import 'package:client/core/utils/random_utils.dart';
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:client/features/events/features/live_meeting/data/providers/live_meeting_provider.dart';
 import 'package:client/features/events/features/live_meeting/features/meeting_guide/data/providers/meeting_guide_card_store.dart';
@@ -17,15 +21,18 @@ import 'package:client/core/widgets/confirm_dialog.dart';
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
 import 'package:data_models/events/event.dart' hide Participant;
+import 'package:data_models/events/live_meetings/live_meeting.dart';
 import 'package:pedantic/pedantic.dart';
 import 'package:provider/provider.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:synchronized/synchronized.dart';
-import 'package:universal_html/js_util.dart' as js_util;
+import 'package:client/core/utils/js_interop_bridge.dart';
+import 'package:data_models/utils/utils.dart';
 import 'package:universal_html/html.dart' as html;
 
 import '../../../../../../../../core/routing/locations.dart';
 import 'agora_room.dart';
+import 'video_capture_confirm.dart';
 
 class FakeParticipant extends AgoraParticipant {
   final int id;
@@ -45,9 +52,6 @@ class FakeParticipant extends AgoraParticipant {
   void removeListener(VoidCallback listener) {}
 
   @override
-  List<dynamic> get audioTracks => [];
-
-  @override
   String get identity => userId;
 
   @override
@@ -56,11 +60,7 @@ class FakeParticipant extends AgoraParticipant {
   @override
   String get userId => id.toString();
 
-  @override
   String get state => 'connected';
-
-  @override
-  List<dynamic> get videoTracks => [];
 }
 
 class VideoParticipant implements MeetingProviderParticipant {
@@ -100,6 +100,7 @@ class ConferenceRoom with ChangeNotifier {
   final MeetingGuideCardStore meetingGuideCardModel;
   final String token;
   final String roomName;
+  final String? screenShareToken;
 
   ConferenceRoom({
     required this.liveMeetingProvider,
@@ -108,6 +109,7 @@ class ConferenceRoom with ChangeNotifier {
     required this.meetingGuideCardModel,
     required this.token,
     required this.roomName,
+    this.screenShareToken,
   }) {
     onException = _onExceptionStreamController.stream;
     Debug.enabled = true;
@@ -128,7 +130,7 @@ class ConferenceRoom with ChangeNotifier {
 
   List<AgoraParticipant> _orderedParticipants = [];
 
-  late StreamSubscription _unraiseHandSubscription;
+  StreamSubscription? _unraiseHandSubscription;
 
   /// List of users who have been muted by the host. All participants mute their audio streams until
   /// they unmute themselves.
@@ -170,15 +172,30 @@ class ConferenceRoom with ChangeNotifier {
       .where((p) => meetingGuideCardModel.getHandRaisedTime(p.identity) != null)
       .toList();
 
+  /// True only when this client is actively publishing screen share (Agora/compositor).
+  /// Do not use [screenSharerUserId] here — that reflects meeting-wide Firestore state
+  /// and would block local mic/camera for non-sharers while someone else is sharing.
   bool get isLocalSharingScreenActive =>
-      screenSharerUserId == userService.currentUserId;
+      _room?.localParticipant?.isScreenSharing ?? false;
 
-  String? get screenSharerUserId => participants
-      .firstWhereOrNull((p) => p.screenshareTrack != null)
-      ?.identity;
+  String? get screenSharerUserId {
+    // Prefer the participant flag (set by _updateScreenSharingParticipants).
+    // Fall back to Firestore: remote viewers may see the compositor track on the
+    // sharer's camera UID before isScreenSharing is synced on the participant.
+    return participants.firstWhereOrNull((p) => p.isScreenSharing)?.identity ??
+        agendaProvider.currentLiveMeeting?.screenSharingUserId ??
+        liveMeetingProvider.liveMeeting?.screenSharingUserId;
+  }
 
-  AgoraParticipant? get screenSharer =>
-      participants.firstWhereOrNull((p) => p.identity == screenSharerUserId);
+  AgoraParticipant? get screenSharer {
+    final id = screenSharerUserId;
+    if (id == null) return null;
+    return participants.firstWhereOrNull((p) => p.identity == id);
+  }
+
+  String? get screenSharePath =>
+      agendaProvider.currentLiveMeeting?.screenSharePath ??
+      liveMeetingProvider.liveMeeting?.screenSharePath;
 
   AgoraRoom? get room => _room;
 
@@ -268,6 +285,7 @@ class ConferenceRoom with ChangeNotifier {
     liveMeetingProvider.conferenceRoom = this;
 
     liveMeetingProvider.eventProvider.addListener(_muteOthersOnOverride);
+    agendaProvider.addListener(_updateScreenSharingParticipants);
   }
 
   void _muteOthersOnOverride() {
@@ -302,6 +320,7 @@ class ConferenceRoom with ChangeNotifier {
       _room = AgoraRoom(
         channelName: roomName,
         token: token,
+        screenShareToken: screenShareToken,
         liveMeetingProvider: liveMeetingProvider,
         eventProvider: liveMeetingProvider.eventProvider,
         conferenceRoom: this,
@@ -313,10 +332,24 @@ class ConferenceRoom with ChangeNotifier {
       loggingService.log(stacktrace);
       loggingService.log(err.runtimeType);
 
-      _connectError = js_util.callMethod(err, 'toString', []);
+      try {
+        final raw = jsCallMethod(err as JSObject, 'toString', []);
+        final dart = raw?.dartify();
+        _connectError = dart is String ? dart : dart?.toString();
+      } catch (_) {
+        _connectError = 'Unknown connection error';
+      }
       notifyListeners();
 
       Debug.log(err);
+
+      // Only roll back if we were actually joining a breakout room.
+      // getMeetingJoinInfo() sets _activeBreakoutRoomId = null, so for main-
+      // room failures activeBreakoutRoomId is null and there is no optimistic
+      // getBreakoutRoomFuture write to undo.
+      if (liveMeetingProvider.activeBreakoutRoomId != null) {
+        liveMeetingProvider.rollbackBreakoutRoomPresence();
+      }
     }
   }
 
@@ -338,6 +371,10 @@ class ConferenceRoom with ChangeNotifier {
     _isDisposed = true;
     liveMeetingProvider.conferenceRoom = null;
 
+    if (isLocalSharingScreenActive) {
+      unawaited(_writeScreenSharingState(null));
+    }
+
     _room?.dispose();
     _updateLiveMeetingParticipants(participantsOverride: [], notify: false);
     _disposeStreamsAndSubscriptions();
@@ -346,9 +383,11 @@ class ConferenceRoom with ChangeNotifier {
 
   void _disposeStreamsAndSubscriptions() {
     liveMeetingProvider.eventProvider.removeListener(_muteOthersOnOverride);
+    agendaProvider.removeListener(_updateScreenSharingParticipants);
 
     _debouncedDominantSpeakerSubscription?.cancel();
-    _unraiseHandSubscription.cancel();
+    // Assigned in onConnected; dispose can run first (leave / remount / failed join).
+    _unraiseHandSubscription?.cancel();
     _debouncedDominantSpeakerStream?.dispose();
 
     _onExceptionStreamController.close();
@@ -357,23 +396,76 @@ class ConferenceRoom with ChangeNotifier {
     }
   }
 
-  Future<bool> _requestUserMediaPermission({bool? audio, bool? video}) async {
+  Future<String?> _queryMediaPermission(String name) async {
     try {
-      final stream = await html.window.navigator.mediaDevices?.getUserMedia({
+      final status =
+          await html.window.navigator.permissions?.query({'name': name});
+      return normalizePermissionState(status?.state);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// null = allowed (or probe skipped). Otherwise a GUM-like error string.
+  Future<String?> _requestUserMediaPermission({
+    bool? audio,
+    bool? video,
+  }) async {
+    final requestingVideo = video == true;
+    final requestingAudio = audio == true;
+    String? permissionState;
+    if (kIsWeb) {
+      if (requestingVideo) {
+        permissionState = await _queryMediaPermission('camera');
+      } else if (requestingAudio) {
+        permissionState = await _queryMediaPermission('microphone');
+      }
+    }
+
+    final action = userMediaProbeAction(
+      requestingVideo: requestingVideo,
+      requestingAudio: requestingAudio,
+      videoCapturedThisSession: _room?.videoCapturedThisSession ?? false,
+      audioCaptureAvailable: _room?.audioCaptureAvailable ?? false,
+      agoraHoldsMedia: requestingVideo
+          ? (_room?.videoModuleInitialized ?? false)
+          : (_room?.audioCaptureAvailable ?? false),
+      permissionState: permissionState,
+    );
+    if (action == UserMediaProbeAction.skip) return null;
+    if (action == UserMediaProbeAction.denied) return kGumNotAllowedError;
+
+    final mediaDevices = html.window.navigator.mediaDevices;
+    if (mediaDevices == null) {
+      return kGumNotFoundError;
+    }
+    late final Future<html.MediaStream> gumFuture;
+    try {
+      gumFuture = mediaDevices.getUserMedia({
         'audio': audio ?? false,
         'video': video ?? false,
       });
-      if (stream == null) {
-        return false;
-      }
+      final stream = await gumFuture.timeout(const Duration(seconds: 4));
       print('Microphone permission granted.');
       // Stop using the audio stream right away
       stream.getTracks().forEach((track) => track.stop());
-      return true;
+      // Let the device drop before Agora re-acquires it.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      return null;
+    } on TimeoutException {
+      // timeout() does not cancel getUserMedia. Stop a late grant so
+      // those tracks cannot hold the device when Agora retries.
+      reclaimTimedOutFuture<html.MediaStream>(
+        gumFuture,
+        onLateSuccess: (lateStream) {
+          lateStream.getTracks().forEach((track) => track.stop());
+        },
+      );
+      return kGumNotAllowedError;
     } catch (e) {
       print('Microphone permission denied.');
       print(e);
-      return false;
+      return e.toString();
     }
   }
 
@@ -384,30 +476,91 @@ class ConferenceRoom with ChangeNotifier {
     final updatedEnabledValue = setEnabled ?? !videoEnabled;
 
     if (updatedEnabledValue) {
-      final granted = await _requestUserMediaPermission(video: true);
-      if (!granted) {
-        await showAlert(
+      final probeError = await _requestUserMediaPermission(video: true);
+      if (probeError != null) {
+        await AudioVideoErrorDialog.show(
           navigatorState.context,
-          'Error enabling camera. Please ensure you have granted permission.',
+          probeError,
+          inMeeting: true,
         );
         return;
       }
     }
 
     // Lock this code so that different sections toggling audio will not cause race conditions.
-    await _videoTogglingLock.synchronized(
-      () async {
-        await _room!.localParticipant!.enableVideo(
-          setEnabled: updatedEnabledValue,
-          deviceId: sharedPreferencesService.getDefaultCameraId(),
-        );
-        if (updateProvider) {
-          liveMeetingProvider.shouldStartLocalVideoOn = updatedEnabledValue;
-        }
-      },
-      timeout: Duration(seconds: 4),
-    );
+    bool executed = false;
+    String? deviceError;
+    try {
+      await _videoTogglingLock.synchronized(
+        () async {
+          try {
+            final participant = _room?.localParticipant;
+            if (participant == null) {
+              loggingService.log(
+                'toggleVideoEnabled: skipped — _room or localParticipant is null',
+              );
+              return;
+            }
+            await participant.enableVideo(
+              setEnabled: updatedEnabledValue,
+              deviceId: sharedPreferencesService.getDefaultCameraId(),
+              // Every camera-on: a stale videoCaptureAvailable skipped the wait.
+              waitForCapture: kIsWeb && updatedEnabledValue,
+            );
+            if (updatedEnabledValue) {
+              _room?.videoModuleInitialized = true;
+            }
+            if (updateProvider) {
+              liveMeetingProvider.shouldStartLocalVideoOn = updatedEnabledValue;
+            }
+            executed = true;
+          } catch (e) {
+            loggingService.log('toggleVideoEnabled: exception: $e');
+            if (isGetUserMediaError(e)) {
+              // Show the dialog only after the lock is released below.
+              // Awaiting it here held the lock until the user closed it, so
+              // the next tap hit the 6s acquisition timeout and surfaced a
+              // raw TimeoutException.
+              deviceError = e.toString();
+              return;
+            }
+            rethrow;
+          }
+        },
+        timeout: Duration(seconds: 6),
+      );
+    } on TimeoutException {
+      // Another toggle is still in flight (device capture can take seconds).
+      // Drop this tap instead of surfacing the lock timeout to the user.
+      loggingService.log('toggleVideoEnabled: toggle in progress, tap ignored');
+      return;
+    }
+    if (deviceError != null) {
+      await AudioVideoErrorDialog.show(
+        navigatorState.context,
+        deviceError!,
+        inMeeting: true,
+      );
+      return;
+    }
+    if (executed) notifyListeners();
+  }
+
+  /// iris-web often fails camera publish without throwing. Revert the local
+  /// tile so it is not a black rectangle, and show the existing AV dialog.
+  Future<void> onLocalVideoCaptureFailed(String error) async {
+    final participant = _room?.localParticipant;
+    if (participant == null || !participant.videoTrackEnabled) return;
+    if (participant.isWaitingForLocalVideoStart) return;
+    try {
+      await participant.enableVideo(setEnabled: false);
+    } catch (_) {}
+    liveMeetingProvider.shouldStartLocalVideoOn = false;
     notifyListeners();
+    final context = navigatorState.context;
+    if (context.mounted) {
+      await AudioVideoErrorDialog.show(context, error, inMeeting: true);
+    }
   }
 
   Future<void> toggleAudioEnabled({
@@ -417,8 +570,8 @@ class ConferenceRoom with ChangeNotifier {
     final updatedEnabledValue = setEnabled ?? !audioEnabled;
 
     if (updatedEnabledValue) {
-      final granted = await _requestUserMediaPermission(audio: true);
-      if (!granted) {
+      final probeError = await _requestUserMediaPermission(audio: true);
+      if (probeError != null) {
         await showAlert(
           navigatorState.context,
           'Error enabling microphone. Please ensure you have granted permission.',
@@ -428,49 +581,258 @@ class ConferenceRoom with ChangeNotifier {
     }
 
     // Lock this code so that different sections toggling audio will not cause race conditions.
-    await _audioTogglingLock.synchronized(
-      () async {
-        if (updatedEnabledValue &&
-            liveMeetingProvider.audioTemporarilyDisabled) {
-          return;
-        }
+    bool executed = false;
+    String? deviceError;
+    try {
+      await _audioTogglingLock.synchronized(
+        () async {
+          if (updatedEnabledValue &&
+              liveMeetingProvider.audioTemporarilyDisabled) {
+            executed =
+                true; // notify listeners so UI can reconcile toggle state
+            return;
+          }
 
-        final audioEnableFutures = [
-          _room!.localParticipant!.enableAudio(
-            setEnabled: updatedEnabledValue,
-            deviceId: sharedPreferencesService.getDefaultMicrophoneId(),
-          ),
-          if ((liveMeetingProvider
-                      .eventProvider.selfParticipant?.muteOverride ??
-                  false) &&
-              updatedEnabledValue)
-            firestoreLiveMeetingService.updateParticipantMuteOverride(
-              event: liveMeetingProvider.eventProvider.event,
-              participantId: userService.currentUserId!,
-              muteOverride: false,
-            ),
-        ];
+          final participant = _room?.localParticipant;
+          if (participant == null) {
+            loggingService.log(
+              'toggleAudioEnabled: skipped — _room or localParticipant is null',
+            );
+            return;
+          }
 
-        await Future.wait(audioEnableFutures);
+          // Optimistic update: reflect the new state immediately so the mute
+          // button responds on click instead of after the SDK round-trip
+          // completes. Reverted below if the toggle fails.
+          final previousEnabled = participant.audioTrackEnabled;
+          participant.audioTrackEnabled = updatedEnabledValue;
+          notifyListeners();
 
-        if (updateProvider) {
-          liveMeetingProvider.shouldStartLocalAudioOn = updatedEnabledValue;
-        }
-      },
-      timeout: Duration(seconds: 4),
-    );
+          // Tracks whether the Agora toggle itself succeeded, so the rollback
+          // below never misreports live mic state: if Agora unmuted but the
+          // parallel Firestore write failed, the mic IS hot and the UI must
+          // keep showing unmuted.
+          bool agoraToggleCompleted = false;
+          try {
+            final audioEnableFutures = [
+              participant
+                  .enableAudio(
+                setEnabled: updatedEnabledValue,
+                deviceId: sharedPreferencesService.getDefaultMicrophoneId(),
+              )
+                  .then((_) {
+                agoraToggleCompleted = true;
+              }),
+              if ((liveMeetingProvider
+                          .eventProvider.selfParticipant?.muteOverride ??
+                      false) &&
+                  updatedEnabledValue)
+                firestoreLiveMeetingService.updateParticipantMuteOverride(
+                  event: liveMeetingProvider.eventProvider.event,
+                  participantId: userService.currentUserId!,
+                  muteOverride: false,
+                ),
+            ];
 
-    notifyListeners();
+            // Default (non-eager) Future.wait: all futures settle before it
+            // completes, so agoraToggleCompleted is final in the catch block.
+            await Future.wait(audioEnableFutures);
+
+            if (updateProvider) {
+              liveMeetingProvider.shouldStartLocalAudioOn = updatedEnabledValue;
+            }
+            executed = true;
+          } catch (e) {
+            // Covers AgoraRtcException from enableAudio and FirebaseException
+            // (or any other error) from updateParticipantMuteOverride.
+            if (!agoraToggleCompleted) {
+              participant.audioTrackEnabled = previousEnabled;
+              notifyListeners();
+            } else if (updatedEnabledValue) {
+              // Agora unmuted, so the failure came from the muteOverride clear
+              // (the only other future). A hot mic with the override still
+              // persisted would make the next self-participant snapshot treat
+              // the stale override as a fresh host-mute (re-mute + "muted by
+              // the host" toast). Mute again so live state matches the
+              // persisted override; retrying unmute re-attempts the clear.
+              try {
+                await participant.enableAudio(setEnabled: false);
+                notifyListeners();
+              } catch (rollbackError) {
+                // Mic stays hot — keep showing unmuted (truthful) and let the
+                // snapshot listener reconcile.
+                loggingService.log(
+                  'toggleAudioEnabled: override rollback failed: $rollbackError',
+                );
+              }
+            }
+            loggingService.log('toggleAudioEnabled: exception: $e');
+            if (isGetUserMediaError(e)) {
+              // Shown after the lock is released below; see toggleVideoEnabled.
+              deviceError = e.toString();
+              return;
+            }
+            rethrow;
+          }
+        },
+        timeout: Duration(seconds: 4),
+      );
+    } on TimeoutException {
+      loggingService.log('toggleAudioEnabled: toggle in progress, tap ignored');
+      return;
+    }
+    if (deviceError != null) {
+      await AudioVideoErrorDialog.show(
+        navigatorState.context,
+        deviceError!,
+        inMeeting: true,
+      );
+      return;
+    }
+
+    if (executed) notifyListeners();
+  }
+
+  bool _canInitiateScreenShare() {
+    final userId = userService.currentUserId;
+    if (userId == null) return false;
+    if (liveMeetingProvider.eventProvider.event.creatorId == userId) {
+      return true;
+    }
+    return userDataService.getMembership(communityProvider.communityId).isMod;
   }
 
   Future<void> toggleScreenShare({bool? setEnabled}) async {
     final updatedEnabledValue = setEnabled ?? !isLocalSharingScreenActive;
     if (updatedEnabledValue) {
-      await _room!.localParticipant!.startScreenShare();
+      if (!_canInitiateScreenShare()) return;
+      if (screenSharer != null && !isLocalSharingScreenActive) return;
+      bool started = false;
+      bool cancelled = false;
+      try {
+        await _room!.localParticipant!.startScreenShare(
+          channelName: roomName,
+          screenShareToken: screenShareToken,
+          onNativeStop: () => unawaited(_writeScreenSharingState(null)),
+          onScreenEngineVideoSizeChanged: (uid, w, h, rot) {
+            _room!.applyReportedVideoFrameSize(uid, w, h, rot);
+            // Screen engine reports uid=0 for local capture; layout keys by screenUid.
+            if (uid == 0) {
+              final screenUid = _room!.localParticipant?.screenAgoraUid;
+              if (screenUid != null) {
+                _room!.applyReportedVideoFrameSize(screenUid, w, h, rot);
+              }
+            }
+          },
+        );
+        started = true;
+        if (kIsWeb) {
+          final px = jsGetCanvasCompositorPixelSize();
+          if (px != null && px.length >= 2 && px[0] > 0 && px[1] > 0) {
+            final uid = uidToInt(userService.currentUserId!);
+            _room!.seedVideoFrameSize(uid, px[0], px[1]);
+            _room!.seedVideoFrameSize(0, px[0], px[1]);
+          }
+        }
+      } on ScreenShareCancelledException {
+        // User dismissed the browser screen picker — silently treat as no-op.
+        cancelled = true;
+        return;
+      } finally {
+        // Skip the Firestore write on cancellation — nothing changed in Agora
+        // or Firestore, and writing null could clear an in-progress share.
+        if (!cancelled) {
+          await _writeScreenSharingState(
+            started && !_isDisposed ? userService.currentUserId : null,
+          );
+        }
+      }
     } else {
-      await _room!.localParticipant!.stopScreenShare();
+      try {
+        final screenUid = _room?.localParticipant?.screenAgoraUid;
+        await _room!.localParticipant!.stopScreenShare();
+        if (screenUid != null) {
+          _room!.clearVideoFrameSize(screenUid);
+        }
+      } finally {
+        await _writeScreenSharingState(null);
+      }
     }
     notifyListeners();
+  }
+
+  Future<void> _writeScreenSharingState(String? userId) async {
+    if (_isDisposed) return;
+    final liveMeetingPath = agendaProvider.liveMeetingPath;
+    if (liveMeetingPath.isEmpty) return;
+
+    // screenShareAgoraUid is the Agora integer UID of the secondary screen-share
+    // engine (uidToInt(userId)|(1<<30)). on_live_meeting.dart reads this field to
+    // use the screen UID (not the camera UID) as maxResolutionUid in the recording
+    // layout. Null when single-engine fallback is active or on stop.
+    final screenAgoraUid =
+        userId != null ? _room?.localParticipant?.screenAgoraUid : null;
+    final String? screenSharePath;
+    if (userId == null) {
+      screenSharePath = null;
+    } else if (screenAgoraUid != null) {
+      screenSharePath = LiveMeeting.screenSharePathDual;
+    } else if (kIsWeb) {
+      screenSharePath = LiveMeeting.screenSharePathCanvas;
+    } else {
+      screenSharePath = LiveMeeting.screenSharePathSingle;
+    }
+
+    // Write directly (not via currentMeeting.copyWith) so this never silently
+    // no-ops when agendaProvider.currentLiveMeeting is null during transitions.
+    try {
+      await firestoreDatabase.firestore.doc(liveMeetingPath).set(
+        {
+          LiveMeeting.kFieldScreenSharingUserId: userId ?? FieldValue.delete(),
+          LiveMeeting.kFieldScreenShareAgoraUid:
+              screenAgoraUid ?? FieldValue.delete(),
+          LiveMeeting.kFieldScreenSharePath:
+              screenSharePath ?? FieldValue.delete(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      loggingService.log(
+          '_writeScreenSharingState: error writing to $liveMeetingPath: $e');
+    }
+  }
+
+  void _updateScreenSharingParticipants() {
+    final liveMeeting = agendaProvider.currentLiveMeeting;
+    final screenSharingUserId = liveMeeting?.screenSharingUserId;
+    final screenShareAgoraUid = liveMeeting?.screenShareAgoraUid;
+
+    // Only sync remote participants from Firestore. The local participant's
+    // isScreenSharing flag is authoritative — it is set directly by
+    // startScreenShare/stopScreenShare. Syncing it here would cause a race
+    // where an in-flight Firestore event (with screenSharingUserId still null)
+    // clears the local flag before the write we just made has been confirmed.
+    for (final participant
+        in _room?.remoteParticipants ?? <AgoraParticipant>[]) {
+      final shouldShare = screenSharingUserId != null &&
+          participant.userId == screenSharingUserId;
+      if (shouldShare && screenShareAgoraUid != null) {
+        participant.syncRemoteScreenShare(
+          screenUid: screenShareAgoraUid,
+          sharing: true,
+        );
+      } else if (shouldShare) {
+        participant.setScreenSharing(true);
+      } else {
+        participant.syncRemoteScreenShare(sharing: false, screenUid: null);
+      }
+    }
+    // Defer past the current build frame — this method is called as an
+    // AgendaProvider listener, which can fire mid-build, causing
+    // "setState during build" if we notify synchronously.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isDisposed) notifyListeners();
+    });
   }
 
   Future<void> onConnected(AgoraRoom room) async {
@@ -479,14 +841,14 @@ class ConferenceRoom with ChangeNotifier {
     _debouncedDominantSpeakerStream = BehaviorSubjectWrapper(
       room.dominantSpeakerStream
           .distinct()
-          .debounceTime(Duration(milliseconds: 500))
+          .debounceTime(Duration(milliseconds: 150))
           .switchMap((id) {
         if (id == null) {
-          // If it is null then wait a few seconds to make sure there arent other changes before switching over to no active speaker
-          return Rx.timer(null, Duration(seconds: 3));
+          // Wait before clearing speaker indicator to avoid flickering
+          return Rx.timer(null, Duration(milliseconds: 1000));
         }
         return Stream.value(id); // Immediately emit new speaker ID
-      }).debounceTime(Duration(seconds: 1)),
+      }).debounceTime(Duration(milliseconds: 150)),
     );
     _debouncedDominantSpeakerSubscription =
         _debouncedDominantSpeakerStream!.listen((_) => notifyListeners());
@@ -500,13 +862,9 @@ class ConferenceRoom with ChangeNotifier {
           room.localParticipant?.agoraUid == dominantSpeaker?.agoraUid;
       final isHandRaised =
           meetingGuideCardModel.getHandIsRaised(userService.currentUserId!);
-      final currentAgendaModelItemId =
-          meetingGuideCardModel.meetingGuideCardAgendaItem?.id;
-      if (dismissRaisedHand &&
-          isHandRaised &&
-          currentAgendaModelItemId != null) {
+      if (dismissRaisedHand && isHandRaised) {
         firestoreMeetingGuideService.toggleHandRaise(
-          agendaItemId: currentAgendaModelItemId,
+          agendaItemId: meetingGuideCardModel.handRaiseScopeId,
           userId: userService.currentUserId!,
           liveMeetingPath: agendaProvider.liveMeetingPath,
           isHandRaised: false,
@@ -603,21 +961,36 @@ class ConferenceRoom with ChangeNotifier {
     Debug.log('ConferenceRoom._onParticipantConnected');
 
     _updateLiveMeetingParticipants();
+    _updateScreenSharingParticipants();
+
+    // When a participant rejoins (e.g. after a WiFi drop without using the
+    // "Leave Meeting" CTA), their existing Firestore vote may already satisfy
+    // the consensus threshold with the updated denominator. Re-checking here
+    // mirrors the same logic in onParticipantDisconnected and prevents the
+    // agenda from getting stuck when all visible voters show "Ready" but no
+    // one can click Next to trigger the cloud function again.
+    Future.delayed(
+        Duration(
+            milliseconds: (500 + 5.0 * random.nextDouble() * 1000).round()),
+        () {
+      if (!_isDisposed && liveMeetingProvider.isInBreakout) {
+        agendaProvider.checkReadyToAdvance();
+      }
+    });
+
+    notifyListeners();
   }
 
   void onParticipantDisconnected() {
     Debug.log('ConferenceRoom._onParticipantDisconnected');
     _updateLiveMeetingParticipants();
 
-    if (liveMeetingProvider.isInBreakout) {
-      Future.delayed(
-          Duration(milliseconds: (5.0 * random.nextDouble() * 1000).round()),
-          () {
-        if (!_isDisposed) {
-          agendaProvider.checkReadyToAdvance();
-        }
-      });
-    }
+    Future.delayed(
+        Duration(milliseconds: (5.0 * random.nextDouble() * 1000).round()), () {
+      if (!_isDisposed && liveMeetingProvider.isInBreakout) {
+        agendaProvider.checkReadyToAdvance();
+      }
+    });
 
     notifyListeners();
   }

@@ -5,6 +5,38 @@ import 'package:client/services.dart';
 import 'package:data_models/utils/firestore_utils.dart';
 import 'package:rxdart/rxdart.dart';
 
+bool _isFirestoreUnavailable(Object error) {
+  if (error is FirebaseException && error.code == 'unavailable') {
+    return true;
+  }
+  final text = error.toString().toLowerCase();
+  return text.contains('cloud_firestore/unavailable') ||
+      text.contains('client is offline');
+}
+
+/// Retries a one-shot document read when Firestore reports the client offline.
+/// Snapshots wait for reconnect; `.get()` throws immediately.
+Future<DocumentSnapshot<T>> getDocumentRetryingUnavailable<T>(
+  DocumentReference<T> ref, {
+  int maxAttempts = 3,
+}) async {
+  Object? lastError;
+  for (var attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await ref.get();
+    } catch (error) {
+      lastError = error;
+      if (!_isFirestoreUnavailable(error) || attempt == maxAttempts - 1) {
+        rethrow;
+      }
+      await Future<void>.delayed(
+        Duration(milliseconds: 300 * (1 << attempt)),
+      );
+    }
+  }
+  throw lastError!;
+}
+
 /// Wrap streams in a data type that keeps track of the last value that arrived
 /// on the stream. This is useful in many different ways when dealing with
 /// streams inside a widget.
@@ -59,10 +91,22 @@ class BehaviorSubjectWrapper<T> extends Stream<T> {
   Future<void> dispose() async {
     if (_isDisposed) return;
     _isDisposed = true;
-    
+
     await streamSubscription.cancel();
     if (!stream.isClosed) {
       await stream.close();
+    }
+  }
+
+  /// Stop forwarding events without awaiting; use before replacing the wrapper
+  /// so the previous upstream (e.g. Firestore) subscription begins teardown
+  /// immediately alongside the new listener.
+  void disposeSync() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    unawaited(streamSubscription.cancel());
+    if (!stream.isClosed) {
+      stream.close();
     }
   }
 

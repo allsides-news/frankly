@@ -1,1 +1,3 @@
-abstract class PrePostEventDialogView {}
+abstract class PrePostEventDialogView {
+  void updateView();
+}

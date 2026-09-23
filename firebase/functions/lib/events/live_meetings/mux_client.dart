@@ -37,6 +37,17 @@ class MuxApi {
     return convert.json.decode(response.body)['data'];
   }
 
+  /// Deletes a live stream, e.g. to avoid leaking a billable orphan when the
+  /// event it was provisioned for fails to persist.
+  Future<void> deleteLiveStream(String liveStreamId) async {
+    final response = await http.delete(
+      Uri.parse('https://api.mux.com/video/v1/live-streams/$liveStreamId'),
+      headers: _headers,
+    );
+
+    _verifyResponse(response);
+  }
+
   void _verifyResponse(http.Response response) {
     if (response.statusCode < 200 || response.statusCode > 299) {
       print('Error during mux call:');

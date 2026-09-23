@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:client/features/events/features/live_meeting/features/video/data/models/networking_status_model.dart';
+import 'package:client/features/events/features/live_meeting/features/video/data/providers/agora_room.dart';
 import 'package:client/features/events/features/live_meeting/features/video/presentation/networking_status_presenter.dart';
 import 'package:client/core/data/services/clock_service.dart';
 import 'package:mockito/mockito.dart';
@@ -54,18 +55,17 @@ void main() {
   });
 
   group('updateNetworkQuality', () {
-    group(
-        '_model.networkQualityLevel == QualityType.qualityBad && isVideoEnabled',
-        () {
+    group('bad network quality', () {
       test('network quality stays bad after 5s', () async {
         model.isLowNetworkQuality = false;
         expect(model.timer, isNull);
 
         when(mockConferenceRoom.room).thenReturn(mockRoom);
         when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-        when(mockLocalParticipant.networkQualityLevel)
+        when(mockLocalParticipant.uplinkQuality)
             .thenReturn(QualityType.qualityBad);
-        when(mockConferenceRoom.videoEnabled).thenReturn(true);
+        when(mockLocalParticipant.downlinkQuality)
+            .thenReturn(QualityType.qualityGood);
 
         presenter.updateNetworkQuality();
 
@@ -82,72 +82,51 @@ void main() {
 
         when(mockConferenceRoom.room).thenReturn(mockRoom);
         when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-        when(mockLocalParticipant.networkQualityLevel)
+        when(mockLocalParticipant.uplinkQuality)
             .thenReturn(QualityType.qualityBad);
-        when(mockConferenceRoom.videoEnabled).thenReturn(true);
+        when(mockLocalParticipant.downlinkQuality)
+            .thenReturn(QualityType.qualityGood);
 
         presenter.updateNetworkQuality();
 
-        model.networkQualityLevel = QualityType.qualityGood;
+        model.uplinkQuality = QualityType.qualityGood;
         await Future.delayed(Duration(seconds: 5));
 
         expect(model.isLowNetworkQuality, isFalse);
         verify(mockView.updateView()).called(2);
         expect(model.timer!.isActive, isFalse);
       });
+
+      test('does not check videoEnabled', () async {
+        model.isLowNetworkQuality = false;
+        expect(model.timer, isNull);
+
+        when(mockConferenceRoom.room).thenReturn(mockRoom);
+        when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
+        when(mockLocalParticipant.uplinkQuality)
+            .thenReturn(QualityType.qualityBad);
+        when(mockLocalParticipant.downlinkQuality)
+            .thenReturn(QualityType.qualityGood);
+
+        presenter.updateNetworkQuality();
+
+        // videoEnabled is never accessed
+        verifyNever(mockConferenceRoom.videoEnabled);
+      });
     });
-    group(
-      '_model.networkQualityLevel != QualityType.qualityBad && isVideoEnabled',
-      () {
-        test('_model.isLowNetworkQuality', () {
-          model.isLowNetworkQuality = true;
-          model.timer = Timer.periodic(Duration(seconds: 1), (_) {});
-          expect(model.timer!.isActive, isTrue);
 
-          when(mockConferenceRoom.room).thenReturn(mockRoom);
-          when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-          when(mockLocalParticipant.networkQualityLevel)
-              .thenReturn(QualityType.qualityGood);
-          when(mockConferenceRoom.videoEnabled).thenReturn(true);
-
-          presenter.updateNetworkQuality();
-
-          expect(model.isLowNetworkQuality, isFalse);
-          verify(mockView.updateView()).called(1);
-          expect(model.timer!.isActive, isFalse);
-        });
-        test('!_model.isLowNetworkQuality', () {
-          model.isLowNetworkQuality = false;
-          model.timer = Timer.periodic(Duration(seconds: 1), (_) {});
-          expect(model.timer!.isActive, isTrue);
-
-          when(mockConferenceRoom.room).thenReturn(mockRoom);
-          when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-          when(mockLocalParticipant.networkQualityLevel)
-              .thenReturn(QualityType.qualityGood);
-          when(mockConferenceRoom.videoEnabled).thenReturn(true);
-
-          presenter.updateNetworkQuality();
-
-          expect(model.isLowNetworkQuality, isFalse);
-          verifyNever(mockView.updateView());
-          expect(model.timer!.isActive, isFalse);
-        });
-      },
-    );
-    group(
-        '_model.networkQualityLevel == QualityType.qualityBad && !isVideoEnabled',
-        () {
-      test('_model.isLowNetworkQuality', () {
+    group('good network quality', () {
+      test('resets isLowNetworkQuality when it was true', () {
         model.isLowNetworkQuality = true;
         model.timer = Timer.periodic(Duration(seconds: 1), (_) {});
         expect(model.timer!.isActive, isTrue);
 
         when(mockConferenceRoom.room).thenReturn(mockRoom);
         when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-        when(mockLocalParticipant.networkQualityLevel)
-            .thenReturn(QualityType.qualityBad);
-        when(mockConferenceRoom.videoEnabled).thenReturn(false);
+        when(mockLocalParticipant.uplinkQuality)
+            .thenReturn(QualityType.qualityGood);
+        when(mockLocalParticipant.downlinkQuality)
+            .thenReturn(QualityType.qualityGood);
 
         presenter.updateNetworkQuality();
 
@@ -155,54 +134,18 @@ void main() {
         verify(mockView.updateView()).called(1);
         expect(model.timer!.isActive, isFalse);
       });
-      test('!_model.isLowNetworkQuality', () {
+
+      test('does not call updateView when isLowNetworkQuality was false', () {
         model.isLowNetworkQuality = false;
         model.timer = Timer.periodic(Duration(seconds: 1), (_) {});
         expect(model.timer!.isActive, isTrue);
 
         when(mockConferenceRoom.room).thenReturn(mockRoom);
         when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-        when(mockLocalParticipant.networkQualityLevel)
-            .thenReturn(QualityType.qualityBad);
-        when(mockConferenceRoom.videoEnabled).thenReturn(false);
-
-        presenter.updateNetworkQuality();
-
-        expect(model.isLowNetworkQuality, isFalse);
-        verifyNever(mockView.updateView());
-        expect(model.timer!.isActive, isFalse);
-      });
-    });
-    group(
-        '_model.networkQualityLevel != QualityType.qualityBad && !isVideoEnabled',
-        () {
-      test('_model.isLowNetworkQuality', () {
-        model.isLowNetworkQuality = true;
-        model.timer = Timer.periodic(Duration(seconds: 1), (_) {});
-        expect(model.timer!.isActive, isTrue);
-
-        when(mockConferenceRoom.room).thenReturn(mockRoom);
-        when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-        when(mockLocalParticipant.networkQualityLevel)
-            .thenReturn(QualityType.qualityPoor);
-        when(mockConferenceRoom.videoEnabled).thenReturn(false);
-
-        presenter.updateNetworkQuality();
-
-        expect(model.isLowNetworkQuality, isFalse);
-        verify(mockView.updateView()).called(1);
-        expect(model.timer!.isActive, isFalse);
-      });
-      test('!_model.isLowNetworkQuality', () {
-        model.isLowNetworkQuality = false;
-        model.timer = Timer.periodic(Duration(seconds: 1), (_) {});
-        expect(model.timer!.isActive, isTrue);
-
-        when(mockConferenceRoom.room).thenReturn(mockRoom);
-        when(mockRoom.localParticipant).thenReturn(mockLocalParticipant);
-        when(mockLocalParticipant.networkQualityLevel)
-            .thenReturn(QualityType.qualityPoor);
-        when(mockConferenceRoom.videoEnabled).thenReturn(false);
+        when(mockLocalParticipant.uplinkQuality)
+            .thenReturn(QualityType.qualityGood);
+        when(mockLocalParticipant.downlinkQuality)
+            .thenReturn(QualityType.qualityGood);
 
         presenter.updateNetworkQuality();
 
@@ -218,12 +161,14 @@ void main() {
       model.isLowNetworkQualityMessageDismissed = true;
       presenter.dismissLowNetworkQualityMessage();
       expect(model.isLowNetworkQualityMessageDismissed, isTrue);
+      expect(model.dismissedAt, isNotNull);
     });
 
     test('was not dismissed', () {
       model.isLowNetworkQualityMessageDismissed = false;
       presenter.dismissLowNetworkQualityMessage();
       expect(model.isLowNetworkQualityMessageDismissed, isTrue);
+      expect(model.dismissedAt, isNotNull);
     });
   });
 
@@ -236,96 +181,102 @@ void main() {
     expect(model.timer!.isActive, isFalse);
   });
 
+  group('getMessage', () {
+    test('suggests turning camera off when uplink is bad', () {
+      model.uplinkQuality = QualityType.qualityBad;
+      model.downlinkQuality = QualityType.qualityGood;
+
+      expect(presenter.getMessage(), contains('Turning off your camera'));
+    });
+
+    test('generic message when only downlink is bad', () {
+      model.uplinkQuality = QualityType.qualityGood;
+      model.downlinkQuality = QualityType.qualityBad;
+
+      expect(presenter.getMessage(), contains('connection is spotty'));
+    });
+
+    test('generic message when both directions are bad', () {
+      // A starved downlink makes the SDK report the uplink as bad too
+      // (bandwidth estimation feedback arrives over the downlink), so the
+      // camera-off advice would be misdirected — see getMessage.
+      model.uplinkQuality = QualityType.qualityBad;
+      model.downlinkQuality = QualityType.qualityVbad;
+
+      expect(presenter.getMessage(), contains('connection is spotty'));
+      expect(
+        presenter.getMessage(),
+        isNot(contains('Turning off your camera')),
+      );
+    });
+  });
+
   group('getCorrectWidget', () {
     final nothing = SizedBox.shrink();
     final networkStatusAlert = SizedBox.shrink();
+    final reconnectingAlert = SizedBox.shrink();
 
-    test(
-        'device time is before required threshold time and low network quality message is dismissed',
-        () {
-      model.isLowNetworkQualityMessageDismissed = true;
-      final DateTime timeBefore =
-          model.messageShowTimeThreshold.subtract(Duration(seconds: 1));
-
-      when(mockClockService.now()).thenReturn(timeBefore);
-      final result = presenter.getCorrectWidget(
-        nothing: nothing,
-        networkStatusAlert: networkStatusAlert,
-      );
-      expect(result, nothing);
-    });
-
-    test(
-        'device time is before required threshold time and low network quality message is not dismissed',
-        () {
+    test('shows nothing when network quality is good', () {
+      model.isLowNetworkQuality = false;
       model.isLowNetworkQualityMessageDismissed = false;
-      final DateTime timeBefore =
-          model.messageShowTimeThreshold.subtract(Duration(seconds: 1));
 
-      when(mockClockService.now()).thenReturn(timeBefore);
       final result = presenter.getCorrectWidget(
         nothing: nothing,
         networkStatusAlert: networkStatusAlert,
+        reconnectingAlert: reconnectingAlert,
       );
       expect(result, nothing);
     });
 
-    test(
-        'device time is at the same time as required threshold time and low network quality message is dismissed',
-        () {
-      model.isLowNetworkQualityMessageDismissed = true;
-      final DateTime currentTime = model.messageShowTimeThreshold;
-
-      when(mockClockService.now()).thenReturn(currentTime);
-      final result = presenter.getCorrectWidget(
-        nothing: nothing,
-        networkStatusAlert: networkStatusAlert,
-      );
-      expect(result, nothing);
-    });
-
-    test(
-        'device time is at the same time as required threshold time and low network quality message is not dismissed',
-        () {
+    test('shows alert when network quality is low and not dismissed', () {
+      model.isLowNetworkQuality = true;
       model.isLowNetworkQualityMessageDismissed = false;
-      final DateTime currentTime = model.messageShowTimeThreshold;
 
-      when(mockClockService.now()).thenReturn(currentTime);
       final result = presenter.getCorrectWidget(
         nothing: nothing,
         networkStatusAlert: networkStatusAlert,
-      );
-      expect(result, nothing);
-    });
-
-    test(
-        'device time is at the later time as required threshold time and low network quality message is dismissed',
-        () {
-      model.isLowNetworkQualityMessageDismissed = true;
-      final DateTime timeAfter =
-          model.messageShowTimeThreshold.add(Duration(seconds: 1));
-
-      when(mockClockService.now()).thenReturn(timeAfter);
-      final result = presenter.getCorrectWidget(
-        nothing: nothing,
-        networkStatusAlert: networkStatusAlert,
-      );
-      expect(result, nothing);
-    });
-
-    test(
-        'device time is at the later time as required threshold time and low network quality message is not dismissed',
-        () {
-      model.isLowNetworkQualityMessageDismissed = false;
-      final DateTime timeAfter =
-          model.messageShowTimeThreshold.add(Duration(seconds: 1));
-
-      when(mockClockService.now()).thenReturn(timeAfter);
-      final result = presenter.getCorrectWidget(
-        nothing: nothing,
-        networkStatusAlert: networkStatusAlert,
+        reconnectingAlert: reconnectingAlert,
       );
       expect(result, networkStatusAlert);
+    });
+
+    test('shows nothing when network quality is low but dismissed', () {
+      model.isLowNetworkQuality = true;
+      model.isLowNetworkQualityMessageDismissed = true;
+
+      final result = presenter.getCorrectWidget(
+        nothing: nothing,
+        networkStatusAlert: networkStatusAlert,
+        reconnectingAlert: reconnectingAlert,
+      );
+      expect(result, nothing);
+    });
+
+    test('shows nothing when network quality is good and dismissed', () {
+      model.isLowNetworkQuality = false;
+      model.isLowNetworkQualityMessageDismissed = true;
+
+      final result = presenter.getCorrectWidget(
+        nothing: nothing,
+        networkStatusAlert: networkStatusAlert,
+        reconnectingAlert: reconnectingAlert,
+      );
+      expect(result, nothing);
+    });
+
+    test('reconnecting outranks the quality alert and dismissal', () {
+      model.isLowNetworkQuality = true;
+      model.isLowNetworkQualityMessageDismissed = true;
+
+      when(mockConferenceRoom.room).thenReturn(mockRoom);
+      when(mockRoom.state).thenReturn(AgoraRoomState.RECONNECTING);
+
+      final result = presenter.getCorrectWidget(
+        nothing: nothing,
+        networkStatusAlert: networkStatusAlert,
+        reconnectingAlert: reconnectingAlert,
+      );
+      expect(result, reconnectingAlert);
     });
   });
 }

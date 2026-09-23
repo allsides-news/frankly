@@ -1,6 +1,7 @@
 import 'package:client/core/widgets/custom_loading_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:client/core/data/services/logging_service.dart';
+import 'package:client/core/utils/error_utils.dart';
 import 'package:client/services.dart';
 
 /// Provides loading and error utilities for StreamBuilder.
@@ -16,6 +17,7 @@ class CustomStreamBuilder<T> extends StatelessWidget {
     this.height = 200,
     this.width,
     this.showLoading = true,
+    this.loadingBuilder,
     this.buildWhileLoading = false,
     this.stream,
   }) : super(key: key);
@@ -31,6 +33,7 @@ class CustomStreamBuilder<T> extends StatelessWidget {
   final double height;
   final double? width;
   final bool showLoading;
+  final WidgetBuilder? loadingBuilder;
 
   /// If true, the builder will be called even if the snapshot is still loading.
   /// Defaults to false, i.e. a loading indicator / placeholder will be shown.
@@ -47,13 +50,21 @@ class CustomStreamBuilder<T> extends StatelessWidget {
       builder: (_, snapshot) {
         if (snapshot.hasError) {
           final error = snapshot.error;
+          // Permission denials are expected. Do not also swallow Firestore
+          // `unavailable` here: one-shot `.get()` calls (after retries) are
+          // often `.asStream()`'d into this widget and must stay at error.
+          // Snapshot-listener blips are downgraded in
+          // logStreamErrorUnlessPermissionDenied.
+          final permissionDenied = isPermissionDeniedError(error);
           loggingService.log(
             'CustomStreamBuilder.build : $entryFrom',
-            logType: LogType.error,
+            logType: permissionDenied ? LogType.debug : LogType.error,
             error: error,
             stackTrace: error is Error ? error.stackTrace : currentStackTrace,
           );
-          loggingService.log(errorMessage);
+          if (!permissionDenied) {
+            loggingService.log(errorMessage);
+          }
 
           if (errorBuilder != null) {
             return errorBuilder!(context);
@@ -70,6 +81,8 @@ class CustomStreamBuilder<T> extends StatelessWidget {
             snapshot.data == null &&
             snapshot.connectionState == ConnectionState.waiting) {
           if (!showLoading) return SizedBox.shrink();
+
+          if (loadingBuilder != null) return loadingBuilder!(context);
 
           return SizedBox(
             height: height,

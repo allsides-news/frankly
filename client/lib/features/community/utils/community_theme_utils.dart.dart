@@ -9,9 +9,50 @@ class PresetColorTheme {
   const PresetColorTheme({required this.lightColor, required this.darkColor});
 }
 
+/// A Space's two brand colours, resolved for a given [Brightness].
+///
+/// The colour picker validates the pair against a 4.5:1 contrast ratio and
+/// enforces which is lighter, so which one acts as background and which as
+/// foreground can simply swap by brightness -- and the contrast the admin
+/// picked holds in either mode. Using the light colour as the background in
+/// dark mode (as this used to) inverts that and breaks it.
+class SpaceBrandColors {
+  final Color background;
+  final Color foreground;
+
+  const SpaceBrandColors({required this.background, required this.foreground});
+
+  /// Null when the Space hasn't set a valid colour pair, in which case callers
+  /// should fall back to the app's own theme.
+  static SpaceBrandColors? resolve({
+    required String? lightColor,
+    required String? darkColor,
+    required Brightness brightness,
+  }) {
+    final light = ThemeUtils.parseColor(lightColor);
+    final dark = ThemeUtils.parseColor(darkColor);
+    if (light == null || dark == null) return null;
+
+    return brightness == Brightness.dark
+        ? SpaceBrandColors(background: dark, foreground: light)
+        : SpaceBrandColors(background: light, foreground: dark);
+  }
+}
+
 /// A utility class to help calculate the perceived contrast between two colors
 /// and other methods related to the creation and use of custom color schemes
 class ThemeUtils {
+  /// References the Space's brand pair is judged against.
+  ///
+  /// Deliberately fixed rather than colorScheme tokens. A Space's colours are
+  /// stored once and shown to every visitor in whichever mode *they* use, so
+  /// validating them against whichever theme the admin happened to have on
+  /// gives a different answer for the same input. These are the light-theme
+  /// values the rule was written against; colorScheme.secondary became white
+  /// under the dark theme, which rejected #ffffff as "must be lighter".
+  static const kLightColorReference = AppNeutralColors.neutral600;
+  static const kDarkColorReference = AppNeutralColors.neutral50;
+
   List<PresetColorTheme> presetColorThemes(BuildContext context) => [
         PresetColorTheme(
           lightColor: context.theme.colorScheme.surface,
@@ -97,10 +138,13 @@ class ThemeUtils {
     final darkColorIsDarkEnough = isContrastRatioValid(
       context,
       darkColor,
-      context.theme.colorScheme.surface,
+      kDarkColorReference,
     );
     final lightColorIsLightEnough = isContrastRatioValid(
-        context, lightColor, context.theme.colorScheme.secondary,);
+      context,
+      lightColor,
+      kLightColorReference,
+    );
 
     return validRatio &&
         lightDarkCorrect &&

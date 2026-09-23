@@ -53,6 +53,7 @@ class Event with _$Event implements SerializeableRequest {
   static const String kFieldBreakoutRoomDefinition = 'breakoutRoomDefinition';
   static const String kFieldStatus = 'status';
   static const String kFieldIsLocked = 'isLocked';
+  static const String kFieldIsEnded = 'isEnded';
   static const String kFieldImage = 'image';
   static const String kDurationInMinutes = 'durationInMinutes';
   static const String kFieldEventSettings = 'eventSettings';
@@ -98,6 +99,9 @@ class Event with _$Event implements SerializeableRequest {
     @JsonKey(fromJson: BreakoutRoomDefinition.fromJsonMigration)
     BreakoutRoomDefinition? breakoutRoomDefinition,
     @Default(false) bool isLocked,
+
+    /// Explicitly ended by a host/mod; triggers post-event teardown (unlike [isLocked]).
+    @Default(false) bool isEnded,
     LiveStreamInfo? liveStreamInfo,
     PrePostCard? preEventCardData,
     PrePostCard? postEventCardData,
@@ -235,6 +239,7 @@ class Event with _$Event implements SerializeableRequest {
 class EventSettings with _$EventSettings {
   static const kFieldTalkingTimer = 'talkingTimer';
   static const kFieldAlwaysRecord = 'alwaysRecord';
+  static const kFieldAlwaysTranscribe = 'alwaysTranscribe';
   static const kFieldAllowPredefineBreakoutsOnHosted =
       'allowPredefineBreakoutsOnHosted';
   static const kFieldDefaultStageView = 'defaultStageView';
@@ -258,6 +263,7 @@ class EventSettings with _$EventSettings {
     allowMultiplePeopleOnStage: false,
     showSmartMatchingForBreakouts: false,
     alwaysRecord: false,
+    alwaysTranscribe: false,
     enablePrerequisites: false,
     agendaPreview: true,
   );
@@ -267,14 +273,14 @@ class EventSettings with _$EventSettings {
     bool? chat,
     bool? showChatMessagesInRealTime,
     bool? talkingTimer,
-    // Reenable if screensharing is implemented
-    //bool? allowScreenshare,
+    bool? allowScreenshare,
     bool? allowPredefineBreakoutsOnHosted,
     bool? defaultStageView,
     bool? enableBreakoutsByCategory,
     bool? allowMultiplePeopleOnStage,
     bool? showSmartMatchingForBreakouts,
     bool? alwaysRecord,
+    bool? alwaysTranscribe,
     bool? enablePrerequisites,
     bool? agendaPreview,
   }) = _EventSettings;
@@ -322,6 +328,9 @@ class Participant with _$Participant implements SerializeableRequest {
   static const String kFieldMuteOverride = 'muteOverride';
   static const String kFieldStatus = 'status';
   static const String kFieldCreatedDate = 'createdDate';
+  static const String kFieldUtmSource = 'utm_source';
+  static const String kFieldUtmMedium = 'utm_medium';
+  static const String kFieldUtmCampaign = 'utm_campaign';
 
   factory Participant({
     required String id,
@@ -346,15 +355,18 @@ class Participant with _$Participant implements SerializeableRequest {
     /// Host can set to true to mute this user during a meeting
     @Default(false) bool muteOverride,
     Map<String, String>? joinParameters,
+    @JsonKey(name: Participant.kFieldUtmSource) String? utmSource,
+    @JsonKey(name: Participant.kFieldUtmMedium) String? utmMedium,
+    @JsonKey(name: Participant.kFieldUtmCampaign) String? utmCampaign,
     @Default([]) List<BreakoutQuestion> breakoutRoomSurveyQuestions,
     @JsonKey(fromJson: dateTimeFromTimestamp, toJson: serverTimestampOrNull)
     DateTime? mostRecentPresentTime,
     String? zipCode,
-    
+
     /// Whether user opted in to receive community communications
     @Default(false) bool optInToCommunity,
-    
-    /// Whether user opted in to receive newsletters from AllSides, LRC, and Newsweek
+
+    /// Whether user opted in to receive newsletters from AllSides
     @Default(false) bool optInToNewsletters,
   }) = _Participant;
 

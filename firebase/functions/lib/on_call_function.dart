@@ -42,6 +42,14 @@ abstract class OnCallMethod<T extends SerializeableRequest>
       print('Error during action $functionName');
       print(e);
       print(stacktrace);
+      // The interop layer's _toJsHttpsError crashes on null details
+      // (jsify(null) throws a JSNull TypeError in dart2js), which turns
+      // intended error codes like not-found into opaque unhandled internal
+      // errors on the client. Substitute empty details so the real code and
+      // message survive the JS conversion.
+      if (e is HttpsError && e.details == null) {
+        throw HttpsError(e.code, e.message, '');
+      }
       rethrow;
     }
   }

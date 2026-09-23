@@ -317,6 +317,20 @@ class AgendaItemPresenter {
     _view.updateView();
   }
 
+  /// This item's 1-based position among all agenda items currently rendered
+  /// -- saved and unsaved (e.g. a just-added, not-yet-saved item) -- in the
+  /// same order as [MeetingAgenda] builds its list, formatted as
+  /// "current/total" (e.g. "3/10").
+  String getPositionLabel() {
+    final items = [
+      ..._agendaProvider.agendaItems,
+      ..._agendaProvider.unsavedItems,
+    ];
+    final position =
+        items.indexWhere((a) => a.id == _model.agendaItem.id) + 1;
+    return '$position/${items.length}';
+  }
+
   String getTitle() {
     final agendaItemType = _model.agendaItem.type;
 

@@ -58,7 +58,7 @@ void _listenForClosedKickProposals(
       if (newlyClosed != null) {
         if (newlyClosed.status == EventProposalStatus.accepted) {
           // Get the removed user's name and original reason
-          _showRemovedUserNotification(context, newlyClosed);
+          _showRemovedUserNotification(context, newlyClosed, liveMeetingProvider);
         } else if (newlyClosed.status == EventProposalStatus.rejected) {
           PersistentFToast.show(
             context,
@@ -66,6 +66,8 @@ void _listenForClosedKickProposals(
             backgroundColor: Colors.red,
             textColor: Colors.white,
             icon: Icons.warning_amber_rounded,
+            onDismiss: () =>
+                liveMeetingProvider.onKickNotificationDismissed(),
           );
         }
       }
@@ -108,25 +110,34 @@ void _listenForOpenKickProposals(
           return;
         }
         hasVotedOn.value.add(openProposal.id!);
-        if (reason != null) {
-          await cloudFunctionsLiveMeetingService.voteToKick(
-            VoteToKickRequest(
-              targetUserId: targetUserId,
-              eventPath: liveMeetingProvider.eventPath,
-              liveMeetingPath: liveMeetingProvider.activeLiveMeetingPath,
-              reason: reason,
-              inFavor: true,
-            ),
+        try {
+          if (reason != null) {
+            await cloudFunctionsLiveMeetingService.voteToKick(
+              VoteToKickRequest(
+                targetUserId: targetUserId,
+                eventPath: liveMeetingProvider.eventPath,
+                liveMeetingPath: liveMeetingProvider.activeLiveMeetingPath,
+                reason: reason,
+                inFavor: true,
+              ),
+            );
+          } else {
+            await cloudFunctionsLiveMeetingService.voteToKick(
+              VoteToKickRequest(
+                targetUserId: targetUserId,
+                eventPath: liveMeetingProvider.eventPath,
+                liveMeetingPath: liveMeetingProvider.activeLiveMeetingPath,
+                inFavor: false,
+              ),
+            );
+          }
+        } catch (e) {
+          loggingService.log(
+            '_listenForOpenKickProposals: failed to submit vote, will retry: $e',
+            logType: LogType.error,
           );
-        } else {
-          await cloudFunctionsLiveMeetingService.voteToKick(
-            VoteToKickRequest(
-              targetUserId: targetUserId,
-              eventPath: liveMeetingProvider.eventPath,
-              liveMeetingPath: liveMeetingProvider.activeLiveMeetingPath,
-              inFavor: false,
-            ),
-          );
+          hasVotedOn.value.remove(openProposal.id!);
+          hasBeenShown.value.remove(openProposal.id!);
         }
       }
     },
@@ -136,6 +147,7 @@ void _listenForOpenKickProposals(
 Future<void> _showRemovedUserNotification(
   BuildContext context,
   EventProposal proposal,
+  LiveMeetingProvider liveMeetingProvider,
 ) async {
   final targetUserId = proposal.targetUserId;
   if (targetUserId == null) return;
@@ -180,6 +192,7 @@ Future<void> _showRemovedUserNotification(
     backgroundColor: Colors.red,
     textColor: Colors.white,
     icon: Icons.person_remove,
+    onDismiss: () => liveMeetingProvider.onKickNotificationDismissed(),
   );
 }
 
@@ -194,14 +207,27 @@ Future<String?> _kickProposalConfirmation(
   );
   final targetUser = await targetUserFuture;
   final initiatingUser = await initiatingUserFuture;
+
+  final initiatingReason = proposalToShow.votes
+      ?.firstWhereOrNull(
+        (vote) => vote.voterUserId == proposalToShow.initiatingUserId,
+      )
+      ?.reason;
+
+  final reasonText = (initiatingReason != null && initiatingReason.trim().isNotEmpty)
+      ? '"${initiatingReason.trim()}"'
+      : null;
+
   return ConfirmTextInputDialogue(
     title: context.l10n.kickOutUser(targetUser.displayName ?? 'this user'),
-    subText: '${initiatingUser.displayName} started a vote to kick'
-        ' ${targetUser.displayName} out of the event. Do you want to'
-        ' kick them out? They will not be allowed back in.',
-    textLabel: 'Enter reason',
+    mainText: reasonText ?? '',
+    subText: '${initiatingUser.displayName} wants to remove'
+        ' ${targetUser.displayName} from the event.'
+        ' If enough participants agree, they will not be allowed back in.'
+        ' Add your reason below to vote to remove them.',
+    textLabel: 'Your reason (required to vote yes)',
     textHint: 'e.g. They are trying to sabotage the event',
-    cancelText: 'Don\'t kick out',
-    confirmText: 'Kick out',
+    cancelText: 'Don\'t remove',
+    confirmText: 'Remove them',
   ).show(context: context);
 }

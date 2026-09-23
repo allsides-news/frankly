@@ -28,6 +28,7 @@ import 'package:client/features/auth/presentation/views/sign_in_dialog.dart';
 import 'package:client/core/widgets/tabs/tab_bar.dart';
 import 'package:client/core/widgets/tabs/tab_bar_view.dart';
 import 'package:client/core/routing/locations.dart';
+import 'package:client/features/user/data/services/user_service.dart';
 import 'package:client/services.dart';
 import 'package:client/styles/app_asset.dart';
 import 'package:client/core/localization/localization_helper.dart';
@@ -41,6 +42,8 @@ import 'package:provider/provider.dart';
 import 'package:universal_html/html.dart' as html;
 
 import '../event_page_presenter.dart';
+import 'package:client/core/widgets/pulse_loading_placeholder.dart';
+import 'package:client/core/widgets/delayed_loading_placeholder.dart';
 
 class EventPage extends StatefulWidget {
   final String templateId;
@@ -62,12 +65,12 @@ class EventPage extends StatefulWidget {
         communityProvider: context.read<CommunityProvider>(),
         templateId: templateId,
         eventId: eventId,
-      ),
+      )..initialize(),
       child: ChangeNotifierProvider(
         create: (context) => TemplateProvider(
           communityId: context.read<CommunityProvider>().communityId,
           templateId: templateId,
-        ),
+        )..initialize(),
         child: ChangeNotifierProvider(
           create: (context) => EventPageProvider(
             eventProvider: context.read<EventProvider>(),
@@ -81,7 +84,7 @@ class EventPage extends StatefulWidget {
               communityPermissions:
                   context.read<CommunityPermissionsProvider>(),
               communityProvider: context.read<CommunityProvider>(),
-            ),
+            )..initialize(),
             child: this,
           ),
         ),
@@ -101,12 +104,17 @@ class EventPageState extends State<EventPage> implements EventPageView {
   bool get userIsJoined => _eventProvider.isParticipant;
 
   EventSettings get eventSettings {
-    final eventSettings = context.watch<EventProvider>().event.eventSettings;
+    final eventSettings =
+        context.watch<EventProvider>().eventOrNull?.eventSettings;
     final communityEventSettings =
         context.watch<CommunityProvider>().eventSettings;
 
     return eventSettings ?? communityEventSettings;
   }
+
+  Widget _buildEventLoading() => const DelayedLoadingPlaceholder(
+        child: PulseLoadingPlaceholder(height: 320),
+      );
 
   late final EventPagePresenter _presenter;
 
@@ -119,8 +127,9 @@ class EventPageState extends State<EventPage> implements EventPageView {
     context.read<TemplateProvider>().initialize();
     context.read<EventPageProvider>().initialize();
 
-    if (!isNullOrEmpty(widget.uid)) {
+    if (!userService.isSignedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         if (!userService.isSignedIn) {
           SignInDialog.show();
         }
@@ -150,6 +159,8 @@ class EventPageState extends State<EventPage> implements EventPageView {
     bool showConfirm = true,
     bool joinCommunity = false,
     bool optInToNewsletters = false,
+    bool showBreakoutSurveyDialog = true,
+    bool showPreEventCta = true,
   }) async {
     return await alertOnError<JoinEventResults>(
           context,
@@ -157,6 +168,8 @@ class EventPageState extends State<EventPage> implements EventPageView {
                 showConfirm: showConfirm,
                 joinCommunity: joinCommunity,
                 optInToNewsletters: optInToNewsletters,
+                showBreakoutSurveyDialog: showBreakoutSurveyDialog,
+                showPreEventCta: showPreEventCta,
               ),
         ) ??
         JoinEventResults(isJoined: false);
@@ -164,10 +177,21 @@ class EventPageState extends State<EventPage> implements EventPageView {
 
   Future<void> _startMeeting() async {
     final eventPageProvider = context.read<EventPageProvider>();
+    final eventProvider = EventProvider.read(context);
     JoinEventResults? joinResults;
-    if (EventProvider.read(context).isParticipant) {
-      joinResults = await _joinEvent(showConfirm: false);
-      if (!joinResults.isJoined) return;
+    if (!eventProvider.isParticipant) {
+      // Skip the CTA and smart-match dialogs here; enterMeeting shows both
+      // so the order is CTA -> smart match -> enter.
+      joinResults = await _joinEvent(
+        showConfirm: false,
+        showBreakoutSurveyDialog: false,
+        showPreEventCta: false,
+      );
+      // Re-check the actual participant state in case the join succeeded but
+      // a later step (e.g. the CTA dialog) reported a failure.
+      if (!joinResults.isJoined && !eventProvider.isParticipant) {
+        return;
+      }
     }
     if (!mounted) return;
     await alertOnError(
@@ -218,7 +242,7 @@ class EventPageState extends State<EventPage> implements EventPageView {
     );
   }
 
-  bool _isEnterEventGraphicShown(DateTime scheduled) {
+  bool _isEnterEventGraphicShown(Event event, DateTime scheduled) {
     final isParticipant = EventProvider.watch(context).isParticipant;
     final now = clockService.now();
     final beforeMeetingCutoff = scheduled.subtract(Duration(minutes: 10));
@@ -232,11 +256,15 @@ class EventPageState extends State<EventPage> implements EventPageView {
   }
 
   Widget _buildGuide() {
+    final event = _eventProvider.eventOrNull;
+    if (event == null) return _buildEventLoading();
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_isEnterEventGraphicShown(event.scheduledTime!)) ...[
+        if (event.scheduledTime != null &&
+            _isEnterEventGraphicShown(event, event.scheduledTime!)) ...[
           CustomInkWell(
             onTap: _startMeeting,
             child: SizedBox(
@@ -300,8 +328,8 @@ class EventPageState extends State<EventPage> implements EventPageView {
         Provider.of<CommunityPermissionsProvider>(context).canEditCommunity;
 
     final hasPrePostContent =
-        (eventProvider.event.preEventCardData?.hasData ?? false) ||
-            (eventProvider.event.postEventCardData?.hasData ?? false);
+        (eventProvider.eventOrNull?.preEventCardData?.hasData ?? false) ||
+            (eventProvider.eventOrNull?.postEventCardData?.hasData ?? false);
 
     final bool enableGuide = isInBreakouts ||
         eventProvider.agendaPreview ||
@@ -323,7 +351,8 @@ class EventPageState extends State<EventPage> implements EventPageView {
   Widget _buildMainContent() {
     final isMobile = responsiveLayoutService.isMobile(context);
     final eventProvider = EventProvider.watch(context);
-    final event = eventProvider.event;
+    final event = eventProvider.eventOrNull;
+    if (event == null) return _buildEventLoading();
 
     return Align(
       alignment: Alignment.topCenter,
@@ -376,7 +405,8 @@ class EventPageState extends State<EventPage> implements EventPageView {
   }
 
   Widget _buildEditTemplateMessage() {
-    String templateId = event.templateId;
+    final templateId = _eventProvider.eventOrNull?.templateId;
+    if (templateId == null) return const SizedBox.shrink();
     return Container(
       color: context.theme.colorScheme.surfaceContainerHigh,
       padding: EdgeInsets.symmetric(vertical: 20),
@@ -389,7 +419,7 @@ class EventPageState extends State<EventPage> implements EventPageView {
             Expanded(
               child: RichText(
                 text: TextSpan(
-                  text: 'You are editing an event. \n',
+                  text: 'You are editing an individual event. \n',
                   style: context.theme.textTheme.titleMedium!.copyWith(
                     color: context.theme.colorScheme.onSurfaceVariant,
                     fontSize: 16,
@@ -402,7 +432,7 @@ class EventPageState extends State<EventPage> implements EventPageView {
                       ),
                     ),
                     TextSpan(
-                      text: 'edit the template.',
+                      text: context.l10n.editTheCommunityTemplate,
                       recognizer: TapGestureRecognizer()
                         ..onTap = () => routerDelegate.beamTo(
                               CommunityPageRoutes(
@@ -434,9 +464,44 @@ class EventPageState extends State<EventPage> implements EventPageView {
     );
   }
 
+  Widget _buildSignInToViewEvent() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              HeightConstrainedText(
+                context.l10n.signUpOrSignInToContinue,
+                textAlign: TextAlign.center,
+                style: context.theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 16),
+              ActionButton(
+                text: context.l10n.signIn,
+                expand: true,
+                onPressed: () => SignInDialog.show(newUser: false),
+              ),
+              const SizedBox(height: 8),
+              ActionButton(
+                type: ActionButtonType.outline,
+                text: context.l10n.signUp,
+                expand: true,
+                onPressed: () => SignInDialog.show(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventProvider = context.watch<EventProvider>();
+    final isSignedIn = context.watch<UserService>().isSignedIn;
 
     if (context.watch<EventPageProvider>().isEnteredMeeting) {
       final isInstant = context.watch<EventPageProvider>().isInstant;
@@ -446,10 +511,14 @@ class EventPageState extends State<EventPage> implements EventPageView {
         entryFrom: '_EventPageState.buildMeetingDialog',
         stream: Provider.of<EventProvider>(context).eventStream,
         builder: (context, snapshot) {
-          if (snapshot == null) return CircularProgressIndicator();
+          if (snapshot == null || eventProvider.eventOrNull == null) {
+            return const SizedBox.shrink();
+          }
+          final eventPermissions = context.read<EventPermissionsProvider>();
           return MeetingDialog.create(
-            avCheckEnabled: false, //eventPermissions.avCheckEnabled,
+            avCheckEnabled: eventPermissions.avCheckEnabled,
             isInstant: isInstant,
+            onLeave: context.read<EventPageProvider>().leaveMeetingPrescreen,
           );
         },
       );
@@ -457,17 +526,40 @@ class EventPageState extends State<EventPage> implements EventPageView {
 
     return CustomStreamBuilder<Event>(
       entryFrom: '_EventPageState.build',
+      loadingBuilder: (_) => _buildEventLoading(),
       stream: eventProvider.eventStream,
+      errorBuilder: (_) => isSignedIn
+          ? SizedBox(
+              height: 200,
+              child: Center(
+                child: HeightConstrainedText(
+                  context.l10n.somethingWentWrong,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+            )
+          : _buildSignInToViewEvent(),
       builder: (_, event) => CustomStreamBuilder<List<Participant>>(
         entryFrom: '_EventPageState.build',
+        loadingBuilder: (_) => _buildEventLoading(),
         stream: eventProvider.eventParticipantsStream,
+        // Roster reads can fail (private event before RSVP) without
+        // blocking the event landing page itself.
+        errorBuilder: (_) {
+          if (event == null || eventProvider.eventOrNull == null) {
+            return _buildEventLoading();
+          }
+          return _buildMainContent();
+        },
         builder: (_, __) {
-          if (event == null) return CircularProgressIndicator();
+          if (event == null || eventProvider.eventOrNull == null) {
+            return _buildEventLoading();
+          }
 
           // Update meta tags for social sharing when event loads
           final community = context.watch<CommunityProvider>().community;
           final currentUrl = html.window.location.href;
-          final communityName = community.name ?? 'Community';
+          final communityName = community.name ?? 'Space';
           MetaTagService.updateEventMetaTags(
             eventTitle: event.title ?? 'Event',
             eventDescription: event.description,

@@ -77,7 +77,9 @@ class CustomScaffoldState extends State<CustomScaffold> {
                 child: widget.floatingActionButton!,
               )
             : null,
-        endDrawer: SideBar(),
+        // Opens from the left, matching the burger's new position next to the
+        // platform logo.
+        drawer: SideBar(),
         body: Column(
           children: [
             Expanded(

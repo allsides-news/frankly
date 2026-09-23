@@ -8,7 +8,8 @@ part of 'emotion.dart';
 
 _$_Emotion _$$_EmotionFromJson(Map<String, dynamic> json) => _$_Emotion(
       creatorId: json['creatorId'] as String,
-      emotionType: $enumDecode(_$EmotionTypeEnumMap, json['emotionType']),
+      emotionType: $enumDecode(_$EmotionTypeEnumMap, json['emotionType'],
+          unknownValue: EmotionType.thumbsUp),
     );
 
 Map<String, dynamic> _$$_EmotionToJson(_$_Emotion instance) =>

@@ -9,7 +9,6 @@ import 'package:client/features/events/features/live_meeting/features/live_strea
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/widgets/proxied_image.dart';
 import 'package:client/core/widgets/custom_ink_well.dart';
-import 'package:client/app.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:client/core/utils/platform_utils.dart';
@@ -82,7 +81,7 @@ class _LiveStreamWidgetState extends State<LiveStreamWidget> {
                   'Stream will show here when it is active.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).primaryColor,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
             ),
           ),
@@ -137,9 +136,15 @@ class RefreshKeyWidget extends StatefulWidget {
   final Color? backgroundColor;
   final Widget child;
 
+  /// Whether to draw the refresh affordance over the child's top-right
+  /// corner. Mobile turns this off and offers it in the overflow menu
+  /// instead, rather than sitting on top of someone's video.
+  final bool showRefreshButton;
+
   const RefreshKeyWidget({
     Key? key,
     this.backgroundColor,
+    this.showRefreshButton = true,
     required this.child,
   }) : super(key: key);
 
@@ -148,43 +153,42 @@ class RefreshKeyWidget extends StatefulWidget {
 }
 
 class _RefreshKeyWidgetState extends State<RefreshKeyWidget> {
-  String _randomKey = uuid.v1();
-
   @override
   Widget build(BuildContext context) {
     final liveMeetingProvider = LiveMeetingProvider.watch(context);
     return Stack(
       children: [
         KeyedSubtree(
-          key: Key(_randomKey),
+          // Keyed off the provider rather than local state, so a refresh
+          // triggered from anywhere -- this button, or an overflow menu --
+          // remounts the subtree.
+          key: ValueKey('refresh-${liveMeetingProvider.refreshToken}'),
           child: SizedBox.expand(
             child: widget.child,
           ),
         ),
-        Align(
-          alignment: Alignment.topRight,
-          child: Tooltip(
-            message: context.l10n.refreshConnection,
-            child: CustomPointerInterceptor(
-              child: CustomInkWell(
-                onTap: () {
-                  liveMeetingProvider.refreshMeeting();
-                  () => setState(() => _randomKey = uuid.v1());
-                },
-                child: Container(
-                  padding: EdgeInsets.all(4),
-                  color: widget.backgroundColor ??
-                      context.theme.colorScheme.surfaceContainer,
-                  child: Icon(
-                    Icons.refresh,
-                    size: 24,
-                    color: context.theme.colorScheme.onSurface,
+        if (widget.showRefreshButton)
+          Align(
+            alignment: Alignment.topRight,
+            child: Tooltip(
+              message: context.l10n.refreshConnection,
+              child: CustomPointerInterceptor(
+                child: CustomInkWell(
+                  onTap: () => liveMeetingProvider.refreshMeeting(),
+                  child: Container(
+                    padding: EdgeInsets.all(4),
+                    color: widget.backgroundColor ??
+                        context.theme.colorScheme.surfaceContainer,
+                    child: Icon(
+                      Icons.refresh,
+                      size: 24,
+                      color: context.theme.colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

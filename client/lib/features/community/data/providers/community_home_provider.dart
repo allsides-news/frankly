@@ -8,6 +8,7 @@ import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/utils/firestore_utils.dart';
 import 'package:client/services.dart';
 import 'package:data_models/events/event.dart';
+import 'package:data_models/community/membership.dart';
 import 'package:data_models/community/community.dart';
 import 'package:data_models/templates/template.dart';
 import 'package:provider/provider.dart';
@@ -16,9 +17,12 @@ import 'package:rxdart/rxdart.dart';
 class CommunityHomeProvider with ChangeNotifier {
   final CommunityProvider communityProvider;
 
-  CommunityHomeProvider({required this.communityProvider});
+  CommunityHomeProvider({
+    required this.communityProvider,
+  });
 
   late BehaviorSubjectWrapper<List<Event>> _upcomingEvents;
+  bool? _includePrivateEventsForCurrentQuery;
 
   late Future<List<Event>> _featuredEventsFuture;
   late Future<List<Template>> _featuredTemplatesFuture;
@@ -37,10 +41,12 @@ class CommunityHomeProvider with ChangeNotifier {
 
   Stream<List<Template>> get templatesStream => _templatesStream;
 
+  bool _initialized = false;
+
   void initialize() {
-    _upcomingEvents = firestoreEventService.futurePublicEventsForCommunity(
-      communityId: communityProvider.communityId,
-    );
+    if (_initialized) return;
+    _initializeUpcomingEvents();
+    userDataService.addListener(_handleUserDataChanged);
 
     _templatesStream = wrapInBehaviorSubject(
       firestoreDatabase
@@ -65,10 +71,39 @@ class CommunityHomeProvider with ChangeNotifier {
         _getFeaturedTemplatesFuture(allTemplatesFuture: _templatesStream.first);
     _featuredEventsFuture = _getFeaturedEventsFuture();
     _featuredEventsImagesFuture = _loadEventImages(_featuredEventsFuture);
+    _initialized = true;
+  }
+
+  bool get _includePrivateEvents =>
+      userDataService
+          .getMembership(communityProvider.communityId)
+          .status
+          ?.isMember ??
+      false;
+
+  void _initializeUpcomingEvents() {
+    final includePrivateEvents = _includePrivateEvents;
+    _includePrivateEventsForCurrentQuery = includePrivateEvents;
+
+    _upcomingEvents = firestoreEventService.futureEventsForCommunity(
+      communityId: communityProvider.communityId,
+      includePrivateEvents: includePrivateEvents,
+    );
+  }
+
+  void _handleUserDataChanged() {
+    final includePrivateEvents = _includePrivateEvents;
+    if (includePrivateEvents == _includePrivateEventsForCurrentQuery) {
+      return;
+    }
+
+    _upcomingEvents.dispose();
+    _initializeUpcomingEvents();
+    notifyListeners();
   }
 
   Future<List<Event>> _getFeaturedEventsFuture() async {
-    await communityProvider.featuredStream.first;
+    await firstEmittedOrNull(communityProvider.featuredStream);
 
     final featuredEvents = communityProvider.featuredItems
         .where((element) => element.featuredType == FeaturedType.event)
@@ -83,7 +118,7 @@ class CommunityHomeProvider with ChangeNotifier {
   Future<List<Template>> _getFeaturedTemplatesFuture({
     required Future<List<Template>> allTemplatesFuture,
   }) async {
-    await communityProvider.featuredStream.first;
+    await firstEmittedOrNull(communityProvider.featuredStream);
 
     final featuredTemplates = communityProvider.featuredItems
         .where((element) => element.featuredType == FeaturedType.template);
@@ -133,8 +168,11 @@ class CommunityHomeProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _upcomingEvents.dispose();
-    _templatesStream.close();
+    userDataService.removeListener(_handleUserDataChanged);
+    if (_initialized) {
+      _upcomingEvents.dispose();
+      _templatesStream.close();
+    }
     super.dispose();
   }
 

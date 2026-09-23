@@ -292,6 +292,7 @@ _$_GetMeetingJoinInfoResponse _$$_GetMeetingJoinInfoResponseFromJson(
       identity: json['identity'] as String,
       meetingToken: json['meetingToken'] as String,
       meetingId: json['meetingId'] as String,
+      screenShareToken: json['screenShareToken'] as String?,
     );
 
 Map<String, dynamic> _$$_GetMeetingJoinInfoResponseToJson(
@@ -300,6 +301,7 @@ Map<String, dynamic> _$$_GetMeetingJoinInfoResponseToJson(
       'identity': instance.identity,
       'meetingToken': instance.meetingToken,
       'meetingId': instance.meetingId,
+      'screenShareToken': instance.screenShareToken,
     };
 
 _$_GetInstantMeetingJoinInfoRequest
@@ -1063,6 +1065,23 @@ Map<String, dynamic> _$$_GetUserIdFromAgoraIdRequestToJson(
       'agoraId': instance.agoraId,
     };
 
+_$_ResendEventEmailsRequest _$$_ResendEventEmailsRequestFromJson(
+        Map<String, dynamic> json) =>
+    _$_ResendEventEmailsRequest(
+      eventPath: json['eventPath'] as String,
+      eventId: json['eventId'] as String,
+      userIds:
+          (json['userIds'] as List<dynamic>).map((e) => e as String).toList(),
+    );
+
+Map<String, dynamic> _$$_ResendEventEmailsRequestToJson(
+        _$_ResendEventEmailsRequest instance) =>
+    <String, dynamic>{
+      'eventPath': instance.eventPath,
+      'eventId': instance.eventId,
+      'userIds': instance.userIds,
+    };
+
 _$_GetUserIdFromAgoraIdResponse _$$_GetUserIdFromAgoraIdResponseFromJson(
         Map<String, dynamic> json) =>
     _$_GetUserIdFromAgoraIdResponse(
@@ -1073,4 +1092,40 @@ Map<String, dynamic> _$$_GetUserIdFromAgoraIdResponseToJson(
         _$_GetUserIdFromAgoraIdResponse instance) =>
     <String, dynamic>{
       'userId': instance.userId,
+    };
+
+_$_LookupEventParticipantByEmailRequest
+    _$$_LookupEventParticipantByEmailRequestFromJson(
+            Map<String, dynamic> json) =>
+        _$_LookupEventParticipantByEmailRequest(
+          eventPath: json['eventPath'] as String,
+          email: json['email'] as String,
+        );
+
+Map<String, dynamic> _$$_LookupEventParticipantByEmailRequestToJson(
+        _$_LookupEventParticipantByEmailRequest instance) =>
+    <String, dynamic>{
+      'eventPath': instance.eventPath,
+      'email': instance.email,
+    };
+
+_$_LookupEventParticipantByEmailResponse
+    _$$_LookupEventParticipantByEmailResponseFromJson(
+            Map<String, dynamic> json) =>
+        _$_LookupEventParticipantByEmailResponse(
+          isRegistered: json['isRegistered'] as bool,
+          isPresent: json['isPresent'] as bool? ?? false,
+          currentRoomName: json['currentRoomName'] as String?,
+          userId: json['userId'] as String?,
+          displayName: json['displayName'] as String?,
+        );
+
+Map<String, dynamic> _$$_LookupEventParticipantByEmailResponseToJson(
+        _$_LookupEventParticipantByEmailResponse instance) =>
+    <String, dynamic>{
+      'isRegistered': instance.isRegistered,
+      'isPresent': instance.isPresent,
+      'currentRoomName': instance.currentRoomName,
+      'userId': instance.userId,
+      'displayName': instance.displayName,
     };

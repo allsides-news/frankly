@@ -64,17 +64,21 @@ class _UserSettingsPageState extends State<UserSettingsPage>
       ),
       CustomTabAndContent(
         tab: context.l10n.profile,
-        content: (context) => ConstrainedBody(
-          child: ChangeNotifierProvider(
-            create: (_) => AppDrawerProvider(),
-            builder: (_, __) {
-              return ProfileTab(
-                currentUserId: userService.currentUserId!,
-                isPreviewButtonVisible: true,
-              );
-            },
-          ),
-        ),
+        content: (context) {
+          final userId = context.watch<UserService>().currentUserId;
+          if (userId == null) return const SizedBox.shrink();
+          return ConstrainedBody(
+            child: ChangeNotifierProvider(
+              create: (_) => AppDrawerProvider(),
+              builder: (_, __) {
+                return ProfileTab(
+                  currentUserId: userId,
+                  isPreviewButtonVisible: true,
+                );
+              },
+            ),
+          );
+        },
       ),
       CustomTabAndContent(
         tab: context.l10n.notifications,

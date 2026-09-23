@@ -9,12 +9,19 @@ import 'package:client/services.dart';
 import 'package:client/core/utils/platform_utils.dart';
 import 'package:data_models/events/event.dart';
 import 'package:data_models/events/live_meetings/live_meeting.dart';
+import 'package:data_models/events/pre_post_card.dart';
+import 'package:data_models/events/pre_post_survey.dart';
 import 'package:data_models/community/membership.dart';
 import 'package:data_models/utils/utils.dart';
 import 'package:rxdart/rxdart.dart';
 
 class FirestoreEventService {
   static const events = 'events';
+  static const kPrivateUserDataCollection = 'privateUserData';
+  static const kFieldSavedMatchingQuestionAnswers =
+      'savedMatchingQuestionAnswers';
+  static const kFieldSavedMatchingQuestionAnswersUpdatedAt =
+      'savedMatchingQuestionAnswersUpdatedAt';
 
   // final time = await NTP.now();
   // Future to mimic NTP.now()
@@ -146,6 +153,76 @@ class FirestoreEventService {
                 Timestamp.fromDate(currentTime.subtract(Duration(hours: 1))),
           )
           .where('isPublic', isEqualTo: true)
+          .orderBy('scheduledTime')
+          .snapshots()
+          .asyncMap((snapshot) async {
+        final events = await _convertEventListAsync(snapshot.docs);
+        return events
+            .where((event) => event.status == EventStatus.active)
+            .toList();
+      });
+    });
+  }
+
+  /// The soonest upcoming event for a community, or null if it has none.
+  ///
+  /// A one-shot read rather than [futureEventsForCommunity]'s stream, because
+  /// callers like the My Spaces cards want a single value per Space and would
+  /// otherwise have to own and dispose a subscription each.
+  ///
+  /// Note this can't be a Firestore `count()`/`limit(1)` aggregate: the active
+  /// check happens in Dart, not in the query, so the server has no way to skip
+  /// cancelled events. It reads a small page and takes the first live one.
+  Future<Event?> nextActiveEventForCommunity({
+    required String communityId,
+    bool includePrivateEvents = false,
+  }) async {
+    final currentTime = await Future(() => clockService.now());
+
+    var query = _eventsCollectionGroup()
+        .where('communityId', isEqualTo: communityId)
+        .where(
+          'scheduledTime',
+          isGreaterThan:
+              Timestamp.fromDate(currentTime.subtract(Duration(hours: 1))),
+        );
+
+    if (!includePrivateEvents) {
+      query = query.where('isPublic', isEqualTo: true);
+    }
+
+    final snapshot = await query.orderBy('scheduledTime').limit(10).get();
+    final events = await _convertEventListAsync(snapshot.docs);
+
+    for (final event in events) {
+      if (event.status == EventStatus.active) return event;
+    }
+    return null;
+  }
+
+  /// Gets future events for a community.
+  ///
+  /// Private events are only included when [includePrivateEvents] is true.
+  BehaviorSubjectWrapper<List<Event>> futureEventsForCommunity({
+    required String communityId,
+    bool includePrivateEvents = false,
+  }) {
+    return wrapInBehaviorSubjectAsync(() async {
+      final currentTime = await Future(() => clockService.now());
+
+      var query = _eventsCollectionGroup()
+          .where('communityId', isEqualTo: communityId)
+          .where(
+            'scheduledTime',
+            isGreaterThan:
+                Timestamp.fromDate(currentTime.subtract(Duration(hours: 1))),
+          );
+
+      if (!includePrivateEvents) {
+        query = query.where('isPublic', isEqualTo: true);
+      }
+
+      return query
           .orderBy('scheduledTime')
           .snapshots()
           .asyncMap((snapshot) async {
@@ -308,6 +385,26 @@ class FirestoreEventService {
         .orderBy('createdDate');
   }
 
+  /// Like [eventParticipantsQuery] but filtered to only participants who are
+  /// currently present in the meeting (isPresent == true). Used by the admin
+  /// panel's live participant list so it mirrors the breakout-room presence
+  /// semantics and doesn't show registered-but-absent ghost participants.
+  ///
+  /// Covered by the existing composite index:
+  ///   event-participants COLLECTION (isPresent ASC, createdDate ASC)
+  Query<Map<String, dynamic>> presentParticipantsQuery({
+    required Event event,
+  }) {
+    return eventReference(
+      communityId: event.communityId,
+      templateId: event.templateId,
+      eventId: event.id,
+    )
+        .collection('event-participants')
+        .where('isPresent', isEqualTo: true)
+        .orderBy('createdDate');
+  }
+
   Future<List<Participant>> getEventParticipants({
     required Event event,
   }) async {
@@ -446,6 +543,90 @@ class FirestoreEventService {
     }
   }
 
+  Future<Map<String, String>> getSavedMatchingQuestionAnswers() async {
+    final uid = userService.currentUserId;
+    if (uid == null) return {};
+
+    try {
+      final snapshot = await firestoreDatabase.firestore
+          .collection(kPrivateUserDataCollection)
+          .doc(uid)
+          .get();
+
+      final savedAnswers = snapshot.data()?[kFieldSavedMatchingQuestionAnswers];
+
+      if (savedAnswers is! Map) return {};
+
+      final parsedAnswers = <String, String>{};
+      savedAnswers.forEach((key, value) {
+        if (key is String && value is String && value.isNotEmpty) {
+          parsedAnswers[key] = value;
+        }
+      });
+
+      return parsedAnswers;
+    } catch (e) {
+      loggingService.log(
+        'FirestoreEventService.getSavedMatchingQuestionAnswers failed: $e',
+      );
+      return {};
+    }
+  }
+
+  Future<void> saveMatchingQuestionAnswers(
+    List<BreakoutQuestion>? questions,
+  ) async {
+    final uid = userService.currentUserId;
+    if (uid == null || questions == null || questions.isEmpty) return;
+
+    final answers = <String, String>{};
+    for (final question in questions) {
+      if (question.id.isNotEmpty && question.answerOptionId.isNotEmpty) {
+        answers[question.id] = question.answerOptionId;
+      }
+    }
+
+    if (answers.isEmpty) return;
+
+    try {
+      final docRef = firestoreDatabase.firestore
+          .collection(kPrivateUserDataCollection)
+          .doc(uid);
+
+      await firestoreDatabase.firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        final savedAnswers =
+            snapshot.data()?[kFieldSavedMatchingQuestionAnswers];
+
+        final existingAnswers = <String, String>{};
+        if (savedAnswers is Map) {
+          savedAnswers.forEach((key, value) {
+            if (key is String && value is String && value.isNotEmpty) {
+              existingAnswers[key] = value;
+            }
+          });
+        }
+
+        transaction.set(
+          docRef,
+          {
+            kFieldSavedMatchingQuestionAnswers: {
+              ...existingAnswers,
+              ...answers,
+            },
+            kFieldSavedMatchingQuestionAnswersUpdatedAt:
+                FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      });
+    } catch (e) {
+      loggingService.log(
+        'FirestoreEventService.saveMatchingQuestionAnswers failed: $e',
+      );
+    }
+  }
+
   Future<void> joinEvent({
     required String communityId,
     required String templateId,
@@ -480,6 +661,11 @@ class FirestoreEventService {
       );
     }
 
+    final joinParameters = queryParametersService.mostRecentQueryParameters;
+    final utmSource = joinParameters?['utm_source'];
+    final utmMedium = joinParameters?['utm_medium'];
+    final utmCampaign = joinParameters?['utm_campaign'];
+
     final participant = Participant(
       id: uid,
       communityId: communityId,
@@ -487,7 +673,10 @@ class FirestoreEventService {
       status: ParticipantStatus.active,
       scheduledTime: event.scheduledTime,
       externalCommunityId: externalCommunityId,
-      joinParameters: queryParametersService.mostRecentQueryParameters,
+      joinParameters: joinParameters,
+      utmSource: utmSource,
+      utmMedium: utmMedium,
+      utmCampaign: utmCampaign,
       breakoutRoomSurveyQuestions: breakoutRoomSurveyResults?.questions ?? [],
       zipCode: breakoutRoomSurveyResults?.zipCode,
       optInToCommunity: optInToCommunity,
@@ -513,7 +702,100 @@ class FirestoreEventService {
       },
       SetOptions(merge: true),
     );
+
+    await saveMatchingQuestionAnswers(
+      breakoutRoomSurveyResults?.questions,
+    );
+
     print('Finished setting participant');
+  }
+
+  /// Returns whether the current user has already submitted answers to the
+  /// pre or post event CTA survey for [event].
+  Future<bool> hasPrePostSurveyResponse({
+    required Event event,
+    required PrePostCardType prePostCardType,
+  }) async {
+    final uid = userService.currentUserId!;
+
+    final snapshot = await eventReference(
+      communityId: event.communityId,
+      templateId: event.templateId,
+      eventId: event.id,
+    ).collection('pre-post-survey-responses').doc(uid).get();
+
+    final answersField = prePostCardType == PrePostCardType.preEvent
+        ? PrePostSurveyResponse.kFieldPreEventAnswers
+        : PrePostSurveyResponse.kFieldPostEventAnswers;
+    final answers = snapshot.data()?[answersField];
+    return answers is List && answers.isNotEmpty;
+  }
+
+  /// Records a participant's answers to the pre or post event CTA survey
+  /// questions under `events/{eventId}/pre-post-survey-responses/{userId}`.
+  Future<void> savePrePostSurveyResponse({
+    required Event event,
+    required PrePostCardType prePostCardType,
+    required List<PrePostSurveyAnswer> answers,
+  }) async {
+    final uid = userService.currentUserId!;
+
+    final responseRef = eventReference(
+      communityId: event.communityId,
+      templateId: event.templateId,
+      eventId: event.id,
+    ).collection('pre-post-survey-responses').doc(uid);
+
+    final isPreEvent = prePostCardType == PrePostCardType.preEvent;
+    final response = PrePostSurveyResponse(
+      userId: uid,
+      preEventAnswers: isPreEvent ? answers : [],
+      postEventAnswers: isPreEvent ? [] : answers,
+      preEventAnsweredDate: isPreEvent ? clockService.now() : null,
+      postEventAnsweredDate: isPreEvent ? null : clockService.now(),
+    );
+
+    await responseRef.set(
+      jsonSubset(
+        [
+          PrePostSurveyResponse.kFieldUserId,
+          if (isPreEvent) ...[
+            PrePostSurveyResponse.kFieldPreEventAnswers,
+            PrePostSurveyResponse.kFieldPreEventAnsweredDate,
+          ] else ...[
+            PrePostSurveyResponse.kFieldPostEventAnswers,
+            PrePostSurveyResponse.kFieldPostEventAnsweredDate,
+          ],
+        ],
+        toFirestoreJson(response.toJson()),
+      ),
+      SetOptions(merge: true),
+    );
+  }
+
+  /// All pre/post survey responses for [event], keyed by user ID.
+  Future<Map<String, PrePostSurveyResponse>> getPrePostSurveyResponses({
+    required Event event,
+  }) async {
+    final snapshot = await eventReference(
+      communityId: event.communityId,
+      templateId: event.templateId,
+      eventId: event.id,
+    ).collection('pre-post-survey-responses').get();
+
+    final responses = <String, PrePostSurveyResponse>{};
+    for (final doc in snapshot.docs) {
+      try {
+        responses[doc.id] = PrePostSurveyResponse.fromJson(
+          fromFirestoreJson(doc.data()),
+        );
+      } catch (e) {
+        loggingService.log(
+          'Failed to parse pre-post survey response ${doc.id}: $e',
+        );
+      }
+    }
+    return responses;
   }
 
   Future<void> removeParticipant({
@@ -721,6 +1003,8 @@ class FirestoreEventService {
       ),
       SetOptions(merge: true),
     );
+
+    await saveMatchingQuestionAnswers(surveyDialogResult.questions);
   }
 
   static Future<List<Event>> _convertEventListAsync(

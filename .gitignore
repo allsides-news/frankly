@@ -3,3 +3,8 @@ logs/
 .idea/
 docs/output
 *.log
+.DS_Store
+.env.json
+.env
+*.env.json
+.firebase/

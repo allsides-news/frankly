@@ -1,3 +1,4 @@
+import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/utils/navigation_utils.dart';
 import 'package:enum_to_string/enum_to_string.dart';
@@ -232,8 +233,15 @@ class _AdminBillingContainerContentState
                 'space/${community.displayId}/admin?tab=billing',
           ),
         );
-        GetIt.instance<StripeClientService>()
-            .redirectToCheckout(sessionId: response.sessionId);
+        try {
+          await GetIt.instance<StripeClientService>()
+              .redirectToCheckout(sessionId: response.sessionId);
+        } catch (e, s) {
+          loggingService.log(e, logType: LogType.error);
+          loggingService.log(s, logType: LogType.error);
+          if (!context.mounted) return;
+          await showAlert(context, context.l10n.somethingWentWrongTryAgain);
+        }
       }
     }
   }
@@ -364,7 +372,7 @@ class _AdminBillingContainerContentState
                           ? '(${snapshot.data?.email}) '
                           : '';
                       return HeightConstrainedText(
-                        '${userInfo.displayName ?? 'The community owner'} ${emailText}is the billing manager',
+                        '${userInfo.displayName ?? 'The space owner'} ${emailText}is the billing manager',
                         style: AppTextStyle.body,
                       );
                     },

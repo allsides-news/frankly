@@ -9,6 +9,7 @@ import 'package:client/services.dart';
 import 'package:client/features/user/data/services/user_service.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:client/core/widgets/stream_utils.dart';
+import 'package:client/styles/styles.dart';
 import 'package:data_models/community/community.dart';
 import 'package:data_models/community/community_user_settings.dart';
 import 'package:data_models/community/membership.dart';
@@ -25,7 +26,7 @@ class NotificationsTab extends StatefulHookWidget {
 }
 
 class _NotificationsTabState extends State<NotificationsTab> {
-  String get _userId => context.read<UserService>().currentUserId!;
+  String? get _userId => context.read<UserService>().currentUserId;
 
   Stream<List<Membership>> get _memberships =>
       Provider.of<UserDataService>(context).memberships.map(
@@ -105,9 +106,11 @@ class _NotificationsTabState extends State<NotificationsTab> {
     required String communityId,
     bool notify = false,
   }) async {
+    final userId = _userId;
+    if (userId == null) return;
     await _update(
       settings: CommunityUserSettings().copyWith(
-        userId: _userId,
+        userId: userId,
         communityId: communityId,
         notifyAnnouncements: _boolToNotificationEmailType(value: notify),
       ),
@@ -119,9 +122,11 @@ class _NotificationsTabState extends State<NotificationsTab> {
     required String communityId,
     bool notify = false,
   }) async {
+    final userId = _userId;
+    if (userId == null) return;
     await _update(
       settings: CommunityUserSettings().copyWith(
-        userId: _userId,
+        userId: userId,
         communityId: communityId,
         notifyEvents: _boolToNotificationEmailType(value: notify),
       ),
@@ -133,40 +138,59 @@ class _NotificationsTabState extends State<NotificationsTab> {
     required String communityId,
     String? communityDisplay,
   }) {
+    final userId = _userId;
+    if (userId == null) return const SizedBox.shrink();
     return MemoizedStreamBuilder<CommunityUserSettings>(
-      streamGetter: () => firestorePrivateUserDataService
-          .getCommunityUserSettings(userId: _userId, communityId: communityId),
+      streamGetter: () =>
+          firestorePrivateUserDataService.getCommunityUserSettings(
+        userId: userId,
+        communityId: communityId,
+      ),
       entryFrom: '_NotificationsTabState._buildActiveCommunitySettings',
-      keys: [_userId, communityId],
+      keys: [userId, communityId],
       height: 100,
       width: 300,
       errorMessage:
           'Something went wrong loading notification settings. Please refresh.',
-      builder: (context, settings) => IntrinsicWidth(
-        child: Column(
+      builder: (context, settings) {
+        if (settings == null) {
+          return Padding(
+            padding: EdgeInsets.all(20),
+            child: HeightConstrainedText(
+              'Notification settings are not available for this space.',
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: EdgeInsets.only(bottom: 12),
               child: HeightConstrainedText(
                 context.l10n.settingsFor(communityDisplay ?? ''),
                 style: TextStyle(
-                  color: Color.fromARGB(128, 0, 0, 0),
+                  // Was 50% black, which is unreadable on a dark surface.
+                  color: context.theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
             Row(
               children: [
                 Checkbox(
-                  activeColor: Theme.of(context).primaryColor,
+                  // ThemeData.primaryColor resolves to colorScheme.surface
+                  // under a dark theme, so a ticked box was filled with the
+                  // page's own background and disappeared entirely.
+                  activeColor: context.theme.colorScheme.primary,
+                  checkColor: context.theme.colorScheme.onPrimary,
                   value: _notificationEmailTypeToBool(
-                    value: settings!.notifyAnnouncements,
+                    value: settings.notifyAnnouncements,
                   ),
                   onChanged: (value) => _updateNotifyAnnouncements(
                     communityId: communityId,
                     notify: value ?? false,
                   ),
                 ),
-                Flexible(
+                Expanded(
                   child: HeightConstrainedText(
                     context.l10n.notifyMeAboutNewAnnouncements,
                   ),
@@ -176,7 +200,8 @@ class _NotificationsTabState extends State<NotificationsTab> {
             Row(
               children: [
                 Checkbox(
-                  activeColor: Theme.of(context).primaryColor,
+                  activeColor: context.theme.colorScheme.primary,
+                  checkColor: context.theme.colorScheme.onPrimary,
                   value: _notificationEmailTypeToBool(
                     value: settings.notifyEvents,
                   ),
@@ -185,15 +210,16 @@ class _NotificationsTabState extends State<NotificationsTab> {
                     notify: value ?? false,
                   ),
                 ),
-                Flexible(
+                Expanded(
                   child: HeightConstrainedText(
-                      context.l10n.notifyMeAboutNewEvents,),
+                    context.l10n.notifyMeAboutNewEvents,
+                  ),
                 ),
               ],
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -208,7 +234,8 @@ class _NotificationsTabState extends State<NotificationsTab> {
           return Padding(
             padding: EdgeInsets.all(20),
             child: HeightConstrainedText(
-                '${context.l10n.no} ${Environment.appName} ${context.l10n.memberships}.',),
+              '${context.l10n.no} ${Environment.appName} ${context.l10n.memberships}.',
+            ),
           );
         }
         return CustomStreamBuilder<List<Community>>(
@@ -221,15 +248,14 @@ class _NotificationsTabState extends State<NotificationsTab> {
             };
 
             return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
                   padding: EdgeInsets.symmetric(vertical: 15),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
                       HeightConstrainedText(context.l10n.selectSpace),
-                      Flexible(
+                      Expanded(
                         child: Container(
                           margin: EdgeInsets.only(left: 15),
                           constraints: BoxConstraints(maxWidth: 300),
@@ -258,7 +284,9 @@ class _NotificationsTabState extends State<NotificationsTab> {
                 Container(
                   padding: EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Color.fromARGB(64, 0, 0, 0)),
+                    border: Border.all(
+                      color: context.theme.colorScheme.outlineVariant,
+                    ),
                     borderRadius: BorderRadius.all(Radius.circular(10)),
                   ),
                   child: _buildActiveCommunitySettings(
@@ -278,9 +306,13 @@ class _NotificationsTabState extends State<NotificationsTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.watch<UserService>().currentUserId == null) {
+      return const SizedBox.shrink();
+    }
     return Align(
       alignment: Alignment.topLeft,
       child: Container(
+        width: double.infinity,
         constraints: BoxConstraints(minWidth: 280, maxWidth: 540),
         child: MemoizedStreamBuilder<void>(
           entryFrom: '_NotificationsTabState.build',

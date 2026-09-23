@@ -14,8 +14,16 @@ import 'package:client/core/localization/localization_helper.dart';
 class AnnouncementsIcon extends StatelessWidget {
   final String communityId;
 
+  /// Size of the bell glyph, and the width of its tap box. Defaults match the
+  /// standalone nav icon; the Space nav pill passes smaller values so the bell
+  /// lines up evenly with the section icons beside it.
+  final double? iconSize;
+  final double? width;
+
   const AnnouncementsIcon({
     required this.communityId,
+    this.iconSize,
+    this.width,
     Key? key,
   }) : super(key: key);
 
@@ -24,20 +32,34 @@ class AnnouncementsIcon extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (BuildContext context) =>
           AnnouncementsProvider(communityId: communityId)..initialize(),
-      child: _AnnouncementsIcon(),
+      child: _AnnouncementsIcon(iconSize: iconSize, width: width),
     );
   }
 }
 
 class _AnnouncementsIcon extends StatefulWidget {
+  final double? iconSize;
+  final double? width;
+
+  const _AnnouncementsIcon({this.iconSize, this.width});
+
   @override
   _AnnouncementsIconState createState() => _AnnouncementsIconState();
 }
 
-class _AnnouncementsIconState extends State<_AnnouncementsIcon> {
+class _AnnouncementsIconState extends State<_AnnouncementsIcon>
+    with AutomaticKeepAliveClientMixin {
   final _buttonGlobalKey = GlobalKey();
   bool _isExiting = false;
   bool _isShowing = false;
+
+  // The whole page (including the nav bar) lives inside one scrollable
+  // ListView, so scrolling this icon far enough off-screen can dispose and
+  // rebuild it from scratch. Without this, that rebuild re-subscribes to
+  // the announcements stream each time, causing a visible pop-in delay
+  // when it re-enters the viewport.
+  @override
+  bool get wantKeepAlive => true;
 
   Future<void> _showOptionsFloating(bool halfSize) async {
     final RenderBox button =
@@ -138,11 +160,12 @@ class _AnnouncementsIconState extends State<_AnnouncementsIcon> {
         onTap: () => _profileActivated(halfSize),
         child: Container(
           key: _buttonGlobalKey,
-          width: 50,
+          width: widget.width ?? 50,
           alignment: Alignment.center,
           child: Icon(
-            Icons.notifications_none_rounded,
-            size: 30,
+            // Matches the outlined family the section icons use.
+            Icons.notifications_outlined,
+            size: widget.iconSize ?? 30,
             color: _isShowing
                 ? context.theme.colorScheme.onSurface
                 : context.theme.colorScheme.onSurfaceVariant,
@@ -154,6 +177,7 @@ class _AnnouncementsIconState extends State<_AnnouncementsIcon> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return CustomStreamBuilder<List<Announcement>>(
       stream: Provider.of<AnnouncementsProvider>(context).announcements,
       entryFrom: '_AnnouncementsState._buildAnnouncementsLoading',

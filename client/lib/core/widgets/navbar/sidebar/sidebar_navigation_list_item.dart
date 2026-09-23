@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:client/app.dart';
 import 'package:client/core/widgets/buttons/action_button.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/community/presentation/widgets/community_icon_or_logo.dart';
@@ -71,7 +72,7 @@ class _SidebarNavigationListItemState extends State<SidebarNavigationListItem> {
         Flexible(
           child: ActionButton(
             type: ActionButtonType.text,
-            text: widget.community.name ?? 'Unnamed Community',
+            text: widget.community.name ?? 'Unnamed Space',
             onPressed: () =>
                 routerDelegate.beamTo(initialCommunityRoute.communityHome),
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
@@ -130,7 +131,7 @@ class CommunitySidebarNavLinks extends StatelessWidget {
             community: community,
             showResources: (showLinks != null && (showLinks)) || userIsAdmin,
             showAdmin: userIsAdmin,
-            enableDiscussionThreads:
+            enableDiscussionThreads: kShowDiscussionThreadsNav &&
                 community.settingsMigration.enableDiscussionThreads,
             showLeaveCommunity: !userIsAdmin,
           );

@@ -13,6 +13,7 @@ import 'package:client/features/events/features/event_page/data/providers/templa
 import 'package:client/features/community/data/providers/community_provider.dart';
 import 'package:client/core/data/services/clock_service.dart';
 import 'package:client/features/events/data/services/firestore_event_service.dart';
+import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/data/services/logging_service.dart';
 import 'package:client/services.dart';
 import 'package:client/core/data/services/shared_preferences_service.dart';
@@ -79,8 +80,9 @@ class EventPagePresenter {
   String get eventPath =>
       '${_eventProvider.event.collectionPath}/${_eventProvider.event.id}';
 
-  void init() async {
-    final event = await _eventProvider.eventStream.first;
+  Future<void> init() async {
+    final event = await firstEmittedOrNull(_eventProvider.eventStream);
+    if (event == null) return;
     _isEditTemplateTooltipShown = event.templateId != defaultTemplateId &&
         _communityPermissionsProvider.canModerateContent &&
         _sharedPreferencesService.isEditTemplateTooltipShown();
@@ -127,10 +129,11 @@ class EventPagePresenter {
   }
 
   Future<void> refreshEvent() async {
-    await _eventProvider.refreshEvent(
-      _templateProvider.template,
-      _eventProvider.event,
-    );
+    final event = _eventProvider.eventOrNull;
+    if (event == null) return;
+    final template = _templateProvider.templateOrNull ??
+        await _templateProvider.templateFuture;
+    await _eventProvider.refreshEvent(template, event);
   }
 
   Future<GetMeetingChatsSuggestionsDataResponse> getChatsAndSuggestions() {
@@ -149,9 +152,10 @@ class EventPagePresenter {
     );
   }
 
-  Template getCombinedTemplateFromEvent() {
-    final event = _eventProvider.event;
-    final currentTemplate = _templateProvider.template;
+  Template? getCombinedTemplateFromEvent() {
+    final event = _eventProvider.eventOrNull;
+    final currentTemplate = _templateProvider.templateOrNull;
+    if (event == null || currentTemplate == null) return null;
 
     return currentTemplate.copyWith(
       title: event.title,

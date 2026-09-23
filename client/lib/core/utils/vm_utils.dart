@@ -13,6 +13,8 @@ void enableDriverBinding() {}
 
 bool checkCanAutoplay() => true;
 
+Future<bool> checkCanAutoplayFuture() async => checkCanAutoplay();
+
 // WKWebview is an embedded web view in apps. NOTE: this flag will return
 // true for Chrome browser in iOS.
 bool get isWKWebView => false;
@@ -36,3 +38,18 @@ void registerWebViewFactory(String key, dynamic Function(dynamic) factory) {}
 HttpsCallablePlatform? getHttpsCallableWeb(String functionName) => null;
 
 void stopMediaTrack(html.MediaStreamTrack track) {}
+
+class BrowserCompatibilityResult {
+  final bool isCompatible;
+  final String? message;
+
+  const BrowserCompatibilityResult({
+    required this.isCompatible,
+    this.message,
+  });
+}
+
+/// Non-web builds are always considered compatible.
+BrowserCompatibilityResult checkBrowserCompatibility() {
+  return const BrowserCompatibilityResult(isCompatible: true);
+}

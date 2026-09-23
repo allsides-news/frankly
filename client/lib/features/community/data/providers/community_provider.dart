@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:client/core/data/services/logging_service.dart';
+import 'package:client/core/utils/error_utils.dart';
 import 'package:client/core/utils/provider_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:client/core/widgets/navbar/nav_bar_provider.dart';
@@ -66,14 +68,25 @@ class CommunityProvider with ChangeNotifier {
 
   void initialize() {
     _community = firestoreDatabase.communityStream(_displayId);
-    _communityListener = _community.stream.listen((community) {
-      notifyListeners();
-      navBarProvider.setCurrentCommunity(community);
-      _hasTemplates ??= _listenForTemplates(community.id);
-      _hasTemplatesListener ??= _hasTemplates?.stream.listen((value) {
+    _communityListener = _community.stream.listen(
+      (community) {
         notifyListeners();
-      });
-    });
+        navBarProvider.setCurrentCommunity(community);
+        _hasTemplates ??= _listenForTemplates(community.id);
+        _hasTemplatesListener ??= _hasTemplates?.stream.listen((value) {
+          notifyListeners();
+        });
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        loggingService.log(
+          'CommunityProvider community stream error',
+          logType: LogType.error,
+          error: error,
+          stackTrace: stackTrace,
+        );
+        notifyListeners();
+      },
+    );
 
     _featured = wrapInBehaviorSubject(_getFeaturedItems());
     _featuredListener = _featured.stream.listen((featured) {
@@ -102,13 +115,15 @@ class CommunityProvider with ChangeNotifier {
   }
 
   Stream<List<Featured>> _getFeaturedItems() async* {
-    final community = await _community.stream.first;
+    final community = await firstEmittedOrNull(_community.stream);
+    if (community == null) return;
 
     yield* firestoreDatabase.getCommunityFeaturedItems(community.id).stream;
   }
 
   Stream<List<CommunityResource>> _getResources() async* {
-    final community = await _community.stream.first;
+    final community = await firstEmittedOrNull(_community.stream);
+    if (community == null) return;
     Stream<List<CommunityResource>> stream = firestoreCommunityResourceService
         .getCommunityResources(communityId: community.id);
     yield* stream;

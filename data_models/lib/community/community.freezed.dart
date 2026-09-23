@@ -815,6 +815,9 @@ mixin _$CommunitySettings {
   bool get enablePlatformSelection => throw _privateConstructorUsedError;
   bool get enableUpdatedLiveMeetingMobile => throw _privateConstructorUsedError;
   bool get enableAVCheck => throw _privateConstructorUsedError;
+  bool get showAttendeeCountToNonAdmins => throw _privateConstructorUsedError;
+  bool get showPostRegistrationAttendeeCount =>
+      throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -841,7 +844,9 @@ abstract class $CommunitySettingsCopyWith<$Res> {
       bool requireApprovalToJoin,
       bool enablePlatformSelection,
       bool enableUpdatedLiveMeetingMobile,
-      bool enableAVCheck});
+      bool enableAVCheck,
+      bool showAttendeeCountToNonAdmins,
+      bool showPostRegistrationAttendeeCount});
 }
 
 /// @nodoc
@@ -870,6 +875,8 @@ class _$CommunitySettingsCopyWithImpl<$Res, $Val extends CommunitySettings>
     Object? enablePlatformSelection = null,
     Object? enableUpdatedLiveMeetingMobile = null,
     Object? enableAVCheck = null,
+    Object? showAttendeeCountToNonAdmins = null,
+    Object? showPostRegistrationAttendeeCount = null,
   }) {
     return _then(_value.copyWith(
       allowDonations: null == allowDonations
@@ -924,6 +931,15 @@ class _$CommunitySettingsCopyWithImpl<$Res, $Val extends CommunitySettings>
           ? _value.enableAVCheck
           : enableAVCheck // ignore: cast_nullable_to_non_nullable
               as bool,
+      showAttendeeCountToNonAdmins: null == showAttendeeCountToNonAdmins
+          ? _value.showAttendeeCountToNonAdmins
+          : showAttendeeCountToNonAdmins // ignore: cast_nullable_to_non_nullable
+              as bool,
+      showPostRegistrationAttendeeCount: null ==
+              showPostRegistrationAttendeeCount
+          ? _value.showPostRegistrationAttendeeCount
+          : showPostRegistrationAttendeeCount // ignore: cast_nullable_to_non_nullable
+              as bool,
     ) as $Val);
   }
 }
@@ -949,7 +965,9 @@ abstract class _$$_CommunitySettingsCopyWith<$Res>
       bool requireApprovalToJoin,
       bool enablePlatformSelection,
       bool enableUpdatedLiveMeetingMobile,
-      bool enableAVCheck});
+      bool enableAVCheck,
+      bool showAttendeeCountToNonAdmins,
+      bool showPostRegistrationAttendeeCount});
 }
 
 /// @nodoc
@@ -976,6 +994,8 @@ class __$$_CommunitySettingsCopyWithImpl<$Res>
     Object? enablePlatformSelection = null,
     Object? enableUpdatedLiveMeetingMobile = null,
     Object? enableAVCheck = null,
+    Object? showAttendeeCountToNonAdmins = null,
+    Object? showPostRegistrationAttendeeCount = null,
   }) {
     return _then(_$_CommunitySettings(
       allowDonations: null == allowDonations
@@ -1030,6 +1050,15 @@ class __$$_CommunitySettingsCopyWithImpl<$Res>
           ? _value.enableAVCheck
           : enableAVCheck // ignore: cast_nullable_to_non_nullable
               as bool,
+      showAttendeeCountToNonAdmins: null == showAttendeeCountToNonAdmins
+          ? _value.showAttendeeCountToNonAdmins
+          : showAttendeeCountToNonAdmins // ignore: cast_nullable_to_non_nullable
+              as bool,
+      showPostRegistrationAttendeeCount: null ==
+              showPostRegistrationAttendeeCount
+          ? _value.showPostRegistrationAttendeeCount
+          : showPostRegistrationAttendeeCount // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -1050,7 +1079,9 @@ class _$_CommunitySettings implements _CommunitySettings {
       this.requireApprovalToJoin = false,
       this.enablePlatformSelection = true,
       this.enableUpdatedLiveMeetingMobile = false,
-      this.enableAVCheck = true});
+      this.enableAVCheck = true,
+      this.showAttendeeCountToNonAdmins = true,
+      this.showPostRegistrationAttendeeCount = true});
 
   factory _$_CommunitySettings.fromJson(Map<String, dynamic> json) =>
       _$$_CommunitySettingsFromJson(json);
@@ -1093,10 +1124,16 @@ class _$_CommunitySettings implements _CommunitySettings {
   @override
   @JsonKey()
   final bool enableAVCheck;
+  @override
+  @JsonKey()
+  final bool showAttendeeCountToNonAdmins;
+  @override
+  @JsonKey()
+  final bool showPostRegistrationAttendeeCount;
 
   @override
   String toString() {
-    return 'CommunitySettings(allowDonations: $allowDonations, allowUnofficialTemplates: $allowUnofficialTemplates, disableEmailDigests: $disableEmailDigests, dontAllowMembersToCreateMeetings: $dontAllowMembersToCreateMeetings, enableDiscussionThreads: $enableDiscussionThreads, enableHostless: $enableHostless, featuredOrder: $featuredOrder, multiplePeopleOnStage: $multiplePeopleOnStage, multipleVideoTypes: $multipleVideoTypes, requireApprovalToJoin: $requireApprovalToJoin, enablePlatformSelection: $enablePlatformSelection, enableUpdatedLiveMeetingMobile: $enableUpdatedLiveMeetingMobile, enableAVCheck: $enableAVCheck)';
+    return 'CommunitySettings(allowDonations: $allowDonations, allowUnofficialTemplates: $allowUnofficialTemplates, disableEmailDigests: $disableEmailDigests, dontAllowMembersToCreateMeetings: $dontAllowMembersToCreateMeetings, enableDiscussionThreads: $enableDiscussionThreads, enableHostless: $enableHostless, featuredOrder: $featuredOrder, multiplePeopleOnStage: $multiplePeopleOnStage, multipleVideoTypes: $multipleVideoTypes, requireApprovalToJoin: $requireApprovalToJoin, enablePlatformSelection: $enablePlatformSelection, enableUpdatedLiveMeetingMobile: $enableUpdatedLiveMeetingMobile, enableAVCheck: $enableAVCheck, showAttendeeCountToNonAdmins: $showAttendeeCountToNonAdmins, showPostRegistrationAttendeeCount: $showPostRegistrationAttendeeCount)';
   }
 
   @override
@@ -1106,13 +1143,11 @@ class _$_CommunitySettings implements _CommunitySettings {
             other is _$_CommunitySettings &&
             (identical(other.allowDonations, allowDonations) ||
                 other.allowDonations == allowDonations) &&
-            (identical(
-                    other.allowUnofficialTemplates, allowUnofficialTemplates) ||
+            (identical(other.allowUnofficialTemplates, allowUnofficialTemplates) ||
                 other.allowUnofficialTemplates == allowUnofficialTemplates) &&
             (identical(other.disableEmailDigests, disableEmailDigests) ||
                 other.disableEmailDigests == disableEmailDigests) &&
-            (identical(other.dontAllowMembersToCreateMeetings,
-                    dontAllowMembersToCreateMeetings) ||
+            (identical(other.dontAllowMembersToCreateMeetings, dontAllowMembersToCreateMeetings) ||
                 other.dontAllowMembersToCreateMeetings ==
                     dontAllowMembersToCreateMeetings) &&
             (identical(other.enableDiscussionThreads, enableDiscussionThreads) ||
@@ -1127,15 +1162,20 @@ class _$_CommunitySettings implements _CommunitySettings {
                 other.multipleVideoTypes == multipleVideoTypes) &&
             (identical(other.requireApprovalToJoin, requireApprovalToJoin) ||
                 other.requireApprovalToJoin == requireApprovalToJoin) &&
-            (identical(
-                    other.enablePlatformSelection, enablePlatformSelection) ||
+            (identical(other.enablePlatformSelection, enablePlatformSelection) ||
                 other.enablePlatformSelection == enablePlatformSelection) &&
-            (identical(other.enableUpdatedLiveMeetingMobile,
-                    enableUpdatedLiveMeetingMobile) ||
+            (identical(other.enableUpdatedLiveMeetingMobile, enableUpdatedLiveMeetingMobile) ||
                 other.enableUpdatedLiveMeetingMobile ==
                     enableUpdatedLiveMeetingMobile) &&
             (identical(other.enableAVCheck, enableAVCheck) ||
-                other.enableAVCheck == enableAVCheck));
+                other.enableAVCheck == enableAVCheck) &&
+            (identical(other.showAttendeeCountToNonAdmins, showAttendeeCountToNonAdmins) ||
+                other.showAttendeeCountToNonAdmins ==
+                    showAttendeeCountToNonAdmins) &&
+            (identical(other.showPostRegistrationAttendeeCount,
+                    showPostRegistrationAttendeeCount) ||
+                other.showPostRegistrationAttendeeCount ==
+                    showPostRegistrationAttendeeCount));
   }
 
   @JsonKey(ignore: true)
@@ -1154,7 +1194,9 @@ class _$_CommunitySettings implements _CommunitySettings {
       requireApprovalToJoin,
       enablePlatformSelection,
       enableUpdatedLiveMeetingMobile,
-      enableAVCheck);
+      enableAVCheck,
+      showAttendeeCountToNonAdmins,
+      showPostRegistrationAttendeeCount);
 
   @JsonKey(ignore: true)
   @override
@@ -1185,7 +1227,9 @@ abstract class _CommunitySettings implements CommunitySettings {
       final bool requireApprovalToJoin,
       final bool enablePlatformSelection,
       final bool enableUpdatedLiveMeetingMobile,
-      final bool enableAVCheck}) = _$_CommunitySettings;
+      final bool enableAVCheck,
+      final bool showAttendeeCountToNonAdmins,
+      final bool showPostRegistrationAttendeeCount}) = _$_CommunitySettings;
 
   factory _CommunitySettings.fromJson(Map<String, dynamic> json) =
       _$_CommunitySettings.fromJson;
@@ -1216,6 +1260,10 @@ abstract class _CommunitySettings implements CommunitySettings {
   bool get enableUpdatedLiveMeetingMobile;
   @override
   bool get enableAVCheck;
+  @override
+  bool get showAttendeeCountToNonAdmins;
+  @override
+  bool get showPostRegistrationAttendeeCount;
   @override
   @JsonKey(ignore: true)
   _$$_CommunitySettingsCopyWith<_$_CommunitySettings> get copyWith =>

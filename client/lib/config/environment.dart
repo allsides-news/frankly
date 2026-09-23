@@ -10,6 +10,9 @@ class Environment {
   );
   static const firebaseProjectId =
       String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'dev');
+  /// Empty: default Firestore database. If production uses a named database,
+  /// set this to the same `FIREBASE_DATABASE_ID` as the deploy workflows and
+  /// Cloud Functions `app.firebase_database_id`, or community reads miss data.
   static const firebaseDatabaseId = String.fromEnvironment(
     'FIREBASE_DATABASE_ID',
     defaultValue: '',
@@ -43,6 +46,9 @@ class Environment {
   static const sidebarFooter = String.fromEnvironment('SIDEBAR_FOOTER');
   static const copyrightStatement =
       String.fromEnvironment('COPYRIGHT_STATEMENT');
+  static const sidebarFooterF = String.fromEnvironment('SIDEBAR_FOOTER_F');
+  static const copyrightStatementF =
+      String.fromEnvironment('COPYRIGHT_STATEMENT_F');
   static const shareLinkUrl = String.fromEnvironment('SHARE_LINK_URL');
   static const termsUrl = String.fromEnvironment('TERMS_URL');
   static const pricingUrl = String.fromEnvironment('PRICING_URL');

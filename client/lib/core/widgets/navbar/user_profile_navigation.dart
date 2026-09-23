@@ -144,7 +144,7 @@ class ProfileNavigationList extends StatelessWidget {
       shrinkWrap: true,
       children: [
         if (userId != null)
-           ActionButton(
+          ActionButton(
             type: ActionButtonType.text,
             text: context.l10n.myProfile,
             onPressed: () => routerDelegate.beamTo(
@@ -153,10 +153,13 @@ class ProfileNavigationList extends StatelessWidget {
               ),
             ),
             expand: true,
+            // Square hover: these rows span the full menu width, so a rounded
+            // highlight would leave gaps at the menu's edges.
+            borderRadius: BorderRadius.zero,
             textStyle: context.theme.textTheme.bodyMedium,
             contentAlign: ActionButtonContentAlignment.start,
           ),
-          ActionButton(
+        ActionButton(
           type: ActionButtonType.text,
           text: context.l10n.myEvents,
           onPressed: () => routerDelegate.beamTo(
@@ -165,14 +168,19 @@ class ProfileNavigationList extends StatelessWidget {
             ),
           ),
           expand: true,
+          borderRadius: BorderRadius.zero,
           textStyle: context.theme.textTheme.bodyMedium,
           contentAlign: ActionButtonContentAlignment.start,
         ),
-         ActionButton(
+        ActionButton(
           type: ActionButtonType.text,
           text: context.l10n.signOut,
           onPressed: () => userService.signOut(),
           expand: true,
+          borderRadius: BorderRadius.zero,
+          // colorScheme.error is the system's existing red, and it already
+          // flips to a lighter red on dark themes.
+          textColor: context.theme.colorScheme.error,
           textStyle: context.theme.textTheme.bodyMedium,
           contentAlign: ActionButtonContentAlignment.start,
         ),

@@ -9,12 +9,17 @@ jobs:
     name: Build & Deploy Preview
     runs-on: ubuntu-latest
     environment: staging
+    env:
+      YOUTUBE_IFRAME_WEB_VERSION: "2.0.2"
     defaults:
       run:
         working-directory: client
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Resolve Agora patch ref
+        run: echo "AGORA_PATCH_REF=$(tr -d '[:space:]' < .agora-patch-ref)" >> "$GITHUB_ENV"
 
       - uses: dorny/paths-filter@v3
         id: changes
@@ -23,11 +28,28 @@ jobs:
             client:
               - 'client/**'
 
+      - name: Cache patched path deps (Agora + youtube iframe web)
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/cache@v4
+        with:
+          path: |
+            client/patches/agora_rtc_engine
+            client/patches/youtube_player_iframe_web-${{ env.YOUTUBE_IFRAME_WEB_VERSION }}
+          key: patch-deps-${{ runner.os }}-${{ env.AGORA_PATCH_REF }}-yt-${{ env.YOUTUBE_IFRAME_WEB_VERSION }}
+
+      - name: Bootstrap patched path dependencies (Agora, youtube_player_iframe_web)
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: client
+        env:
+          AGORA_PATCH_REPO: https://github.com/berkmancenter/Agora-Flutter-SDK.git
+          FORCE_RESTORE_OVERLAYS: "1"
+        run: ./bootstrap_patches.sh
+
       - name: Set Up Flutter
-        if: steps.changes.outputs.client == 'true'
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch'
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.22.2" # could read version from pubspec file, but would need to be exact
+          flutter-version: "3.41.4" # Pin stable toolchain (see client/UPGRADE-README.md)
           channel: "stable"
           cache: true
           cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
@@ -36,11 +58,11 @@ jobs:
           pub-cache-path: "/home/runner/.pub-cache"
 
       - name: Install Dependencies
-        if: steps.changes.outputs.client == 'true'
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch'
         run: flutter pub get
 
       - name: Set Build Number and Version
-        if: steps.changes.outputs.client == 'true'
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           echo "BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
           # Extract version from pubspec.yaml
@@ -51,17 +73,17 @@ jobs:
           echo "Building version: ${VERSION}"
 
       - name: Update Product Version
-        if: steps.changes.outputs.client == 'true' 
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch' 
         run: |
           sed -i 's/__VERSION__/${{ env.VERSION }}/g' ${{ github.workspace }}/client/web/index.html
 
       - name: Update Google Auth Client ID
-        if: steps.changes.outputs.client == 'true' 
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch' 
         run: |
           sed -i 's/__GOOGLE_ID__/${{ secrets.GOOGLE_SIGN_IN_ID }}/g' ${{ github.workspace }}/client/web/index.html
 
       - name: Create .env.json file
-        if: steps.changes.outputs.client == 'true' 
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch' 
         run: |
           cat > ${{ github.workspace }}/.env.json << 'EOF'
           {
@@ -92,21 +114,52 @@ jobs:
             "LOGO_URL": "https://res.cloudinary.com/dh0vegjku/image/upload/v1725488238/frankly_assets/Frankly-Icon-144x144_ex8nky.png",
             "SIDEBAR_FOOTER": "AllSides Roundtables is operated by AllSides Technologies Inc.",
             "COPYRIGHT_STATEMENT": "2025 AllSides Technologies Inc.",
+            "SIDEBAR_FOOTER_F": "Powered by Frankly",
+            "COPYRIGHT_STATEMENT_F": "2024-2026 President and Fellows of Harvard College.",
             "CLOUDINARY_IMAGE_PRESET": "${{ secrets.CLOUDINARY_IMAGE_PRESET }}",
             "CLOUDINARY_VIDEO_PRESET": "${{ secrets.CLOUDINARY_VIDEO_PRESET }}",
             "CLOUDINARY_DEFAULT_PRESET": "${{ secrets.CLOUDINARY_DEFAULT_PRESET }}",
             "CLOUDINARY_CLOUD_NAME": "${{ secrets.CLOUDINARY_CLOUD_NAME }}",
-            "LINK_PREVIEW_API_KEY": "${{ secrets.LINK_PREVIEW_API_KEY }}"
+            "LINK_PREVIEW_API_KEY": "${{ secrets.LINK_PREVIEW_API_KEY }}",
+            "MATOMO_URL": "${{ secrets.MATOMO_URL }}",
+            "MATOMO_SITE_ID": "${{ secrets.MATOMO_SITE_ID }}"
           }
           EOF
 
+      # Flutter 3.41+ removed --web-renderer html; smoke-test video/platform views after deploy (UPGRADE-README.md).
       - name: Build App
-        if: steps.changes.outputs.client == 'true' 
+        if: steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch' 
         id: build_app
-        run: flutter build web --release --build-number=${{ env.BUILD_NUMBER }} --web-renderer html -t lib/main.dart --dart-define-from-file=${{ github.workspace }}/.env.json
+        run: flutter build web --release --build-number=${{ env.BUILD_NUMBER }} -t lib/main.dart --dart-define-from-file=${{ github.workspace }}/.env.json
+
+      - name: Verify Flutter web asset manifests exist
+        if: (steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch') && steps.build_app.outcome == 'success'
+        run: |
+          set -e
+          if ! compgen -G "build/web/assets/AssetManifest*" > /dev/null; then
+            echo "No AssetManifest files under build/web/assets"
+            exit 1
+          fi
+          test -f build/web/assets/FontManifest.json
+          ls -la build/web/assets/AssetManifest* build/web/assets/FontManifest.json
+
+      # Tree-shaking makes the icon font's contents build-specific while its
+      # path stays fixed, so a browser that cached an older subset keeps it and
+      # any icon added since renders blank. Cache headers can't rescue a
+      # browser that already cached the file; only a different URL can.
+      - name: Fingerprint font assets
+        if: (steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch') && steps.build_app.outcome == 'success'
+        run: python3 tool/fingerprint_font_assets.py build/web
+
+      - name: Set up Java 21
+        if: (steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch') && steps.build_app.outcome == 'success'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Deploy to Preview Channel
-        if: steps.changes.outputs.client == 'true'
+        if: (steps.changes.outputs.client == 'true' || github.event_name == 'workflow_dispatch') && steps.build_app.outcome == 'success'
         uses: w9jds/firebase-action@v13.22.1
         with:
           args: hosting:channel:deploy preview --expires 14d

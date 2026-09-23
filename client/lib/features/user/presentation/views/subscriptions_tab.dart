@@ -19,7 +19,7 @@ class SubscriptionsTab extends StatefulHookWidget {
 }
 
 class _SubscriptionsTabState extends State<SubscriptionsTab> {
-  String get _userId => context.read<UserService>().currentUserId!;
+  String? get _userId => context.watch<UserService>().currentUserId;
 
   Widget _buildContent(
     BuildContext context,
@@ -33,7 +33,7 @@ class _SubscriptionsTabState extends State<SubscriptionsTab> {
       return Padding(
         padding: EdgeInsets.all(20),
         child: HeightConstrainedText(
-          'You are not the billing manager for any communities',
+          'You are not the billing manager for any spaces',
         ),
       );
     }
@@ -52,7 +52,7 @@ class _SubscriptionsTabState extends State<SubscriptionsTab> {
             shrinkWrap: true,
             children: [
               HeightConstrainedText(
-                'Communities',
+                'Spaces',
                 textAlign: TextAlign.start,
                 style: AppTextStyle.headline4,
               ),
@@ -67,7 +67,7 @@ class _SubscriptionsTabState extends State<SubscriptionsTab> {
                       SizedBox(width: 10),
                       Expanded(
                         child: HeightConstrainedText(
-                          communities[i].name ?? 'Unnamed Community',
+                          communities[i].name ?? 'Unnamed Space',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -98,6 +98,8 @@ class _SubscriptionsTabState extends State<SubscriptionsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final userId = _userId;
+    if (userId == null) return const SizedBox.shrink();
     return Align(
       alignment: Alignment.topLeft,
       child: Container(
@@ -105,7 +107,7 @@ class _SubscriptionsTabState extends State<SubscriptionsTab> {
         child: MemoizedStreamBuilder<List<Community>>(
           entryFrom: '_SubscriptionsTabState.build',
           streamGetter: () =>
-              firestoreDatabase.communitiesUserIsOwnerOf(_userId),
+              firestoreDatabase.communitiesUserIsOwnerOf(userId),
           builder: _buildContent,
         ),
       ),

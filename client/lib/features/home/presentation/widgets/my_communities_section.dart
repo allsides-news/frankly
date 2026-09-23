@@ -1,3 +1,4 @@
+import 'package:client/features/home/presentation/widgets/section_heading_row.dart';
 import 'dart:math';
 
 import 'package:client/core/widgets/buttons/circle_icon_button.dart';
@@ -7,19 +8,14 @@ import 'package:client/core/localization/localization_helper.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:client/features/community/features/create_community/presentation/widgets/dialog_flow.dart';
-import 'package:client/features/community/presentation/widgets/community_icon_or_logo.dart';
-import 'package:client/core/widgets/proxied_image.dart';
-import 'package:client/core/widgets/custom_ink_well.dart';
+import 'package:client/features/community/presentation/widgets/space_card.dart';
 import 'package:client/core/widgets/custom_stream_builder.dart';
 import 'package:client/features/user/data/providers/user_info_builder.dart';
-import 'package:client/core/routing/locations.dart';
 import 'package:client/services.dart';
 import 'package:client/styles/styles.dart';
 import 'package:client/core/widgets/height_constained_text.dart';
 import 'package:data_models/community/community.dart';
 import 'package:data_models/user/public_user_info.dart';
-
-import '../../../community/utils/community_theme_utils.dart.dart';
 
 /// This is the top section of the home page that displays a carousel of images which link to the community home pages
 class MyCommunitiesSection extends StatefulWidget {
@@ -30,8 +26,6 @@ class MyCommunitiesSection extends StatefulWidget {
 }
 
 class _MyCommunitiesSectionState extends State<MyCommunitiesSection> {
-  static const double _communityCardSize = 295;
-
   void _createCommunityPressed() {
     guardSignedIn(() => DialogFlow().show());
   }
@@ -64,20 +58,16 @@ class _MyCommunitiesSectionState extends State<MyCommunitiesSection> {
               AsyncSnapshot<PublicUserInfo?> snapshot,
             ) {
               final userInfo = snapshot.data;
-              if (isLoading) {
-                return Row(children: const [CircularProgressIndicator()]);
-              }
               final owner = userInfo?.isOwner ?? false;
-              return Row(
-                children: [
-                  HeightConstrainedText(
-                    context.l10n.myCommunities,
-                    style: AppTextStyle.headline3.copyWith(fontSize: 22),
-                  ),
-                  Spacer(),
-                  if (owner || Uri.base.origin.contains('localhost'))
-                    _buildCreateCommunityButton(),
-                ],
+              final canCreate = !isLoading &&
+                  (owner || Uri.base.origin.contains('localhost'));
+              // The heading no longer waits on the user lookup -- it used to
+              // be replaced by a spinner, which left this section's cards
+              // jumping into place once the fetch landed. Only the button
+              // depends on who you are.
+              return SectionHeadingRow(
+                context.l10n.myCommunities,
+                trailing: canCreate ? _buildCreateCommunityButton() : null,
               );
             },
           ),
@@ -96,7 +86,7 @@ class _MyCommunitiesSectionState extends State<MyCommunitiesSection> {
             child: CircleIconButton(
               onPressed: _createCommunityPressed,
               icon: Icons.add,
-              toolTipText: 'Start a community',
+              toolTipText: 'Start a Space',
             ),
           ),
           if (!responsiveLayoutService.isMobile(context)) ...[
@@ -126,7 +116,10 @@ class _MyCommunitiesSectionState extends State<MyCommunitiesSection> {
           },
         ),
         child: SizedBox(
-          height: 295,
+          // The cards' own height. This was 295 -- the card *width* constant's
+          // value, reused by mistake -- which left the cards floating in the
+          // middle of a strip 111px taller than they are.
+          height: SpaceCard.height,
           child: CustomStreamBuilder<List<Community>>(
             entryFrom: 'Homepage._buildCommunitiesCarousel',
             stream: userDataService.userCommunities,
@@ -151,14 +144,24 @@ class _MyCommunitiesSectionState extends State<MyCommunitiesSection> {
                   : ListView.builder(
                       dragStartBehavior: DragStartBehavior.down,
                       physics: ClampingScrollPhysics(),
-                      itemExtent: 315,
+                      itemExtent: SpaceCard.width + SpaceCard.gutter,
                       shrinkWrap: responsiveLayoutService.isMobile(context),
                       scrollDirection: Axis.horizontal,
                       itemCount: communitiesUserBelongsTo.length,
                       itemBuilder: (BuildContext context, int index) {
                         final community = communitiesUserBelongsTo[index];
 
-                        return _buildCommunityCard(community);
+                        // itemExtent above is the card plus its gutter, and it
+                        // constrains the child to that full width -- hence the
+                        // Row, so the card keeps its own width and the
+                        // remainder becomes the gap.
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SpaceCard(community: community),
+                            SizedBox(width: SpaceCard.gutter),
+                          ],
+                        );
                       },
                     );
             },
@@ -167,85 +170,6 @@ class _MyCommunitiesSectionState extends State<MyCommunitiesSection> {
       ),
     );
   }
-
-  Widget _buildCommunityCard(Community community) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CustomInkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => routerDelegate.beamTo(
-            CommunityPageRoutes(
-              communityDisplayId: community.displayId,
-            ).communityHome,
-          ),
-          child: SizedBox(
-            height: _communityCardSize,
-            width: _communityCardSize,
-            child: ClipRRect(
-              clipBehavior: Clip.hardEdge,
-              borderRadius: BorderRadius.circular(10),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (community.bannerImageUrl == null ||
-                      community.bannerImageUrl!.trim().isEmpty) ...[
-                    Container(
-                      color: ThemeUtils.parseColor(community.themeDarkColor) ??
-                          context.theme.colorScheme.primary,
-                    ),
-                  ] else ...[
-                    ProxiedImage(
-                      community.bannerImageUrl,
-                      width: _communityCardSize,
-                      height: _communityCardSize,
-                      fit: BoxFit.cover,
-                    ),
-                    Container(
-                      // Black54 on a white background with white text (worst case scenario)
-                      // has a contrast ratio of 4.54, which is the minimum value of 4.5
-                      color: Colors.black54,
-                    ),
-                  ],
-                  _buildCommunityCardOverlay(community),
-                ],
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: 20),
-      ],
-    );
-  }
-
-  Widget _buildCommunityCardOverlay(Community community) => Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CommunityCircleIcon(community),
-            SizedBox(height: 10),
-            HeightConstrainedText(
-              (community.name ?? 'Unnamed Community').toUpperCase(),
-              style: AppTextStyle.eyebrow
-                  .copyWith(color: context.theme.colorScheme.onPrimary),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 30),
-            SizedBox(
-              height: 78,
-              width: 255,
-              child: HeightConstrainedText(
-                community.tagLine ?? community.description ?? '',
-                style: AppTextStyle.headline3
-                    .copyWith(color: context.theme.colorScheme.onPrimary),
-                textAlign: TextAlign.center,
-                maxLines: 3,
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 /// This is a modified version of [ClampingScrollPhysics] which accepts a negative offset which will

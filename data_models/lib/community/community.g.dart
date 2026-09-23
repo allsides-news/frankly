@@ -141,6 +141,10 @@ _$_CommunitySettings _$$_CommunitySettingsFromJson(Map<String, dynamic> json) =>
       enableUpdatedLiveMeetingMobile:
           json['enableUpdatedLiveMeetingMobile'] as bool? ?? false,
       enableAVCheck: json['enableAVCheck'] as bool? ?? true,
+      showAttendeeCountToNonAdmins:
+          json['showAttendeeCountToNonAdmins'] as bool? ?? true,
+      showPostRegistrationAttendeeCount:
+          json['showPostRegistrationAttendeeCount'] as bool? ?? true,
     );
 
 Map<String, dynamic> _$$_CommunitySettingsToJson(
@@ -160,4 +164,7 @@ Map<String, dynamic> _$$_CommunitySettingsToJson(
       'enablePlatformSelection': instance.enablePlatformSelection,
       'enableUpdatedLiveMeetingMobile': instance.enableUpdatedLiveMeetingMobile,
       'enableAVCheck': instance.enableAVCheck,
+      'showAttendeeCountToNonAdmins': instance.showAttendeeCountToNonAdmins,
+      'showPostRegistrationAttendeeCount':
+          instance.showPostRegistrationAttendeeCount,
     };

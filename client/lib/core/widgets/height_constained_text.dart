@@ -40,6 +40,8 @@ class HeightConstrainedText extends StatelessWidget {
         child: Text(
           text,
           textAlign: textAlign,
+          overflow: overflow,
+          maxLines: localMaxLines,
           style: textStyle,
           softWrap: softWrap,
           semanticsLabel: semanticsLabel,
